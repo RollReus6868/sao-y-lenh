@@ -1,0 +1,48 @@
+{
+  "name": "sao-y-lenh",
+  "productName": "SaoYLenh",
+  "version": "0.1.0",
+  "description": "Sao chép và sửa y lệnh nội trú trên OneMES",
+  "main": "src/main.js",
+  "author": "Xuan Dai",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "mock": "node mock/server.js 2026",
+    "test": "node tests/agent-test.js && node tests/driver-test.js && node tests/updater-test.js",
+    "ui:build": "cd ui && npm run build",
+    "dist:win": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux dir"
+  },
+  "build": {
+    "appId": "vn.xuandai.saoylenh",
+    "productName": "SaoYLenh",
+    "files": ["src/**/*", "ui_dist/**/*", "build/icon.png", "package.json"],
+    "afterPack": "tools/ky-mac.js",
+    "publish": null,
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "build/icon.png" },
+    "nsis": {
+      "artifactName": "SaoYLenh-${version}-windows-setup.exe",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Sao Y Lệnh"
+    },
+    "mac": {
+      "target": ["zip"],
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "icon": "build/icon.png",
+      "artifactName": "SaoYLenh-${version}-mac-${arch}.${ext}"
+    },
+    "linux": { "target": ["dir"] }
+  },
+  "devDependencies": {
+    "electron": "44.4.3",
+    "electron-builder": "26.0.12",
+    "playwright-core": "1.56.1"
+  }
+}

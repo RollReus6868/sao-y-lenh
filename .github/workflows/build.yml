@@ -1,0 +1,134 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish a GitHub Release from this commit'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - run: npm ci
+      - name: Version and release notes
+        run: |
+          V=$(node -p "require('./package.json').version")
+          if [[ "$GITHUB_REF" == refs/tags/v* && "${GITHUB_REF#refs/tags/v}" != "$V" ]]; then echo "::error::tag does not match version $V"; exit 1; fi
+          grep -q "$V" RELEASE_NOTES.md || { echo "::error::RELEASE_NOTES.md does not mention $V"; exit 1; }
+      - name: UI builds and matches committed ui_dist
+        run: |
+          cd ui && npm ci && npm run build && cd ..
+          git diff --stat --exit-code -- ui_dist || { echo "::error::ui_dist is stale, run npm run build in ui/"; exit 1; }
+      - run: node tests/ci-run.js updater node tests/updater-test.js
+      - run: node tests/ci-run.js agent node tests/agent-test.js
+      - run: node tests/ci-run.js driver node tests/driver-test.js
+      - run: node tests/ci-run.js e2e-dev xvfb-run -a node tests/e2e-app.js
+
+  windows:
+    needs: test
+    runs-on: windows-2025
+    defaults: { run: { shell: bash } }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: node tests/ci-run.js driver-win node tests/driver-test.js
+      - name: Build installer
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
+        run: node tests/ci-run.js build-win npx electron-builder --win --x64 --publish never
+      - name: Silent install into a path with spaces
+        run: |
+          V=$(node -p "require('./package.json').version")
+          SETUP="dist/SaoYLenh-$V-windows-setup.exe"
+          test -f "$SETUP"
+          DIR='C:\Test Apps\Sao Y Lenh'
+          powershell -NoProfile -Command "\$p = Start-Process -FilePath '$SETUP' -ArgumentList '/S','/D=$DIR' -Wait -PassThru; exit \$p.ExitCode"
+          test -f "/c/Test Apps/Sao Y Lenh/SaoYLenh.exe"
+          test -f "/c/Test Apps/Sao Y Lenh/Uninstall SaoYLenh.exe"
+      - name: Run the installed app end to end
+        run: node tests/ci-run.js e2e-installed node tests/e2e-app.js "C:\Test Apps\Sao Y Lenh\SaoYLenh.exe"
+      - name: Real self-update
+        run: |
+          V=$(node -p "require('./package.json').version")
+          node tests/ci-run.js self-update node tests/update-e2e.js "C:\Test Apps\Sao Y Lenh\SaoYLenh.exe" "dist/SaoYLenh-$V-windows-setup.exe" "C:\Test Apps\Sao Y Lenh\LICENSE.electron.txt"
+      - name: Run again after update
+        run: node tests/ci-run.js e2e-after-update node tests/e2e-app.js "C:\Test Apps\Sao Y Lenh\SaoYLenh.exe"
+      - name: Uninstall
+        run: |
+          powershell -NoProfile -Command "\$p = Start-Process -FilePath 'C:\Test Apps\Sao Y Lenh\Uninstall SaoYLenh.exe' -ArgumentList '/S' -Wait -PassThru; exit \$p.ExitCode"
+          for i in $(seq 1 60); do [ -f "/c/Test Apps/Sao Y Lenh/SaoYLenh.exe" ] || break; sleep 2; done
+          if [ -f "/c/Test Apps/Sao Y Lenh/SaoYLenh.exe" ]; then echo "::error::uninstall left the exe"; exit 1; fi
+      - uses: actions/upload-artifact@v7
+        with: { name: windows, path: 'dist/*.exe', if-no-files-found: error }
+
+  macos:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14, arch: arm64 }
+          - { os: macos-15-intel, arch: x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - run: npm ci
+      - name: Build zip
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
+        run: node tests/ci-run.js build-mac npx electron-builder --mac --${{ matrix.arch }} --publish never
+      - name: Unzip like a user and check
+        run: |
+          V=$(node -p "require('./package.json').version")
+          ZIPFILE="dist/SaoYLenh-$V-mac-${{ matrix.arch }}.zip"
+          test -f "$ZIPFILE"
+          mkdir -p "$RUNNER_TEMP/My Apps"
+          ditto -x -k "$ZIPFILE" "$RUNNER_TEMP/My Apps"
+          APPDIR="$RUNNER_TEMP/My Apps/SaoYLenh.app"
+          file "$APPDIR/Contents/MacOS/SaoYLenh" | tee /dev/stderr | grep -q "${{ matrix.arch == 'x64' && 'x86_64' || 'arm64' }}"
+          codesign --verify --deep --strict "$APPDIR"
+      - name: Run the app end to end
+        run: node tests/ci-run.js e2e-mac node tests/e2e-app.js "$RUNNER_TEMP/My Apps/SaoYLenh.app/Contents/MacOS/SaoYLenh"
+      - name: Real self-update
+        run: |
+          V=$(node -p "require('./package.json').version")
+          node tests/ci-run.js self-update-mac node tests/update-e2e.js "$RUNNER_TEMP/My Apps/SaoYLenh.app/Contents/MacOS/SaoYLenh" "dist/SaoYLenh-$V-mac-${{ matrix.arch }}.zip" "$RUNNER_TEMP/My Apps/SaoYLenh.app"
+          codesign --verify --deep --strict "$RUNNER_TEMP/My Apps/SaoYLenh.app"
+      - uses: actions/upload-artifact@v7
+        with: { name: 'mac-${{ matrix.arch }}', path: 'dist/*.zip', if-no-files-found: error }
+
+  release:
+    needs: [windows, macos]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with: { path: out, merge-multiple: true }
+      - name: Publish
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          V=$(node -p "require('./package.json').version")
+          cd out
+          for f in "SaoYLenh-$V-windows-setup.exe" "SaoYLenh-$V-mac-arm64.zip" "SaoYLenh-$V-mac-x64.zip"; do test -f "$f" || { echo "::error::missing $f"; exit 1; }; done
+          sha256sum "SaoYLenh-$V-windows-setup.exe" "SaoYLenh-$V-mac-arm64.zip" "SaoYLenh-$V-mac-x64.zip" > SHA256SUMS.txt
+          if gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "::error::release v$V already exists"; exit 1; fi
+          gh release create "v$V" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Sao Y Lệnh $V" --notes-file ../RELEASE_NOTES.md --latest \
+            "SaoYLenh-$V-windows-setup.exe" "SaoYLenh-$V-mac-arm64.zip" "SaoYLenh-$V-mac-x64.zip" SHA256SUMS.txt

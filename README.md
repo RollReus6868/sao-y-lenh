@@ -1,0 +1,40 @@
+# Sao Y Lệnh
+
+Tool desktop sao chép và sửa y lệnh nội trú trên OneMES 3.0: quét danh sách bệnh nhân, chọn mục xóa cho từng ngày, rồi để tool tự Sao chép, Sao y lệnh (ngày), xóa và Hoàn tất.
+
+## Cài đặt (Windows)
+
+1. Vào [Releases](https://github.com/RollReus6868/sao-y-lenh/releases/latest), tải `SaoYLenh-x.y.z-windows-setup.exe`.
+2. Mở file. Windows có thể báo "Windows protected your PC" vì tool chưa ký số: bấm **More info → Run anyway**.
+3. Khi có bản mới, tool hiện "Bản mới" ở góc trái dưới; vào **Cài đặt → Cập nhật**.
+
+## Dùng
+
+1. Đăng nhập OneMES ở khung bên phải (như trên Chrome).
+2. **Quét danh sách**.
+3. Bấm một bệnh nhân. Tool mở Lịch sử y lệnh và chọn y lệnh nguồn.
+4. Chọn **Số ngày tạo** (1 = chỉ Sao chép; 2–4 = Sao chép + Sao y lệnh 1–3 ngày).
+5. Tick ô đỏ ở mục cần xóa cho từng ngày. Bấm tên mục để chọn cả hàng; bấm tiêu đề cột để chọn nhanh hoặc áp mẫu.
+6. **Sao chép & xóa cho N ngày** → xem lại → **Bắt đầu**.
+
+Lần đầu nên bật **Từng bước** và thử với 1 bệnh nhân.
+
+Nhật ký: `%APPDATA%\SaoYLenh\logs`.
+
+## Cách tool làm (để kiểm tra)
+
+- Ngày 1: bấm Sao chép → Đồng ý trên y lệnh nguồn.
+- Mục bị xóa ở mọi ngày được xóa ngay trên ngày 1, trước khi Sao y lệnh, để các ngày sau cũng không có.
+- Ngày 1 được Hoàn tất với Sao y lệnh (ngày) = N−1 (hình thức trong Cài đặt), OneMES tạo các ngày tiếp theo.
+- Nếu ngày 1 còn mục riêng cần xóa: Thu hồi ngày 1, xóa, Hoàn tất lại.
+- Mỗi ngày tiếp theo: mở, kiểm tra trạng thái Mới, xóa, Hoàn tất.
+- Khi OneMES báo cảnh báo hoặc trang không như mong đợi, tool dừng bệnh nhân đó và ghi nhật ký, không đoán.
+
+## Phát triển
+
+```
+npm ci && (cd ui && npm ci)
+npm run mock                 # OneMES giả lập ở http://127.0.0.1:2026
+SYL_ONEMES_URL=http://127.0.0.1:2026/login.aspx npx electron .
+npm test                     # agent, driver, updater trên trang giả lập
+```

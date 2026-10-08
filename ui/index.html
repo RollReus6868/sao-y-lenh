@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:" />
+    <title>Sao Y Lệnh</title>
+    <link rel="icon" href="data:," />
+    <script>
+      // Re-apply the saved theme before React loads, so there is no flash.
+      (function () {
+        var KEY = 'sao-y-lenh';
+        try {
+          var mode = localStorage.getItem(KEY + '-mode') || 'dark';
+          if (mode === 'dark') document.documentElement.classList.add('dark');
+          var vars = JSON.parse(localStorage.getItem(KEY + '-vars') || 'null');
+          if (vars) for (var k in vars) document.documentElement.style.setProperty(k, vars[k]);
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

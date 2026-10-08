@@ -1,0 +1,102 @@
+// Demo backend for previewing the UI in a browser. Fake names only.
+import type { AppState, Data, Item, LogEntry, Patient } from './types';
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const ROOMS = ['Buồng 101', 'Buồng 101', 'Buồng 103', 'Buồng 103', 'Buồng 105', 'Buồng 105', 'Buồng 107'];
+const NAMES = ['NGUYỄN THỊ MẪU A', 'TRẦN VĂN MẪU B', 'LÊ THỊ MẪU C', 'PHẠM VĂN MẪU D', 'HOÀNG THỊ MẪU E', 'VŨ VĂN MẪU G', 'ĐẶNG THỊ MẪU H'];
+const DX = ['Tọa cốt phong [Đau dây thần kinh hông to]', 'Chứng tý [Hội chứng cổ vai cánh tay]', 'Khẩu nhãn oa tà [Liệt dây VII ngoại biên]', 'Yêu thống [Đau lưng]', 'Tý chứng [Thoái hóa khớp gối]', 'Chứng huyễn vựng [Thiểu năng tuần hoàn não]', 'Kiên thống [Viêm quanh khớp vai]'];
+
+const patients: Patient[] = NAMES.map((n, i) => ({
+  noitruid: `0000000${i}-0000-0000-0000-000000000000`,
+  url: '#',
+  buong: ROOMS[i],
+  tgVao: `0${i + 1}:30 0${i + 1}/10/2026`,
+  bg: `${ROOMS[i]} / G${i + 2}-NB`,
+  maBN: `26000000${10 + i}`,
+  hoTen: n,
+  tuoi: String(58 + i * 3),
+  gt: i % 2 ? 'Nam' : 'Nữ',
+  doiTuong: 'Bảo hiểm (Đúng tuyến)',
+  trangThai: 'Đang thực hiện',
+  bacSi: 'BS. Nguyễn Văn Mẫu',
+  chanDoan: DX[i],
+  khoa: 'Khoa Nội B',
+}));
+
+const T = (name: string, hamLuong: string, dvt: string, sl: string, group = 'Thuốc Tây Y', cachDung = ''): Item => ({
+  kind: 'thuoc', id: name, key: `t|${name.toLowerCase()}|${hamLuong.toLowerCase()}#1`, canDelete: true, group, name, hamLuong, dvt, sl, cachDung, duongDung: group === 'Vật tư y tế' ? '' : 'Uống', doiTuong: 'Bảo hiểm', trangThai: 'Mới',
+});
+const D = (name: string, moTa: string, group: string): Item => ({
+  kind: 'dvkt', id: name, key: `d|${name.toLowerCase()}|${moTa.toLowerCase()}#1`, canDelete: true, group, name, moTa, sl: '1', doiTuong: 'Bảo hiểm', trangThai: 'Mới',
+});
+
+const source = {
+  id: 'src', status: 'Hoàn tất', info: 'Ngày điều trị thứ 6', thoiGian: '07:04 13/10/2026',
+  dienBien: 'Bệnh nhân tỉnh, tiếp xúc tốt. Đau vùng thắt lưng lan xuống mông chân 2 bên, giảm so với hôm qua.',
+  dienBienPHCN: 'Cột sống thắt lưng giảm đường cong sinh lý, co cứng cơ cạnh sống.',
+  thuoc: [
+    T('Renaxib 200', '200mg', 'Viên', '1', 'Thuốc Tây Y', 'Uống 1 viên/lần, sáng sau ăn'),
+    T('HOẠT HUYẾT KHỨ Ứ ẨM', '6000mg+6000mg', 'Túi', '2', 'Thuốc Tây Y', 'Uống 1 túi/lần x 2 lần/ngày'),
+    T('Lirystad 150', '150mg', 'Viên', '1', 'Thuốc Tây Y', 'Uống 1 viên tối sau ăn'),
+    T('Kim châm cứu tiệt trùng dùng một lần', '', 'Cái', '20', 'Vật tư y tế'),
+    T('Nhang ngải cứu', '', 'Cái', '1', 'Vật tư y tế'),
+  ],
+  dvkt: [
+    D('Giác hơi điều trị các chứng đau', 'Vùng thắt lưng, giác chân không. Ngày 01 lần x 15 phút', 'Y học dân tộc - Phục hồi chức năng'),
+    D('Điện châm [kim ngắn]', 'Châm tả: A thị huyệt, Giáp tích L4-L5. Ngày 01 lần x 30 phút', 'Y học dân tộc - Phục hồi chức năng'),
+    D('Kỹ thuật xoa bóp vùng', 'Vùng thắt lưng và mông chân 2 bên. Ngày 01 lần x 15 phút', 'Phục hồi chức năng'),
+    D('Điều trị bằng các dòng điện xung', 'Vùng mông đùi T, ngày 01 lần x 20 phút', 'Phục hồi chức năng'),
+    D('Điều trị bằng siêu âm', 'Vùng cơ cạnh sống thắt lưng 2 bên. Ngày 01 lần x 15 phút', 'Phục hồi chức năng'),
+  ],
+  saoYLenh: { value: '0', options: ['0', '1', '2', '3'].map((v) => ({ value: v, text: v })) },
+  hinhThucSao: { value: '', options: [{ value: '1', text: 'Sao thuốc dự trù và dịch vụ' }] },
+};
+
+export function demoApi() {
+  const data: Data = {
+    settings: { baseUrl: 'http://192.168.30.19:2026/', autoComplete: true, stepMode: false, hinhThuc: '1', defaultDays: 3 },
+    templates: [
+      { id: 'a', name: 'Bỏ điện xung', keys: ['d|điều trị bằng các dòng điện xung|vùng mông đùi t, ngày 01 lần x 20 phút'] },
+      { id: 'b', name: 'Chỉ giữ thuốc', keys: source.dvkt.map((x) => x.key.replace(/#\d+$/, '')) },
+    ],
+    choices: { [patients[1].noitruid]: { days: 3, deletions: [[], [], []] } },
+    runs: { [patients[2].noitruid]: { at: Date.now(), ok: true, message: '3 ngày' }, [patients[4].noitruid]: { at: Date.now(), ok: false, message: 'OneMES báo: Chưa chọn loại phiếu lĩnh' } },
+  };
+  let state: AppState = { busy: false, task: '', stepWaiting: null, progress: null, viewUrl: 'http://192.168.30.19:2026/home.aspx', update: null };
+  const stateCbs: ((s: AppState) => void)[] = [];
+  const logCbs: ((e: LogEntry) => void)[] = [];
+  const log: LogEntry[] = [
+    { at: Date.now() - 60000, level: 'info', msg: 'Sao Y Lệnh khởi động' },
+    { at: Date.now() - 50000, level: 'info', msg: 'Quét được 7 bệnh nhân' },
+    { at: Date.now() - 40000, level: 'ok', msg: 'Ngày 2: đã xóa "Lirystad 150"' },
+    { at: Date.now() - 30000, level: 'warn', msg: 'Ngày 3: không thấy "nhang ngải cứu", bỏ qua' },
+    { at: Date.now() - 20000, level: 'error', msg: 'HOÀNG THỊ MẪU E: OneMES báo: Chưa chọn loại phiếu lĩnh' },
+  ];
+  const pushState = (s: Partial<AppState>) => { state = { ...state, ...s }; stateCbs.forEach((c) => c(state)); };
+  const addLog = (level: LogEntry['level'], msg: string) => { const e = { at: Date.now(), level, msg }; log.push(e); logCbs.forEach((c) => c(e)); };
+  const q = new URLSearchParams(location.search);
+  if (q.get('update')) pushState({ update: { version: '0.2.0', kind: 'installer', url: '#' } });
+
+  return {
+    async call<T>(cmd: string, payload?: any): Promise<T> {
+      switch (cmd) {
+        case 'init': return { version: '0.1.0', platform: 'win32', data, state, log, logDir: '' } as T;
+        case 'settings:set': data.settings = { ...data.settings, ...payload }; return data.settings as T;
+        case 'templates:set': data.templates = payload; return data.templates as T;
+        case 'choice:set': if (payload.choice) data.choices[payload.id] = payload.choice; else delete data.choices[payload.id]; return undefined as T;
+        case 'scan': pushState({ busy: true, task: 'Quét danh sách' }); await sleep(500); pushState({ busy: false, task: '' }); addLog('info', `Quét được ${patients.length} bệnh nhân`); return patients as T;
+        case 'patient:load': pushState({ busy: true, task: 'Đọc y lệnh' }); await sleep(400); pushState({ busy: false, task: '' });
+          return { rows: [{ id: 'src', tg: '07:04 13/10/2026', tgth: '07:05 13/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }, { id: 'old', tg: '07:04 12/10/2026', tgth: '07:05 12/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }], source, skipped: [] } as T;
+        case 'run': {
+          pushState({ busy: true, task: 'Sao chép y lệnh', progress: { patient: payload.plans[0].patient.hoTen, index: 0, total: payload.plans.length } });
+          if (q.get('step')) { pushState({ stepWaiting: 'Ngày 2: xóa "Lirystad 150"' }); return new Promise(() => {}) as Promise<T>; }
+          await sleep(1500); addLog('ok', 'Xong'); pushState({ busy: false, task: '', progress: null });
+          return payload.plans.map((p: any) => ({ noitruid: p.patient.noitruid, ok: true })) as T;
+        }
+        default: return undefined as T;
+      }
+    },
+    onState: (cb: (s: AppState) => void) => { stateCbs.push(cb); return () => {}; },
+    onLog: (cb: (e: LogEntry) => void) => { logCbs.push(cb); return () => {}; },
+  };
+}
