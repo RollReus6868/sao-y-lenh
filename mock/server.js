@@ -78,14 +78,14 @@ const findOrder = (id) => {
   return null;
 };
 
-function copyOrder(o, days, loai) {
+function copyOrder(o, days, loai, status = 'Mới') {
   const withThuoc = loai === undefined || ['0', '1', '3', '4', '5'].includes(String(loai));
   const withDv = loai === undefined || ['1', '2', '5'].includes(String(loai));
   return {
     ...o,
     id: uid(),
     date: addDays(o.date, days),
-    status: 'Mới',
+    status,
     thuoc: withThuoc ? o.thuoc.map((x) => ({ ...x, id: uid(), trangThai: 'Mới' })) : [],
     dvkt: withDv ? o.dvkt.map((x) => ({ ...x, id: uid(), trangThai: 'Mới' })) : [],
   };
@@ -114,7 +114,7 @@ const api = {
     if (!f) return { Error: true, InfoMessage: 'Không tìm thấy y lệnh' };
     const ids = [];
     for (let i = 1; i <= Number(soLan); i++) {
-      const n = copyOrder(f.o, i, loai);
+      const n = copyOrder(f.o, i, loai, 'Hoàn tất'); // OneMES completes these copies itself
       f.p.orders.push(n);
       ids.push(n.id);
     }

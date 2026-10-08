@@ -146,19 +146,25 @@ function createDriver(host) {
 
   async function scanPatients() {
     await gotoList();
+    // OneMES draws the list a moment after the page opens; an empty table at first
+    // means "not yet". If nothing shows, press its Tìm kiếm once and accept the answer.
+    const read = (needRows) => async () => {
+      const x = await call('readPatients');
+      return x.ok && (!needRows || x.patients.length) ? x : null;
+    };
     let r;
     try {
-      r = await waitFor('bảng bệnh nhân', async () => {
-        const x = await call('readPatients');
-        return x.ok ? x : null;
-      }, 8000);
+      r = await waitFor('bảng bệnh nhân', read(true), 8000);
     } catch (e) {
       if (e instanceof StopError) throw e;
       await call('searchPatients');
-      r = await waitFor('bảng bệnh nhân', async () => {
-        const x = await call('readPatients');
-        return x.ok ? x : null;
-      });
+      await sleep(1500);
+      try {
+        r = await waitFor('bảng bệnh nhân', read(true), 10000);
+      } catch (e2) {
+        if (e2 instanceof StopError) throw e2;
+        r = await waitFor('bảng bệnh nhân', read(false));
+      }
     }
     const all = new Map(r.patients.map((p) => [p.noitruid, p]));
     const pg = await call('listPages');
@@ -390,6 +396,19 @@ function createDriver(host) {
     const src = await openOrder(plan.sourceId);
     if (!isDone(src)) throw new PageError(`Y lệnh nguồn đang ở trạng thái "${src.status}", cần Hoàn tất để sao chép`);
 
+    // Never create a second order for a day that already has one.
+    const srcDate = parseTime(before.find((r) => r.id === norm(src.id))?.tg) || parseTime(src.thoiGian);
+    if (srcDate) {
+      const taken = [];
+      for (let k = 1; k <= N; k++) {
+        const d = addDays(srcDate, k);
+        if (before.some((r) => dayStamp(parseTime(r.tg)) === dayStamp(d))) taken.push(ddmmOf(d));
+      }
+      if (taken.length) {
+        throw new PageError(`Đã có y lệnh ngày ${taken.join(', ')}. Hãy chọn y lệnh nguồn mới nhất, hoặc xóa y lệnh trùng trên OneMES trước`);
+      }
+    }
+
     // 1. Sao chép -> Đồng ý. OneMES opens the new order itself.
     await step('Sao chép y lệnh nguồn');
     await settle();
@@ -461,14 +480,23 @@ function createDriver(host) {
       const label = `Ngày ${k + 1}`;
       const row = byDay[k - 1];
       const o = await openOrder(row.id);
-      log('info', `${label}: mở y lệnh ${row.tg}`);
-      if (!isNew(o)) throw new PageError(`${label} có trạng thái "${o.status}", không sửa`);
+      log('info', `${label}: mở y lệnh ${row.tg} (${o.status})`);
       const keys = present(o, del[k]);
       const gone = del[k].filter((x) => !keys.includes(x));
-      const r = await deleteKeys(row.id, keys, label);
+      let r = { deleted: [], missing: [], failed: [] };
+      // OneMES creates these copies already Hoàn tất: Thu hồi only when something must go.
+      if (keys.length) {
+        if (isDone(o)) await recall(row.id, label);
+        else if (!isNew(o)) throw new PageError(`${label} có trạng thái "${o.status}", không sửa`);
+        r = await deleteKeys(row.id, keys, label);
+        if (autoComplete) await complete(row.id, label);
+      } else if (isNew(o) && autoComplete) {
+        await complete(row.id, label);
+      } else {
+        log('info', `${label}: không có mục cần xóa, giữ nguyên`);
+      }
       r.alreadyGone = gone;
       result.days.push({ day: k + 1, id: row.id, time: row.tg, del: r });
-      if (autoComplete) await complete(row.id, label);
     }
     await call('back').catch(() => {});
     result.ok = true;

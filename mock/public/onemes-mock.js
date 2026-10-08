@@ -52,7 +52,12 @@
   };
   window.onShowLichSuChung = function () {};
 
-  if (MOCK_PAGE === 'list') { window.FilterChange(); return; }
+  if (MOCK_PAGE === 'list') {
+    // Like OneMES: an empty table first, the patients a little later.
+    document.getElementById('divToaThuocDanhSachContent').innerHTML = '<table id="tblNoiTru"><tr><th>T/G vào</th><th>Họ tên</th></tr></table>';
+    setTimeout(window.FilterChange, 1200);
+    return;
+  }
   if (MOCK_PAGE !== 'bacsi') return;
 
   // ----- Lịch sử y lệnh -----

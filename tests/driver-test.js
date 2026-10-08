@@ -12,7 +12,7 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     const page = await loggedInPage(browser, m.base);
     const logs = [];
     const d = createDriver({ ...hostFor(page, logs), timeout: 15000 });
-    const pts = await d.scanPatients();
+    let pts = await d.scanPatients();
     const keyOf = (src, name) => [...src.thuoc, ...src.dvkt].find((x) => x.name.startsWith(name)).key;
     const newOrders = (pi, before) => m.mock.getState().patients[pi].orders.filter((o) => !before.includes(o.id)).sort((a, b) => a.date - b.date);
     const ids = (pi) => m.mock.getState().patients[pi].orders.map((o) => o.id);
@@ -43,7 +43,8 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     check(!names(fresh[2]).includes('Điện châm [kim ngắn]') && names(fresh[2]).length === 8, 'day 3 also lost Điện châm');
     const days = fresh.map((o) => o.date.getDate());
     check(days[1] === days[0] + 1 && days[2] === days[0] + 2, 'consecutive dates');
-    check(!m.mock.getState().log.some((x) => x[0] === 'thuHoi'), 'no Thu hồi needed');
+    const th = m.mock.getState().log.filter((x) => x[0] === 'thuHoi').map((x) => x[1]);
+    check(th.length === 2 && th[0] === fresh[1].id && th[1] === fresh[2].id, 'Thu hồi only on days 2 and 3 (copies come Hoàn tất)');
 
     // --- 4 days, day 1 has its own deletion -> Thu hồi ---
     console.log('4 ngày + thu hồi');
@@ -58,18 +59,28 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     check(!names(fresh[0]).includes('Nhang ngải cứu') && names(fresh[0]).length === n0 - 1, 'day 1 lost Nhang only');
     check(names(fresh[1]).length === n0, 'day 2 untouched');
     check(!names(fresh[2]).includes('Điều trị bằng siêu âm') && !names(fresh[3]).includes('Điều trị bằng siêu âm'), 'days 3-4 lost siêu âm');
-    check(m.mock.getState().log.filter((x) => x[0] === 'thuHoi').length === 1, 'one Thu hồi on day 1');
+    const th4 = m.mock.getState().log.filter((x) => x[0] === 'thuHoi').map((x) => x[1]);
+    check(th4.length === 3 && th4[0] === fresh[0].id && !th4.includes(fresh[1].id), 'Thu hồi on day 1, 3, 4 but not on untouched day 2');
 
     // --- autoComplete off ---
     console.log('không tự hoàn tất');
     ({ source } = await d.loadPatient(pts[1]));
     before = ids(1);
-    r = await d.run({ patient: pts[1], sourceId: source.id, days: 2, deletions: [[], [L]], autoComplete: false });
+    r = await d.run({ patient: pts[1], sourceId: source.id, days: 2, deletions: [[], [keyOf(source, 'Giác hơi')]], autoComplete: false });
     fresh = newOrders(1, before);
-    check(fresh[0].status === 'Hoàn tất' && fresh[1].status === 'Mới', 'day 1 completed (needed for copies), day 2 left Mới');
+    check(fresh[0].status === 'Hoàn tất' && fresh[1].status === 'Mới', 'day 1 completed (needed for copies), edited day 2 left Mới');
+
+    // --- same source again: the days already exist, nothing may be created ---
+    console.log('trùng ngày');
+    before = ids(1);
+    const dup = await d.run({ patient: pts[1], sourceId: source.id, days: 2, deletions: [[], []] }).catch((x) => x);
+    check(dup instanceof Error && /Đã có y lệnh ngày/.test(dup.message), 'duplicate days refused: ' + (dup && dup.message));
+    check(newOrders(1, before).length === 0, 'nothing created for duplicate days');
 
     // --- Stop ---
     console.log('dừng');
+    m.mock.reset();
+    pts = await d.scanPatients();
     let n = 0;
     const d2 = createDriver({ ...hostFor(page), stopped: () => n > 0, step: async () => { n++; } });
     ({ source } = await d2.loadPatient(pts[1]));
