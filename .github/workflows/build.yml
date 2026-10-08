@@ -53,12 +53,7 @@ jobs:
       - name: Silent install into a path with spaces
         run: |
           V=$(node -p "require('./package.json').version")
-          SETUP="dist/SaoYLenh-$V-windows-setup.exe"
-          test -f "$SETUP"
-          DIR='C:\Test Apps\Sao Y Lenh'
-          powershell -NoProfile -Command "\$p = Start-Process -FilePath '$SETUP' -ArgumentList '/S','/D=$DIR' -Wait -PassThru; exit \$p.ExitCode"
-          test -f "/c/Test Apps/Sao Y Lenh/SaoYLenh.exe"
-          test -f "/c/Test Apps/Sao Y Lenh/Uninstall SaoYLenh.exe"
+          node tests/ci-run.js install node tests/win-install.js install "dist/SaoYLenh-$V-windows-setup.exe" "C:\Test Apps\Sao Y Lenh"
       - name: Run the installed app end to end
         run: node tests/ci-run.js e2e-installed node tests/e2e-app.js "C:\Test Apps\Sao Y Lenh\SaoYLenh.exe"
       - name: Real self-update
@@ -68,10 +63,7 @@ jobs:
       - name: Run again after update
         run: node tests/ci-run.js e2e-after-update node tests/e2e-app.js "C:\Test Apps\Sao Y Lenh\SaoYLenh.exe"
       - name: Uninstall
-        run: |
-          powershell -NoProfile -Command "\$p = Start-Process -FilePath 'C:\Test Apps\Sao Y Lenh\Uninstall SaoYLenh.exe' -ArgumentList '/S' -Wait -PassThru; exit \$p.ExitCode"
-          for i in $(seq 1 60); do [ -f "/c/Test Apps/Sao Y Lenh/SaoYLenh.exe" ] || break; sleep 2; done
-          if [ -f "/c/Test Apps/Sao Y Lenh/SaoYLenh.exe" ]; then echo "::error::uninstall left the exe"; exit 1; fi
+        run: node tests/ci-run.js uninstall node tests/win-install.js uninstall "C:\Test Apps\Sao Y Lenh"
       - uses: actions/upload-artifact@v7
         with: { name: windows, path: 'dist/*.exe', if-no-files-found: error }
 

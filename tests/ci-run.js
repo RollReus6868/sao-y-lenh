@@ -6,7 +6,10 @@ const { spawn } = require('child_process');
 
 const [title, cmd, ...args] = process.argv.slice(2);
 let out = '';
-const p = spawn(cmd, args, { shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
+// On Windows npx/npm are .cmd files and need a shell; quote arguments with spaces for it.
+const win = process.platform === 'win32';
+const q = (a) => (win && /[\s&()]/.test(a) ? `"${a}"` : a);
+const p = spawn(q(cmd), args.map(q), { shell: win, stdio: ['ignore', 'pipe', 'pipe'] });
 p.stdout.on('data', (d) => { process.stdout.write(d); out += d; });
 p.stderr.on('data', (d) => { process.stderr.write(d); out += d; });
 p.on('exit', (code) => {

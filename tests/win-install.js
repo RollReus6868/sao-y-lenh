@@ -1,0 +1,48 @@
+// Windows: silent NSIS install / uninstall with diagnostics.
+// Usage: node tests/win-install.js install <setup.exe> <dir>
+//        node tests/win-install.js uninstall <dir>
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const { spawnSync } = require('child_process');
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const [mode, a, b] = process.argv.slice(2);
+
+function list(dir) {
+  try {
+    return fs.readdirSync(dir).join(', ');
+  } catch (e) {
+    return '(' + e.code + ')';
+  }
+}
+
+(async () => {
+  if (mode === 'install') {
+    const setup = path.resolve(a);
+    const dir = b;
+    console.log('installer', setup, fs.existsSync(setup) ? fs.statSync(setup).size : 'MISSING');
+    // NSIS wants /D last and unquoted, even with spaces.
+    const r = spawnSync(`"${setup}" /S /D=${dir}`, { shell: true, windowsVerbatimArguments: true, stdio: 'inherit' });
+    console.log('installer exit', r.status, r.error || '');
+    const exe = path.join(dir, 'SaoYLenh.exe');
+    for (let i = 0; i < 60 && !fs.existsSync(exe); i++) await sleep(2000);
+    console.log('install dir:', list(dir));
+    const local = path.join(process.env.LOCALAPPDATA || '', 'Programs');
+    console.log('LOCALAPPDATA\\Programs:', list(local), '| sao-y-lenh:', list(path.join(local, 'sao-y-lenh')));
+    const ok = fs.existsSync(exe) && fs.existsSync(path.join(dir, 'Uninstall SaoYLenh.exe'));
+    console.log(ok ? 'ok  installed' : 'FAIL not installed');
+    process.exit(ok ? 0 : 1);
+  }
+  if (mode === 'uninstall') {
+    const dir = a;
+    const un = path.join(dir, 'Uninstall SaoYLenh.exe');
+    const r = spawnSync(`"${un}" /S`, { shell: true, windowsVerbatimArguments: true, stdio: 'inherit' });
+    console.log('uninstaller exit', r.status);
+    const exe = path.join(dir, 'SaoYLenh.exe');
+    for (let i = 0; i < 60 && fs.existsSync(exe); i++) await sleep(2000);
+    const ok = !fs.existsSync(exe);
+    console.log(ok ? 'ok  uninstalled' : 'FAIL exe still there: ' + list(dir));
+    process.exit(ok ? 0 : 1);
+  }
+})();
