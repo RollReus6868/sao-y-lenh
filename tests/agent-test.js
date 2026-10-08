@@ -36,7 +36,9 @@ const { createDriver } = require('../src/driver');
     o.status = 'Mới';
     await d.loadPatient(pts[0], o.id);
     await d.call('deleteThuoc', o.thuoc[0].id);
+    await page.waitForTimeout(700); // SweetAlert accepts clicks once it is fully shown
     const s = await d.call('swal');
+    check(s.ready, 'dialog ready for clicks');
     check(s.visible && s.confirmText === 'Có' && s.cancelText === 'Không', 'delete dialog visible with Có/Không');
     await d.call('swalClick', 'cancel');
     await page.waitForTimeout(500);
