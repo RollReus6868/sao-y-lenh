@@ -28,6 +28,7 @@ function parseTime(s) {
   if (!m) return null;
   return new Date(+m[5], +m[4] - 1, +m[3], +m[1], +m[2]);
 }
+const ddmmOf = (d) => `${d.getDate()}/${d.getMonth() + 1}`;
 const dayStamp = (d) => (d ? `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}` : '');
 const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, d.getHours(), d.getMinutes());
 
@@ -434,15 +435,23 @@ function createDriver(host) {
     // 5. Find the copies made by Sao y lệnh and match them to days 2..N by date.
     const after = await listOrders();
     const fresh = after.filter((r) => !beforeIds.has(r.id) && r.id !== d1);
-    const base = parseTime(day1.thoiGian) || parseTime(after.find((r) => r.id === d1)?.tg);
+    // The history list is the reference for dates; the form field is a fallback.
+    const base = parseTime(after.find((r) => r.id === d1)?.tg) || parseTime(day1.thoiGian);
     const byDay = [];
-    for (let k = 1; k < N; k++) {
-      const want = base ? dayStamp(addDays(base, k)) : '';
-      const m = fresh.filter((r) => dayStamp(parseTime(r.tg)) === want);
-      if (m.length !== 1) {
-        throw new PageError(`Không xác định được y lệnh ngày ${k + 1} (tìm thấy ${m.length}), dừng để an toàn`);
+    if (base && fresh.every((r) => parseTime(r.tg))) {
+      for (let k = 1; k < N; k++) {
+        const want = dayStamp(addDays(base, k));
+        const m = fresh.filter((r) => dayStamp(parseTime(r.tg)) === want);
+        if (m.length !== 1) {
+          throw new PageError(`Không xác định được y lệnh ngày ${k + 1} (tìm thấy ${m.length} y lệnh ngày ${ddmmOf(addDays(base, k))}), dừng để an toàn`);
+        }
+        byDay.push(m[0]);
       }
-      byDay.push(m[0]);
+    } else if (fresh.length === N - 1) {
+      log('warn', 'Không đọc được ngày của các y lệnh mới, xếp theo thứ tự trong Lịch sử y lệnh');
+      byDay.push(...[...fresh].reverse());
+    } else {
+      throw new PageError(`Tìm thấy ${fresh.length} y lệnh mới, mong đợi ${N - 1}, dừng để an toàn`);
     }
     if (fresh.length !== N - 1) log('warn', `Có ${fresh.length} y lệnh mới, mong đợi ${N - 1}`);
 
