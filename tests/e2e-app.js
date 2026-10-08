@@ -26,7 +26,7 @@ async function waitFor(what, fn, ms = 30000) {
 
 (async () => {
   const m = await startMock();
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'syl-e2e-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'syl e2e ')); // a space, like many Windows user names;
   const exe = process.argv[2];
   const electronBin = require('electron');
   const args = exe ? [] : ['.'];

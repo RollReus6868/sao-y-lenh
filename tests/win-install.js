@@ -20,10 +20,11 @@ function list(dir) {
 (async () => {
   if (mode === 'install') {
     const setup = path.resolve(a);
-    const dir = b;
+    // "default" = where a user's double-click install goes (per-user Programs folder).
+    const dir = b === 'default' ? path.join(process.env.LOCALAPPDATA, 'Programs', 'SaoYLenh') : b;
     console.log('installer', setup, fs.existsSync(setup) ? fs.statSync(setup).size : 'MISSING');
     // NSIS wants /D last and unquoted, even with spaces.
-    const r = spawnSync(`"${setup}" /S /D=${dir}`, { shell: true, windowsVerbatimArguments: true, stdio: 'inherit' });
+    const r = spawnSync(b === 'default' ? `"${setup}" /S` : `"${setup}" /S /D=${dir}`, { shell: true, windowsVerbatimArguments: true, stdio: 'inherit' });
     console.log('installer exit', r.status, r.error || '');
     const exe = path.join(dir, 'SaoYLenh.exe');
     for (let i = 0; i < 60 && !fs.existsSync(exe); i++) await sleep(2000);

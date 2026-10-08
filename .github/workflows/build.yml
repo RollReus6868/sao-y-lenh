@@ -52,20 +52,21 @@ jobs:
         run: node tests/ci-run.js build-win npx electron-builder --win --x64 --publish never
       - uses: actions/upload-artifact@v7
         with: { name: windows, path: 'dist/*.exe', if-no-files-found: error }
-      - name: Silent install into a path with spaces
+      - name: Silent install (per-user, as a double-click install does)
         run: |
           V=$(node -p "require('./package.json').version")
-          node tests/ci-run.js install node tests/win-install.js install "dist/SaoYLenh-$V-windows-setup.exe" "C:\Test Apps\Sao Y Lenh"
+          node tests/ci-run.js install node tests/win-install.js install "dist/SaoYLenh-$V-windows-setup.exe" default
+          echo "APPDIR=$LOCALAPPDATA\Programs\SaoYLenh" >> "$GITHUB_ENV"
       - name: Run the installed app end to end
-        run: node tests/ci-run.js e2e-installed node tests/e2e-app.js "C:\Test Apps\Sao Y Lenh\SaoYLenh.exe"
+        run: node tests/ci-run.js e2e-installed node tests/e2e-app.js "$APPDIR\SaoYLenh.exe"
       - name: Real self-update
         run: |
           V=$(node -p "require('./package.json').version")
-          node tests/ci-run.js self-update node tests/update-e2e.js "C:\Test Apps\Sao Y Lenh\SaoYLenh.exe" "dist/SaoYLenh-$V-windows-setup.exe" "C:\Test Apps\Sao Y Lenh\LICENSE.electron.txt"
+          node tests/ci-run.js self-update node tests/update-e2e.js "$APPDIR\SaoYLenh.exe" "dist/SaoYLenh-$V-windows-setup.exe" "$APPDIR\LICENSE.electron.txt"
       - name: Run again after update
-        run: node tests/ci-run.js e2e-after-update node tests/e2e-app.js "C:\Test Apps\Sao Y Lenh\SaoYLenh.exe"
+        run: node tests/ci-run.js e2e-after-update node tests/e2e-app.js "$APPDIR\SaoYLenh.exe"
       - name: Uninstall
-        run: node tests/ci-run.js uninstall node tests/win-install.js uninstall "C:\Test Apps\Sao Y Lenh"
+        run: node tests/ci-run.js uninstall node tests/win-install.js uninstall "$APPDIR"
 
   macos:
     needs: test
