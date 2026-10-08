@@ -15,7 +15,7 @@ let win = null;
 let view = null;
 let store = null;
 let updater = null;
-let viewVisible = true;
+let lastListUrl = ''; // last Ds Điều trị nội trú address seen in the view (carries the session id)
 
 const state = {
   busy: false,
@@ -47,9 +47,15 @@ function setupView() {
   ses.setUserAgent(ses.getUserAgent().replace(/\s(Electron|SaoYLenh|sao-y-lenh)\/\S+/gi, ''));
   view = new WebContentsView({ webPreferences: { session: ses, backgroundThrottling: false } });
   win.contentView.addChildView(view);
-  view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+  // Hidden until the Trình duyệt page shows it; the page keeps its size so OneMES lays out normally.
+  view.setBounds({ x: 0, y: 0, width: 1280, height: 800 });
+  view.setVisible(false);
   const wc = view.webContents;
-  const upd = () => push({ viewUrl: wc.getURL(), canGoBack: wc.navigationHistory.canGoBack() });
+  const upd = () => {
+    const u = wc.getURL();
+    if (/wpid=danhsachdieutrinoitrudraw/i.test(u) && !/bacsidraw/i.test(u)) lastListUrl = u.replace(/#.*$/, '');
+    push({ viewUrl: u, canGoBack: wc.navigationHistory.canGoBack() });
+  };
   wc.on('did-navigate', upd);
   wc.on('did-navigate-in-page', upd);
   wc.on('did-finish-load', upd);
@@ -77,13 +83,12 @@ function loadURL(url) {
 }
 
 function applyBounds(b) {
-  if (!view) return;
-  if (!b || !viewVisible) return view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+  if (!view || !b || b.width < 10 || b.height < 10) return;
   view.setBounds({
     x: Math.round(b.x),
     y: Math.round(b.y),
-    width: Math.max(0, Math.round(b.width)),
-    height: Math.max(0, Math.round(b.height)),
+    width: Math.round(b.width),
+    height: Math.round(b.height),
   });
 }
 
@@ -92,6 +97,7 @@ function makeDriver() {
   return createDriver({
     exec: (code) => view.webContents.executeJavaScript(code, true),
     loadURL,
+    listUrl: () => lastListUrl,
     log,
     stopped: () => stopFlag,
     step: async (desc) => {
@@ -138,14 +144,21 @@ const commands = {
   'choice:set': ({ id, choice }) => store.setChoice(id, choice),
   'view:bounds': (b) => applyBounds(b),
   'view:visible': (v) => {
-    viewVisible = !!v;
-    if (!viewVisible) applyBounds(null);
+    view.setVisible(!!v);
   },
-  'view:nav': ({ action }) => {
+  'view:nav': async ({ action }) => {
     const wc = view.webContents;
     if (action === 'home') goHome();
     else if (action === 'back' && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack();
     else if (action === 'reload') wc.reload();
+    else if (action === 'list') {
+      if (state.busy) throw new Error('Tool đang thao tác, hãy đợi xong');
+      try {
+        await makeDriver().gotoList();
+      } catch (e) {
+        throw new Error(/đăng nhập/i.test(errMsg(e)) ? 'Hãy đăng nhập OneMES trước' : errMsg(e));
+      }
+    }
   },
   scan: () =>
     task('Quét danh sách', async (d) => {

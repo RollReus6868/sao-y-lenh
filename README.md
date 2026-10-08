@@ -10,7 +10,7 @@ Tool desktop sao chép và sửa y lệnh nội trú trên OneMES 3.0: quét dan
 
 ## Dùng
 
-1. Đăng nhập OneMES ở khung bên phải (như trên Chrome).
+1. Mở mục **Trình duyệt** ở thanh bên, đăng nhập OneMES như trên Chrome. Nút **Ds Điều trị nội trú** đưa thẳng tới danh sách bệnh nhân.
 2. **Quét danh sách**.
 3. Bấm một bệnh nhân. Tool mở Lịch sử y lệnh và chọn y lệnh nguồn.
 4. Chọn **Số ngày tạo** (1 = chỉ Sao chép; 2–4 = Sao chép + Sao y lệnh 1–3 ngày).

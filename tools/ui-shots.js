@@ -22,13 +22,12 @@ const { chromium } = require('playwright-core');
         await page.waitForTimeout(350);
         const over = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
         if (over) problems.push(`${mode} ${width} ${name}: horizontal overflow`);
-        // nothing from the control column may reach into the OneMES pane
-        const bad = await page.evaluate(() => {
-          const pane = document.querySelector('[data-pane=onemes]').getBoundingClientRect();
-          const col = document.querySelector('[data-column]');
-          return [...col.querySelectorAll('*')].filter((e) => { const r = e.getBoundingClientRect(); return r.width && r.right > pane.left + 1; }).length;
-        });
-        if (bad) problems.push(`${mode} ${width} ${name}: ${bad} elements overlap the OneMES pane`);
+        // nothing may spill out of its column (list, detail, single pages)
+        const bad = await page.evaluate(() => [...document.querySelectorAll('[data-column]')].reduce((n, col) => {
+          const c = col.getBoundingClientRect();
+          return n + [...col.querySelectorAll('*')].filter((e) => { const r = e.getBoundingClientRect(); return r.width && (r.right > c.right + 1 || r.left < c.left - 1); }).length;
+        }, 0));
+        if (bad) problems.push(`${mode} ${width} ${name}: ${bad} elements spill out of their column`);
         if (width === 1440 || name === 'detail') await page.screenshot({ path: `${out}/${mode}-${width}-${name}.png` });
       };
       await shot('empty');
@@ -47,6 +46,7 @@ const { chromium } = require('playwright-core');
       await page.click('[data-action=run]');
       await shot('confirm');
       await page.click('text=Hủy');
+      await page.click('[data-nav=browser]'); await page.waitForSelector('[data-action=goto-list]'); await shot('browser');
       await page.click('[data-nav=templates]'); await shot('templates');
       await page.click('[data-nav=log]'); await shot('log');
       await page.click('[data-nav=settings]'); await shot('settings');

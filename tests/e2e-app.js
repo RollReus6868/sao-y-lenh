@@ -48,9 +48,9 @@ async function waitFor(what, fn, ms = 30000) {
     ui = await waitFor('UI page', () => pages().find((p) => p.url().includes('ui_dist')));
     ui.on('console', (msg) => msg.type() === 'error' && console.log('[ui console]', msg.text()));
     const view = await waitFor('OneMES view', () => pages().find((p) => p.url().startsWith(m.base)));
-    await ui.waitForSelector('[data-action=scan]');
 
-    // Log in inside the embedded view like a user would.
+    // The browser lives on its own page; log in there like a user would.
+    await ui.click('[data-nav=browser]');
     await view.waitForSelector('#txtUser');
     await view.fill('#txtUser', 'bs');
     await view.fill('#txtPass', 'x');
@@ -59,10 +59,18 @@ async function waitFor(what, fn, ms = 30000) {
     // The view sits exactly over the placeholder.
     const geo = await ui.evaluate(() => {
       const r = document.querySelector('[data-pane=onemes] > div:last-child').getBoundingClientRect();
-      return { x: r.left, w: r.width, col: document.querySelector('[data-column]').getBoundingClientRect().right };
+      return { x: r.left, y: r.top, w: r.width, h: r.height };
     });
-    check(geo.w > 300 && geo.x > geo.col, 'OneMES pane right of the control column');
+    const vsize = await view.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+    check(geo.w > 300 && Math.abs(vsize.w - geo.w) <= 2 && Math.abs(vsize.h - geo.h) <= 2, `view fills the browser page (${vsize.w}x${vsize.h} vs ${Math.round(geo.w)}x${Math.round(geo.h)})`);
 
+    // One button takes the view straight to Ds Điều trị nội trú.
+    await ui.click('[data-action=goto-list]');
+    await waitFor('list page', async () => /danhsachdieutrinoitrudraw/.test(view.url()) && !(await ui.$('[data-action=goto-list][disabled]')), 30000);
+    check(/danhsachdieutrinoitrudraw/.test(view.url()), 'Ds Điều trị nội trú button opens the list');
+
+    await ui.click('[data-nav=patients]');
+    await ui.waitForSelector('[data-action=scan]');
     await ui.click('[data-action=scan]');
     await ui.waitForSelector('[data-patient]', { timeout: 30000 });
     check((await ui.$$('[data-patient]')).length === 3, 'three patients listed');

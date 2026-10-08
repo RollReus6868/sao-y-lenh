@@ -132,7 +132,7 @@ function createDriver(host) {
     const w = await waitFor('trang OneMES', () => where());
     if (w.page === 'login') throw new PageError('Chưa đăng nhập OneMES');
     if (w.page !== 'list') {
-      const link = listUrl || (await call('listLink'));
+      const link = listUrl || (await call('listLink')) || (host.listUrl ? host.listUrl() : '');
       if (!link) throw new PageError('Không tìm thấy đường dẫn Ds Điều trị nội trú, hãy mở trang đó trong khung OneMES');
       await loadURL(link);
     }

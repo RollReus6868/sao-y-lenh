@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Moon, Sun, Sparkles, type LucideIcon } from 
 import { cn } from '@/kit/cn';
 import { useTheme } from '@/kit/theme';
 
-export interface NavItem { id: string; label: string; icon: LucideIcon; badge?: number }
+export interface NavItem { id: string; label: string; icon: LucideIcon; badge?: number; dot?: boolean }
 
 function Item({ it, active, collapsed, onClick }: { it: NavItem; active: boolean; collapsed: boolean; onClick: () => void }) {
   const Icon = it.icon;
@@ -21,6 +21,7 @@ function Item({ it, active, collapsed, onClick }: { it: NavItem; active: boolean
       {active && <span className="absolute left-0 h-5 w-1 rounded-r-full bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.5)]" />}
       <Icon className="h-5 w-5 shrink-0 transition-transform group-hover:scale-110" />
       {!collapsed && <span className="truncate">{it.label}</span>}
+      {it.dot && <span className={cn('h-2 w-2 animate-pulse rounded-full bg-primary', collapsed ? 'absolute right-2 top-2' : 'ml-auto')} title="Tool đang thao tác" />}
       {!!it.badge && (
         <span className={cn('rounded-full bg-primary px-1.5 text-[10px] font-bold leading-4 text-primary-foreground', collapsed ? 'absolute right-1.5 top-1' : 'ml-auto')}>{it.badge}</span>
       )}

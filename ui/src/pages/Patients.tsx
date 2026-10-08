@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, BedDouble, Check, ChevronDown, ClipboardCopy, Copy, ListChecks, Pill as PillIcon, Play, RefreshCw, ScanLine, Search, Stethoscope, Users, X } from 'lucide-react';
+import { BedDouble, Globe, MousePointerClick, Check, ChevronDown, ClipboardCopy, Copy, ListChecks, Pill as PillIcon, Play, RefreshCw, ScanLine, Search, Stethoscope, Users, X } from 'lucide-react';
 import { cn } from '@/kit/cn';
 import { Button, Chip, EmptyState, Input, PageHeader, Pill, Segmented, Select, Switch } from '@/kit/ui';
 import { useApp } from '@/lib/useApp';
@@ -9,13 +9,30 @@ import { ActionBar, RunBar, Sheet } from '@/components/common';
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 const today = () => new Date().toDateString();
 
-export function PatientsPage() {
+export function PatientsPage({ onBrowser }: { onBrowser: () => void }) {
   const [open, setOpen] = useState<Patient | null>(null);
-  return open ? <PatientDetail patient={open} onBack={() => setOpen(null)} /> : <PatientList onOpen={setOpen} />;
+  const { state } = useApp();
+  const running = state.busy && state.task === 'Sao chép y lệnh';
+  return (
+    <div className="flex min-w-0 flex-1 gap-3">
+      <section className="glass-panel relative flex w-[400px] shrink-0 flex-col overflow-hidden" data-column="list">
+        <PatientList onOpen={(p) => !running && setOpen(p)} selected={open?.noitruid} onBrowser={onBrowser} />
+      </section>
+      <section className="glass-panel relative flex min-w-0 flex-1 flex-col overflow-hidden" data-column="detail">
+        {open ? (
+          <PatientDetail key={open.noitruid} patient={open} onBack={() => setOpen(null)} onBrowser={onBrowser} />
+        ) : (
+          <div className="flex flex-1 items-center justify-center">
+            <EmptyState icon={<MousePointerClick />} title="Chọn một bệnh nhân" text="Bấm vào bệnh nhân ở danh sách bên trái để xem y lệnh nguồn và chọn mục xóa cho từng ngày." />
+          </div>
+        )}
+      </section>
+    </div>
+  );
 }
 
 // ---------------- danh sách ----------------
-function PatientList({ onOpen }: { onOpen: (p: Patient) => void }) {
+function PatientList({ onOpen, selected, onBrowser }: { onOpen: (p: Patient) => void; selected?: string; onBrowser: () => void }) {
   const { patients, setPatients, data, state, call, toast, refresh } = useApp();
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -88,7 +105,7 @@ function PatientList({ onOpen }: { onOpen: (p: Patient) => void }) {
       )}
       <div className="scroll-thin min-h-0 flex-1 overflow-auto px-4 pb-4 sm:px-5" data-list="patients">
         {!patients.length ? (
-          <EmptyState icon={<ScanLine />} title="Chưa có danh sách" text="Đăng nhập OneMES ở khung bên phải, rồi bấm Quét danh sách để đọc các bệnh nhân đang điều trị." />
+          <EmptyState icon={<ScanLine />} title="Chưa có danh sách" text="Đăng nhập OneMES ở mục Trình duyệt, rồi bấm Quét danh sách để đọc các bệnh nhân đang điều trị." action={<Button variant="outline" size="sm" onClick={onBrowser}><Globe /> Mở trình duyệt OneMES</Button>} />
         ) : !shown.length ? (
           <EmptyState icon={<Search />} title="Không thấy bệnh nhân" text="Thử từ khóa khác." />
         ) : (
@@ -101,7 +118,7 @@ function PatientList({ onOpen }: { onOpen: (p: Patient) => void }) {
                   const ch: Choice | undefined = choices[p.noitruid];
                   const ranToday = run && new Date(run.at).toDateString() === today();
                   return (
-                    <div key={p.noitruid} className="group flex items-start gap-2.5 rounded-xl border border-border/50 bg-card/40 p-3 transition-all hover:border-primary/30 hover:bg-card/70" data-patient={p.maBN}>
+                    <div key={p.noitruid} className={cn('group flex items-start gap-2.5 rounded-xl border p-3 transition-colors', selected === p.noitruid ? 'border-primary/50 bg-primary/10' : 'border-border/50 bg-card/40 hover:border-primary/30 hover:bg-card/70')} data-patient={p.maBN}>
                       <button
                         type="button"
                         aria-label="Chọn để chạy"
@@ -143,7 +160,7 @@ function PatientList({ onOpen }: { onOpen: (p: Patient) => void }) {
       </div>
       <ActionBar>
         {state.busy && state.task === 'Sao chép y lệnh' ? (
-          <RunBar />
+          <RunBar onBrowser={onBrowser} />
         ) : !patients.length ? (
           <Button variant="gradient" size="xl" className="w-full" onClick={scan} disabled={state.busy} data-action="scan">
             <ScanLine /> {state.busy ? 'Đang quét…' : 'Quét danh sách'}
@@ -185,7 +202,7 @@ const parseDate = (s: string) => {
 const ddmm = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 const EMPTY: string[][] = [[], [], [], []];
 
-function PatientDetail({ patient, onBack }: { patient: Patient; onBack: () => void }) {
+function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBack: () => void; onBrowser: () => void }) {
   const { data, state, call, toast, refresh, setData } = useApp();
   const [res, setRes] = useState<LoadResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -257,6 +274,7 @@ function PatientDetail({ patient, onBack }: { patient: Patient; onBack: () => vo
     const plan: Plan = { patient, sourceId: src.id, days, deletions: sel.slice(0, days) };
     const r = await call<RunResult[]>('run', { plans: [plan] }).catch(() => null);
     await refresh();
+    load(); // the newest order is now the source for next time
     if (r && r[0]) {
       if (r[0].ok) toast('success', `Xong ${days} ngày cho ${patient.hoTen}`);
       else toast(r[0].stopped ? 'warning' : 'error', r[0].message || 'Có lỗi, xem Nhật ký');
@@ -273,9 +291,9 @@ function PatientDetail({ patient, onBack }: { patient: Patient; onBack: () => vo
   const total = sel.slice(0, days).reduce((a, d) => a + d.length, 0);
   const cols = `minmax(0,1fr) repeat(${days}, 56px)`;
 
-  const Section = ({ title, icon, list }: { title: string; icon: React.ReactNode; list: Item[] }) => (
+  const section = (title: string, icon: React.ReactNode, list: Item[]) => (
     <>
-      <div className="col-span-full mt-2 flex items-center gap-2 px-1 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-primary [&_svg]:size-3.5">{icon}{title} <span className="font-semibold text-muted-foreground">({list.length})</span></div>
+      <div key={title} className="col-span-full mt-2 flex items-center gap-2 px-1 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-primary [&_svg]:size-3.5">{icon}{title} <span className="font-semibold text-muted-foreground">({list.length})</span></div>
       {!list.length && <div className="col-span-full px-1 pb-2 text-xs text-muted-foreground">Không có mục nào</div>}
       {groupsOf(list).map(([g, its]) => (
         <div key={g} className="contents">
@@ -317,7 +335,7 @@ function PatientDetail({ patient, onBack }: { patient: Patient; onBack: () => vo
   return (
     <>
       <div className="flex flex-shrink-0 items-center gap-2 px-3 pb-2 pt-3 sm:px-4">
-        <Button variant="ghost" size="icon" aria-label="Về danh sách" onClick={onBack} disabled={running} data-action="back"><ArrowLeft /></Button>
+        <Button variant="ghost" size="icon" aria-label="Đóng" title="Đóng" onClick={onBack} disabled={running} data-action="back"><X /></Button>
         <div className="min-w-0 flex-1">
           <div className="truncate font-bold leading-tight">{patient.hoTen}</div>
           <div className="truncate text-xs text-muted-foreground">{patient.maBN} · {patient.tuoi} tuổi · {patient.bg}</div>
@@ -364,8 +382,8 @@ function PatientDetail({ patient, onBack }: { patient: Patient; onBack: () => vo
                   <span className={cn('text-[10px] font-bold', sel[k].length ? 'text-red-500' : 'text-muted-foreground/60')}>−{sel[k].length}</span>
                 </button>
               ))}
-              <Section title="Cho thuốc / VTYT" icon={<PillIcon />} list={src.thuoc} />
-              <Section title="Chỉ định DVKT" icon={<Stethoscope />} list={src.dvkt} />
+              {section('Cho thuốc / VTYT', <PillIcon />, src.thuoc)}
+              {section('Chỉ định DVKT', <Stethoscope />, src.dvkt)}
             </div>
           </>
         )}
@@ -373,7 +391,7 @@ function PatientDetail({ patient, onBack }: { patient: Patient; onBack: () => vo
 
       <ActionBar>
         {running ? (
-          <RunBar />
+          <RunBar onBrowser={onBrowser} />
         ) : (
           <div className="space-y-3">
             <div className="flex items-center gap-4 text-xs">

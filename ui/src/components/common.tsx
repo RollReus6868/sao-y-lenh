@@ -22,7 +22,7 @@ export function Toasts() {
   const { toasts } = useApp();
   const icon = { success: <CheckCircle2 className="text-emerald-500" />, error: <XCircle className="text-red-500" />, warning: <TriangleAlert className="text-amber-500" />, info: <Info className="text-sky-500" /> };
   return (
-    <div className="pointer-events-none absolute inset-x-3 top-3 z-40 flex flex-col items-stretch gap-2">
+    <div className="pointer-events-none absolute right-4 top-4 z-40 w-[360px] max-w-[calc(100%-2rem)] flex flex-col items-stretch gap-2">
       {toasts.map((t) => (
         <div key={t.id} className="solid-panel pointer-events-auto flex items-start gap-2.5 px-3.5 py-3 text-sm shadow-xl animate-in slide-in-from-top-2 [&_svg]:mt-0.5 [&_svg]:size-4 [&_svg]:shrink-0">
           {icon[t.tone]}
@@ -40,7 +40,7 @@ export const levelLabel: Record<string, string> = { ok: 'XONG', warn: 'BỎ QUA'
 export const clock = (t: number) => new Date(t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 // Shown in the action bar while the tool works: progress, current step, Stop / Continue.
-export function RunBar() {
+export function RunBar({ onBrowser }: { onBrowser?: () => void }) {
   const { state, log, call } = useApp();
   const last = log.slice(-3);
   const p = state.progress;
@@ -56,6 +56,7 @@ export function RunBar() {
           {p && p.total > 1 ? ` · ${p.index + 1}/${p.total}` : ''}
           {p ? ` · ${p.patient}` : ''}
         </span>
+        {onBrowser && <button type="button" onClick={onBrowser} className="shrink-0 text-xs font-semibold text-primary hover:underline">Xem trình duyệt</button>}
       </div>
       {state.stepWaiting && (
         <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
