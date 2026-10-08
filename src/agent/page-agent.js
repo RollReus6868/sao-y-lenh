@@ -364,6 +364,8 @@
       dienBien: val('txtDienBienYLenhThamKham'),
       dienBienPHCN: val('txtDienBienPHCNThamKham'),
       buttons: buttons(),
+      busy: isBusy(),
+      tables: { thuoc: !!tblThuoc, dvkt: !!tblDV },
       saoYLenh: sel('cboSaoYLenh'),
       hinhThucSao: sel('cboHinhThucSao'),
       thuoc,

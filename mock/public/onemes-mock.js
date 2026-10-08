@@ -92,6 +92,15 @@
     document.getElementById('txtDienBienYLenhThamKham').value = ylenh.dienBien;
     document.getElementById('txtDienBienPHCNThamKham').value = ylenh.dienBienPHCN;
     show('btnSaoChep', done); show('btnPopupTHUHOI', done); show('btnPopupHOANTAT', !done); show('btnPopupXOA', !done);
+    // Like OneMES, the drug and service tables arrive a moment later (async callbacks).
+    document.querySelector('.divThuocVTYT').innerHTML = '';
+    document.getElementById('divDichVu').innerHTML = '';
+    var drawnFor = ylenh;
+    setTimeout(function () { if (ylenh === drawnFor) drawTables(done); }, 250);
+    document.getElementById('cboSaoYLenh').value = '0';
+    document.getElementById('cboHinhThucSao').value = '';
+  }
+  function drawTables(done) {
 
     // Thuốc / VTYT
     var t = '<div class="table-responsive"><table class="table table-striped table-bordered" id="tblThuoc"><tr>' +
@@ -131,8 +140,6 @@
     });
     d += '</table></div>';
     document.getElementById('divDichVu').innerHTML = d;
-    document.getElementById('cboSaoYLenh').value = '0';
-    document.getElementById('cboHinhThucSao').value = '';
   }
 
   window.onDrawWebpartYLenh = function (id) {

@@ -206,20 +206,38 @@ function createDriver(host) {
     return rows.find((r) => r.dienBien && r.dienBienPHCN) || null;
   }
 
-  async function openOrder(id) {
-    await call('openOrder', id);
-    const o = await waitFor('mở y lệnh', async () => {
+  // OneMES fills the drug and service tables after the order opens (and again after
+  // each deletion), so a read is trusted only when both tables are there, nothing is
+  // loading, and two reads a moment apart agree.
+  async function readStable(id) {
+    const sig = (x) => [x.status, ...x.thuoc.map((y) => y.id), '|', ...x.dvkt.map((y) => y.id)].join(',');
+    let prev = null;
+    const softEnd = Date.now() + 8000;
+    const o = await waitFor('đọc y lệnh', async () => {
       await failOnAlert();
       const x = await call('readOrder');
-      return x.ok && norm(x.id) === norm(id) && x.status ? x : null;
+      if (!x.ok || (id && norm(x.id) !== norm(id)) || !x.status || x.busy) return null;
+      const tablesOk = (x.tables.thuoc && x.tables.dvkt) || Date.now() > softEnd;
+      if (!tablesOk) return null;
+      const same = prev && sig(prev) === sig(x);
+      prev = x;
+      if (!same) {
+        await sleep(350);
+        return null;
+      }
+      return x;
     });
+    if (!o.tables.thuoc || !o.tables.dvkt) log('warn', `Y lệnh ${o.thoiGian}: không thấy bảng ${!o.tables.thuoc ? 'Cho thuốc/VTYT' : 'Chỉ định DVKT'}`);
     return { ...o, thuoc: withKeys(o.thuoc), dvkt: withKeys(o.dvkt) };
   }
 
+  async function openOrder(id) {
+    await call('openOrder', id);
+    return readStable(id);
+  }
+
   async function readOrder() {
-    const o = await call('readOrder');
-    if (!o.ok) throw new PageError('Y lệnh không còn mở trên trang');
-    return { ...o, thuoc: withKeys(o.thuoc), dvkt: withKeys(o.dvkt) };
+    return readStable(null);
   }
 
   // Loads the patient and reads the source order: the given one, or the newest order
