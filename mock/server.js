@@ -131,6 +131,7 @@ const api = {
   xoaYLenh({ id }) {
     const f = findOrder(id);
     if (!f) return { Error: true, InfoMessage: 'Không tìm thấy y lệnh' };
+    if (f.o.status !== 'Mới') return { Error: true, InfoMessage: 'Y lệnh đã hoàn tất, không thể xóa' };
     f.p.orders = f.p.orders.filter((x) => x !== f.o);
     state.log.push(['xoaYLenh', id]);
     return { Error: false };

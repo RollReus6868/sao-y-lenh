@@ -64,7 +64,9 @@ async function waitFor(what, fn, ms = 30000) {
     const vsize = await view.evaluate(() => ({ w: innerWidth, h: innerHeight }));
     check(geo.w > 300 && Math.abs(vsize.w - geo.w) <= 2 && Math.abs(vsize.h - geo.h) <= 2, `view fills the browser page (${vsize.w}x${vsize.h} vs ${Math.round(geo.w)}x${Math.round(geo.h)})`);
 
-    // One button takes the view straight to Ds Điều trị nội trú.
+    // One button takes the view straight to Ds Điều trị nội trú, even from a page
+    // without the OneMES menu (the address is rebuilt from the session id).
+    await view.goto(m.base + '/nomenu.aspx?scope=sys&lang=vi&usid=10.0.0.1_e2e');
     await ui.click('[data-action=goto-list]');
     await waitFor('list page', async () => /danhsachdieutrinoitrudraw/.test(view.url()) && !(await ui.$('[data-action=goto-list][disabled]')), 30000);
     check(/danhsachdieutrinoitrudraw/.test(view.url()), 'Ds Điều trị nội trú button opens the list');
@@ -109,6 +111,20 @@ async function waitFor(what, fn, ms = 30000) {
     check(fresh.every((o) => o.status === 'Hoàn tất'), 'all completed');
     check(fresh.every((o) => !names(o).includes('Lirystad 150')), 'Lirystad removed every day');
     check(fresh[2] && !names(fresh[2]).includes('Điều trị bằng siêu âm') && names(fresh[1]).includes('Điều trị bằng siêu âm'), 'siêu âm removed on day 3 only');
+
+    // The result tab shows what was read back from OneMES.
+    await ui.waitForSelector('[data-result] [data-day="3"]', { timeout: 30000 });
+    check(/Đúng như đã chọn/.test(await ui.textContent('[data-summary]')), 'result: all days as chosen');
+    check((await ui.textContent('[data-day="3"]')).includes('Lirystad 150') === true, 'result: day 3 lists removed Lirystad');
+
+    // Delete day 3 from the tool: Thu hồi, then Xóa on OneMES.
+    m.mock.getState().log.length = 0;
+    await ui.click('[data-day="3"] [data-action=delete-day]');
+    await ui.click('[data-action=confirm-delete]');
+    await ui.waitForSelector('[data-day="3"] [data-action=delete-day]', { state: 'detached', timeout: 60000 });
+    const lg = m.mock.getState().log;
+    check(lg.some((x) => x[0] === 'thuHoi' && x[1] === fresh[2].id) && lg.some((x) => x[0] === 'xoaYLenh' && x[1] === fresh[2].id), 'delete: Thu hồi then Xóa on day 3');
+    check(!st.patients[1].orders.includes(fresh[2]) && m.mock.getState().patients[1].orders.some((o) => o.id === fresh[1].id), 'delete: only day 3 removed');
 
     // Choice is remembered and shown in the list.
     await ui.click('[data-action=back]');

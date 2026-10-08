@@ -2,7 +2,7 @@
 // calls OneMES's own functions; it never calls the server directly.
 // Every function returns plain data so it survives structured clone.
 (function () {
-  if (window.__SYL && window.__SYL.version === 4) return;
+  if (window.__SYL && window.__SYL.version === 5) return;
 
   const txt = (el) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
   const norm = (s) =>
@@ -135,12 +135,26 @@
     return { ok: true, patients: out.filter((p) => p.noitruid) };
   }
 
-  // Link to Ds Điều trị nội trú from the menu (carries the session's usid).
-  function listLink() {
+  // Link to Ds Điều trị nội trú from the menu (carries the session's usid). Pages
+  // without that menu (e.g. the start page after login) still carry usid in their
+  // address, so the link is rebuilt from it with the last known role.
+  function listLink(role) {
     const a = [...document.querySelectorAll('a[href*="wpid=danhsachdieutrinoitrudraw"]')].find(
       (x) => !/bacsidraw/i.test(x.href) && /^https?:/i.test(x.href)
     );
-    return a ? a.href.replace(/#.*$/, '') : '';
+    if (a) return a.href.replace(/#.*$/, '');
+    const u = new URL(location.href);
+    const usid = u.searchParams.get('usid');
+    if (!usid) return '';
+    let r = role || '';
+    for (const x of document.querySelectorAll('a[href*="role="]')) {
+      const m = /[?&]role=(\d+)/.exec(x.getAttribute('href') || '');
+      if (m) { r = r || m[1]; break; }
+    }
+    const q = new URLSearchParams({ scope: 'sys', lang: u.searchParams.get('lang') || 'vi', wpid: 'danhsachdieutrinoitrudraw' });
+    if (r) q.set('role', r);
+    q.set('usid', usid);
+    return `${u.origin}/home.aspx?${q}`;
   }
 
   // Page numbers offered by the patient list pager (NextPage(n) links), if any.
@@ -457,7 +471,7 @@
   }
 
   window.__SYL = {
-    version: 4,
+    version: 5,
     where,
     readPatients,
     listLink,

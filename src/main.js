@@ -52,7 +52,11 @@ function setupView() {
   const wc = view.webContents;
   const upd = () => {
     const u = wc.getURL();
-    if (/wpid=danhsachdieutrinoitrudraw/i.test(u) && !/bacsidraw/i.test(u)) lastListUrl = u.replace(/#.*$/, '');
+    if (/wpid=danhsachdieutrinoitrudraw/i.test(u) && !/bacsidraw/i.test(u)) {
+      lastListUrl = u.replace(/#.*$/, '');
+      const role = (/[?&]role=(\d+)/.exec(u) || [])[1];
+      if (role && store.get().settings.listRole !== role) store.setSettings({ listRole: role });
+    }
     push({ viewUrl: u, canGoBack: wc.navigationHistory.canGoBack() });
   };
   wc.on('did-navigate', upd);
@@ -104,6 +108,7 @@ function makeDriver() {
     exec: (code) => view.webContents.executeJavaScript(code, true),
     loadURL,
     listUrl: () => lastListUrl,
+    listRole: () => store.get().settings.listRole || '',
     log,
     stopped: () => stopFlag,
     step: async (desc) => {
@@ -162,9 +167,12 @@ const commands = {
     else if (action === 'list') {
       if (state.busy) throw new Error('Tool đang thao tác, hãy đợi xong');
       try {
-        await makeDriver().gotoList();
+        await makeDriver().gotoList(true);
+        log('info', 'Đã mở Ds Điều trị nội trú');
       } catch (e) {
-        throw new Error(/đăng nhập/i.test(errMsg(e)) ? 'Hãy đăng nhập OneMES trước' : errMsg(e));
+        const m = /đăng nhập/i.test(errMsg(e)) ? 'Hãy đăng nhập OneMES trước' : errMsg(e);
+        log('warn', `Không mở được Ds Điều trị nội trú: ${m}`);
+        throw new Error(m);
       }
     }
   },
@@ -193,17 +201,42 @@ const commands = {
             if (p.baseDeletions) p.deletions = resolveKeys(r.source, p.baseDeletions);
           }
           const r = await d.run(p);
-          store.setRun(p.patient.noitruid, { ok: true, message: `${p.days} ngày` });
-          out.push({ noitruid: p.patient.noitruid, ok: true, result: r });
+          const check = await checkAfter(d, p.patient, r);
+          store.setRun(p.patient.noitruid, { ok: true, message: `${p.days} ngày`, ...runRecord(r), check });
+          out.push({ noitruid: p.patient.noitruid, ok: true, result: r, check });
+          if (stopFlag) break;
         } catch (e) {
           const msg = errMsg(e);
           log(e.stopped ? 'warn' : 'error', `${p.patient.hoTen}: ${msg}`);
-          store.setRun(p.patient.noitruid, { ok: false, message: msg });
-          out.push({ noitruid: p.patient.noitruid, ok: false, message: msg, stopped: !!e.stopped });
+          // Whatever was created before the error still gets checked, so it can be fixed or removed.
+          const part = e.partial && e.partial.days.length ? e.partial : null;
+          const check = part && !e.stopped ? await checkAfter(d, p.patient, part) : null;
+          store.setRun(p.patient.noitruid, { ok: false, message: msg, ...(part ? runRecord(part) : {}), check });
+          out.push({ noitruid: p.patient.noitruid, ok: false, message: msg, stopped: !!e.stopped, check });
           if (e.stopped) break;
         }
       }
       return out;
+    }),
+  'patient:check': ({ patient }) =>
+    task('Kiểm tra lại', async (d) => {
+      const run = store.get().runs[patient.noitruid];
+      const ids = ((run && run.days) || []).filter((x) => !x.deleted);
+      if (!ids.length) throw new Error('Chưa có ngày nào do tool tạo để kiểm tra');
+      const check = await d.verify(patient, run.expect, ids);
+      return store.patchRun(patient.noitruid, { check: keepDeleted(run.check, check) });
+    }),
+  'order:delete': ({ patient, id }) =>
+    task('Xóa y lệnh', async (d) => {
+      const run = store.get().runs[patient.noitruid];
+      const day = run && (run.days || []).find((x) => x.id === id);
+      // Only orders this tool created can be deleted from here.
+      if (!day) throw new Error('Chỉ xóa được y lệnh do tool vừa tạo');
+      log('info', `${patient.hoTen}: xóa y lệnh ngày ${day.day} (${day.time || ''})`);
+      await d.deleteOrder(patient, id);
+      const days = run.days.map((x) => (x.id === id ? { ...x, deleted: true } : x));
+      const check = run.check && { ...run.check, days: run.check.days.map((x) => (x.id === id ? { ...x, deleted: true } : x)) };
+      return store.patchRun(patient.noitruid, { days, check });
     }),
   stop: () => {
     stopFlag = true;
@@ -218,6 +251,25 @@ const commands = {
   'update:install': () => installUpdate(),
   'open:releases': () => shell.openExternal(`https://github.com/RollReus6868/sao-y-lenh/releases/latest`),
 };
+
+function runRecord(r) {
+  return { expect: r.expect || null, days: r.days.map((x) => ({ day: x.day, id: x.id, time: x.time })) };
+}
+
+async function checkAfter(d, patient, r) {
+  try {
+    return await d.verify(patient, r.expect, r.days);
+  } catch (e) {
+    log('warn', e.stopped ? `${patient.hoTen}: đã dừng, chưa kiểm tra lại` : `${patient.hoTen}: không kiểm tra lại được (${errMsg(e)})`);
+    return null;
+  }
+}
+
+// A re-check does not see deleted orders; keep them listed as deleted.
+function keepDeleted(old, fresh) {
+  const gone = ((old && old.days) || []).filter((x) => x.deleted && !fresh.days.some((y) => y.id === x.id));
+  return { ...fresh, days: [...fresh.days, ...gone].sort((a, b) => a.day - b.day) };
+}
 
 function pickSettings() {
   const s = store.get().settings;

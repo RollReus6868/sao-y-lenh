@@ -17,7 +17,17 @@ export interface LoadResult { rows: OrderRow[]; source: Order | null; skipped: {
 export interface Settings { baseUrl: string; autoComplete: boolean; stepMode: boolean; hinhThuc: string; defaultDays: number }
 export interface Template { id: string; name: string; keys: string[] }
 export interface Choice { days: number; deletions: string[][]; savedAt?: number }
-export interface RunInfo { at: number; ok: boolean; message: string }
+export interface CheckItem {
+  kind: 'thuoc' | 'dvkt'; id: string; base: string; group: string; name: string; hamLuong?: string; dvt?: string; duongDung?: string;
+  sl: string; cachDung?: string; moTa?: string; thoiGian?: string; noiThucHien?: string; doiTuong: string; trangThai: string;
+}
+export interface CheckDay {
+  day: number; id: string; tg?: string; status?: string; thoiGian?: string; thoiGianThucHien?: string; dienBien?: string; dienBienPHCN?: string;
+  thuoc?: CheckItem[]; dvkt?: CheckItem[]; removed?: string[]; problems: string[]; warnings: string[]; gone?: boolean; deleted?: boolean;
+}
+export interface Check { at: number; ok: boolean; days: CheckDay[] }
+export interface RunDay { day: number; id: string; time?: string; deleted?: boolean }
+export interface RunInfo { at: number; ok: boolean; message: string; days?: RunDay[]; check?: Check | null }
 export interface Data { settings: Settings; templates: Template[]; choices: Record<string, Choice>; runs: Record<string, RunInfo> }
 export interface UpdateInfo { version: string; kind: string; url: string; downloading?: boolean; progress?: number; error?: string }
 export interface AppState {
@@ -27,6 +37,6 @@ export interface AppState {
 }
 export interface LogEntry { at: number; level: 'info' | 'ok' | 'warn' | 'error'; msg: string }
 export interface Plan { patient: Patient; sourceId?: string; days: number; deletions?: string[][]; baseDeletions?: string[][] }
-export interface RunResult { noitruid: string; ok: boolean; message?: string; stopped?: boolean }
+export interface RunResult { noitruid: string; ok: boolean; message?: string; stopped?: boolean; check?: Check | null }
 
 export const baseKey = (key: string) => key.replace(/#\d+$/, '');

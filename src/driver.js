@@ -62,7 +62,7 @@ function createDriver(host) {
 
   async function call(fn, ...args) {
     const a = args.map((x) => JSON.stringify(x)).join(',');
-    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==4){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
+    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==5){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
   }
 
   function checkStop() {
@@ -128,12 +128,13 @@ function createDriver(host) {
 
   // ---------- danh sách bệnh nhân ----------
   let listUrl = '';
-  async function gotoList() {
+  async function gotoList(force = false) {
     const w = await waitFor('trang OneMES', () => where());
     if (w.page === 'login') throw new PageError('Chưa đăng nhập OneMES');
-    if (w.page !== 'list') {
-      const link = listUrl || (await call('listLink')) || (host.listUrl ? host.listUrl() : '');
-      if (!link) throw new PageError('Không tìm thấy đường dẫn Ds Điều trị nội trú, hãy mở trang đó trong khung OneMES');
+    if (w.page !== 'list' || force) {
+      const role = host.listRole ? host.listRole() : '';
+      const link = (w.page === 'list' ? w.url.replace(/#.*$/, '') : '') || (await call('listLink', role)) || listUrl || (host.listUrl ? host.listUrl() : '');
+      if (!link) throw new PageError('Không tìm thấy đường dẫn Ds Điều trị nội trú. Hãy mở trang đó một lần bằng menu của OneMES');
       await loadURL(link);
     }
     const w2 = await waitFor('Ds Điều trị nội trú', async () => {
@@ -384,11 +385,20 @@ function createDriver(host) {
    * Day 1 is the copy made by Sao chép; days 2..N come from Sao y lệnh (ngày) = N-1.
    */
   async function run(plan) {
+    const result = { days: [], ok: false };
+    try {
+      return await runInner(plan, result);
+    } catch (e) {
+      e.partial = result;
+      throw e;
+    }
+  }
+
+  async function runInner(plan, result) {
     const N = Math.max(1, Math.min(4, plan.days | 0));
     const del = Array.from({ length: N }, (_, i) => [...new Set((plan.deletions && plan.deletions[i]) || [])]);
     const autoComplete = plan.autoComplete !== false;
     const name = plan.patient.hoTen || plan.patient.maBN;
-    const result = { days: [], ok: false };
     log('info', `Bắt đầu: ${name}, ${N} ngày`);
 
     const before = await openPatient(plan.patient);
@@ -398,6 +408,7 @@ function createDriver(host) {
 
     // Never create a second order for a day that already has one.
     const srcDate = parseTime(before.find((r) => r.id === norm(src.id))?.tg) || parseTime(src.thoiGian);
+    result.expect = expectations(src, del, srcDate, autoComplete);
     if (srcDate) {
       const taken = [];
       for (let k = 1; k <= N; k++) {
@@ -504,7 +515,137 @@ function createDriver(host) {
     return result;
   }
 
-  return { call, where, scanPatients, openPatient, listOrders, pickSource, loadPatient, openOrder, readOrder, run, gotoList };
+  // ---------- kiểm tra lại sau khi chạy ----------
+  /**
+   * Re-reads every order the run created and compares it with what was asked:
+   * deleted items gone, the rest of the source still there, Hoàn tất, right date.
+   * expect = { autoComplete, names: {base: name}, days: [{ day, want: {base: n}, gone: {base: n}, date }] }
+   * ids = [{ day, id }]
+   */
+  async function verify(patient, expect, ids) {
+    const name = patient.hoTen || patient.maBN;
+    log('info', `${name}: kiểm tra lại các ngày vừa sao chép`);
+    const rows = await openPatient(patient);
+    const days = [];
+    for (const { day, id } of ids) {
+      checkStop();
+      const e = (expect && expect.days.find((x) => x.day === day)) || null;
+      const row = rows.find((r) => r.id === norm(id));
+      if (!row) {
+        days.push({ day, id, gone: true, problems: ['Không còn trong Lịch sử y lệnh (đã bị xóa?)'], warnings: [] });
+        continue;
+      }
+      const o = await openOrder(row.id);
+      const items = [...o.thuoc, ...o.dvkt];
+      const have = countBy(items.map(baseKey));
+      const problems = [];
+      const warnings = [];
+      const label = (b) => (expect && expect.names[b]) || items.find((it) => baseKey(it) === b)?.name || keyName(b);
+      if (e) {
+        for (const [b, n] of Object.entries(e.gone)) {
+          if ((have[b] || 0) > (e.want[b] || 0)) problems.push(`"${label(b)}" vẫn còn, cần xóa`);
+        }
+        for (const [b, n] of Object.entries(e.want)) {
+          if ((have[b] || 0) < n) warnings.push(`Thiếu "${label(b)}" so với y lệnh nguồn`);
+        }
+        for (const b of Object.keys(have)) {
+          if (!(b in e.want) && !(b in e.gone)) warnings.push(`Có thêm "${label(b)}" không có trong y lệnh nguồn`);
+        }
+        const d = parseTime(row.tg);
+        if (e.date && d && dayStamp(d) !== dayStamp(new Date(e.date))) problems.push(`Sai ngày: ${row.tg}, mong đợi ${ddmmOf(new Date(e.date))}`);
+      }
+      if (expect && expect.autoComplete && !isDone(o)) problems.push(`Chưa Hoàn tất (đang "${o.status}")`);
+      if (!o.dienBien) warnings.push('Trống Diễn biến bệnh');
+      if (!o.dienBienPHCN) warnings.push('Trống Diễn biến PHCN');
+      const slim = (it) => {
+        const { key, ...rest } = it;
+        return { ...rest, base: baseKey(it) };
+      };
+      days.push({
+        day,
+        id: row.id,
+        tg: row.tg,
+        status: o.status,
+        thoiGian: o.thoiGian,
+        thoiGianThucHien: o.thoiGianThucHien,
+        dienBien: o.dienBien,
+        dienBienPHCN: o.dienBienPHCN,
+        thuoc: o.thuoc.map(slim),
+        dvkt: o.dvkt.map(slim),
+        removed: e ? Object.keys(e.gone).map(label) : [],
+        problems,
+        warnings,
+      });
+    }
+    await call('back').catch(() => {});
+    const bad = days.filter((d) => d.problems.length).length;
+    if (bad) log('warn', `${name}: kiểm tra thấy ${bad} ngày có vấn đề`);
+    else log('ok', `${name}: kiểm tra ${days.length} ngày, đúng như đã chọn`);
+    return { at: Date.now(), ok: !bad, days };
+  }
+
+  // ---------- xóa một y lệnh ----------
+  // OneMES only offers Xóa on a Mới order, and asks no question, so the caller
+  // must have confirmed with the user. Hoàn tất orders are recalled first.
+  async function deleteOrder(patient, id) {
+    const rows = await openPatient(patient);
+    const row = rows.find((r) => r.id === norm(id));
+    if (!row) throw new PageError('Không thấy y lệnh này trong Lịch sử y lệnh (có thể đã xóa)');
+    const label = `Y lệnh ${row.tg}`;
+    let o = await openOrder(row.id);
+    if (isDone(o)) {
+      await recall(row.id, label);
+      o = await readOrder();
+    }
+    if (!isNew(o)) throw new PageError(`${label} có trạng thái "${o.status}", không xóa`);
+    await step(`${label}: Xóa y lệnh`);
+    await settle();
+    const c = await call('clickButton', 'btnPopupXOA');
+    if (!c.ok) throw new PageError(`${label}: không thấy nút Xóa`);
+    await waitFor('xóa y lệnh', async () => {
+      const s = await failOnAlert();
+      if (s.visible && s.ready && s.cancelText) {
+        // Not seen on OneMES so far; answer only a plain delete question.
+        if (/xóa/i.test(s.text + ' ' + s.title) && /^(có|đồng ý|ok)$/i.test(String(s.confirmText).trim())) await call('swalClick', 'confirm');
+        else {
+          await call('swalClick', 'cancel');
+          throw new PageError(`Hộp thoại lạ (${s.title}: ${s.text}), đã bấm hủy`);
+        }
+        return null;
+      }
+      const w = await where();
+      return !(w.popupOpen && norm(w.orderId) === norm(row.id));
+    }, 60000);
+    const after = await listOrders();
+    if (after.some((r) => r.id === row.id)) throw new PageError(`${label}: vẫn còn sau khi bấm Xóa`);
+    log('ok', `${label}: đã xóa y lệnh`);
+    return { ok: true, id: row.id, tg: row.tg };
+  }
+
+  return { call, where, scanPatients, openPatient, listOrders, pickSource, loadPatient, openOrder, readOrder, run, gotoList, verify, deleteOrder };
+}
+
+function countBy(list) {
+  const o = {};
+  for (const x of list) o[x] = (o[x] || 0) + 1;
+  return o;
+}
+
+// What each created day should hold: the source minus that day's deletions.
+function expectations(src, del, srcDate, autoComplete) {
+  const items = [...src.thuoc, ...src.dvkt];
+  const names = {};
+  for (const it of items) names[baseKey(it)] = it.name;
+  return {
+    autoComplete,
+    names,
+    days: del.map((keys, i) => ({
+      day: i + 1,
+      want: countBy(items.filter((it) => !keys.includes(it.key)).map(baseKey)),
+      gone: countBy(items.filter((it) => keys.includes(it.key)).map(baseKey)),
+      date: srcDate ? addDays(srcDate, i + 1).getTime() : null,
+    })),
+  };
 }
 
 function mergeRes(a, b) {

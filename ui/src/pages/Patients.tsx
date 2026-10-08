@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BedDouble, Globe, MousePointerClick, Check, ChevronDown, ClipboardCopy, Copy, ListChecks, Pill as PillIcon, Play, RefreshCw, ScanLine, Search, Stethoscope, Users, X } from 'lucide-react';
+import { BedDouble, ClipboardCheck, Globe, MousePointerClick, Check, ChevronDown, ClipboardCopy, Copy, ListChecks, Pill as PillIcon, Play, RefreshCw, ScanLine, Search, Stethoscope, Users, X } from 'lucide-react';
 import { cn } from '@/kit/cn';
 import { Button, Chip, EmptyState, Input, PageHeader, Pill, Segmented, Select, Switch } from '@/kit/ui';
 import { useApp } from '@/lib/useApp';
 import { baseKey, type Choice, type Item, type LoadResult, type Patient, type Plan, type RunResult, type Template } from '@/lib/types';
 import { ActionBar, RunBar, Sheet } from '@/components/common';
+import { ResultView } from '@/pages/Result';
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 const today = () => new Date().toDateString();
@@ -134,7 +135,9 @@ function PatientList({ onOpen, selected, onBrowser }: { onOpen: (p: Patient) => 
                           <span className="truncate font-bold">{p.hoTen}</span>
                           <span className="ml-auto shrink-0">
                             {ranToday ? (
-                              run.ok ? <Pill tone="success"><Check />Đã làm hôm nay</Pill> : <Pill tone="error">Lỗi</Pill>
+                              !run.ok ? <Pill tone="error">Lỗi</Pill>
+                              : run.check?.days.some((d) => !d.deleted && d.problems.length) ? <Pill tone="warning">Cần xem lại</Pill>
+                              : <Pill tone="success"><Check />Đã làm hôm nay</Pill>
                             ) : ch ? (
                               <Pill tone="active">Có lựa chọn · {ch.days} ngày</Pill>
                             ) : (
@@ -212,6 +215,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const [saveTpl, setSaveTpl] = useState<number | null>(null);
   const [tplName, setTplName] = useState('');
   const [confirm, setConfirm] = useState(false);
+  const [tab, setTab] = useState<'pick' | 'result'>('pick');
   const loaded = useRef(false);
 
   const load = async (sourceId?: string) => {
@@ -274,6 +278,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     const plan: Plan = { patient, sourceId: src.id, days, deletions: sel.slice(0, days) };
     const r = await call<RunResult[]>('run', { plans: [plan] }).catch(() => null);
     await refresh();
+    if (r && r[0] && (r[0].check || r[0].ok)) setTab('result');
     load(); // the newest order is now the source for next time
     if (r && r[0]) {
       if (r[0].ok) toast('success', `Xong ${days} ngày cho ${patient.hoTen}`);
@@ -288,6 +293,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   };
   const candidates = (res?.rows || []).filter((r) => r.dienBien && r.dienBienPHCN);
   const running = state.busy && state.task === 'Sao chép y lệnh';
+  const lastRun = data?.runs[patient.noitruid];
   const total = sel.slice(0, days).reduce((a, d) => a + d.length, 0);
   const cols = `minmax(0,1fr) repeat(${days}, 56px)`;
 
@@ -342,7 +348,17 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
         </div>
         <Button variant="ghost" size="icon" aria-label="Đọc lại" title="Đọc lại y lệnh" onClick={() => load(src?.id)} disabled={state.busy}><RefreshCw /></Button>
       </div>
+      <div className="flex flex-shrink-0 gap-1 px-3 pb-2 sm:px-4" role="tablist">
+        <TabBtn on={tab === 'pick'} onClick={() => setTab('pick')} data-tab="pick"><ListChecks /> Chọn mục xóa</TabBtn>
+        <TabBtn on={tab === 'result'} onClick={() => setTab('result')} data-tab="result">
+          <ClipboardCheck /> Kết quả
+          {lastRun?.check ? (
+            lastRun.check.days.some((d) => !d.deleted && d.problems.length) ? <span className="h-2 w-2 rounded-full bg-red-500" /> : <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          ) : null}
+        </TabBtn>
+      </div>
 
+      {tab === 'result' ? <ResultView patient={patient} /> : <>
       <div className="scroll-thin min-h-0 flex-1 overflow-auto px-3 pb-4 sm:px-4" data-detail>
         {loading && !src ? (
           <div className="space-y-3 pt-2">{[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-muted/50" />)}</div>
@@ -405,6 +421,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
           </div>
         )}
       </ActionBar>
+      </>}
 
       <Sheet open={menu !== null} onClose={() => setMenu(null)} title={menu !== null ? `Ngày ${menu + 1} (${dayDate(menu)}): chọn nhanh` : ''}>
         {menu !== null && (
@@ -442,6 +459,14 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
         </ol>
       </Sheet>
     </>
+  );
+}
+
+function TabBtn({ on, children, ...p }: { on: boolean; children: React.ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button type="button" role="tab" aria-selected={on} className={cn('flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors [&_svg]:size-3.5', on ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground')} {...p}>
+      {children}
+    </button>
   );
 }
 

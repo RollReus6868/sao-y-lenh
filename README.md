@@ -16,6 +16,7 @@ Tool desktop sao chép và sửa y lệnh nội trú trên OneMES 3.0: quét dan
 4. Chọn **Số ngày tạo** (1 = chỉ Sao chép; 2–4 = Sao chép + Sao y lệnh 1–3 ngày).
 5. Tick ô đỏ ở mục cần xóa cho từng ngày. Bấm tên mục để chọn cả hàng; bấm tiêu đề cột để chọn nhanh hoặc áp mẫu.
 6. **Sao chép & xóa cho N ngày** → xem lại → **Bắt đầu**.
+7. Xong, tool tự kiểm tra lại và mở thẻ **Kết quả**: xem từng ngày vừa tạo. Ngày nào sai thì bấm **Xóa** (tool Thu hồi rồi Xóa trên OneMES).
 
 Lần đầu nên bật **Từng bước** và thử với 1 bệnh nhân.
 

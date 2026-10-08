@@ -103,6 +103,34 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     check(e2 && /diễn biến/i.test(e2.message), 'OneMES warning surfaces: ' + (e2 && e2.message));
     check(newOrders(1, before2).length === 1 && newOrders(1, before2)[0].status === 'Mới', 'stopped with the copy still Mới');
     check(!(await d.call('swal')).visible, 'warning dialog closed');
+    check(e2.partial && e2.partial.days.length === 1, 'error carries the day already created');
+
+    // --- check afterwards, then delete a created day ---
+    console.log('kiểm tra lại + xóa ngày');
+    m.mock.reset();
+    pts = await d.scanPatients();
+    ({ source } = await d.loadPatient(pts[1]));
+    before = ids(1);
+    const L2 = keyOf(source, 'Lirystad'), SA2 = keyOf(source, 'Điều trị bằng siêu âm');
+    r = await d.run({ patient: pts[1], sourceId: source.id, days: 3, deletions: [[L2], [L2], [L2, SA2]] });
+    let v = await d.verify(pts[1], r.expect, r.days);
+    check(v.ok && v.days.length === 3 && v.days.every((x) => !x.problems.length), 'check: all three days as chosen');
+    check(v.days.every((x) => /hoàn tất/i.test(x.status) && x.dienBien && x.thuoc.length && x.dvkt.length), 'check: full details read back');
+    check(v.days[2].removed.includes('Điều trị bằng siêu âm') && v.days[2].dvkt.every((x) => x.name !== 'Điều trị bằng siêu âm'), 'check: day 3 lists what was removed');
+    // put a deleted drug back on day 2 behind the tool's back
+    fresh = newOrders(1, before);
+    const lir = m.mock.getState().patients[1].orders.find((o) => o.id === source.id).thuoc.find((x) => x.name === 'Lirystad 150');
+    fresh[1].thuoc.push({ ...lir, id: 'aaaaaaaa-0000-4000-8000-000000000001' });
+    v = await d.verify(pts[1], r.expect, r.days);
+    check(!v.ok && v.days[1].problems.some((x) => /Lirystad 150.*vẫn còn/.test(x)) && !v.days[0].problems.length, 'check: leftover drug flagged on day 2 only');
+
+    const gone = await d.deleteOrder(pts[1], r.days[2].id);
+    check(gone.ok && !ids(1).includes(r.days[2].id), 'delete: day 3 removed from OneMES');
+    check(m.mock.getState().log.some((x) => x[0] === 'thuHoi' && x[1] === r.days[2].id), 'delete: Thu hồi first (it was Hoàn tất)');
+    const again = await d.deleteOrder(pts[1], r.days[2].id).catch((x) => x);
+    check(again instanceof Error && /Không thấy/.test(again.message), 'delete: a missing order is refused');
+    v = await d.verify(pts[1], r.expect, r.days);
+    check(v.days[2].gone && v.days[2].problems.length, 'check: deleted day reported as gone');
   } catch (e) {
     console.log('ERROR', e);
     process.exitCode = 1;

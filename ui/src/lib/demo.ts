@@ -1,5 +1,5 @@
 // Demo backend for previewing the UI in a browser. Fake names only.
-import type { AppState, Data, Item, LogEntry, Patient } from './types';
+import type { AppState, Check, CheckDay, Data, Item, LogEntry, Patient, RunInfo } from './types';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const ROOMS = ['Buồng 101', 'Buồng 101', 'Buồng 103', 'Buồng 103', 'Buồng 105', 'Buồng 105', 'Buồng 107'];
@@ -52,6 +52,24 @@ const source = {
   hinhThucSao: { value: '', options: [{ value: '1', text: 'Sao thuốc dự trù và dịch vụ' }] },
 };
 
+// What a read-back after a 3-day run looks like; day 2 shows a leftover to flag.
+function demoCheck(deletions: string[][]): Check {
+  const all = [...source.thuoc, ...source.dvkt];
+  const days: CheckDay[] = deletions.map((del, i) => {
+    const keep = all.filter((it) => !del.includes(it.key) || (i === 1 && it.name === 'Lirystad 150'));
+    const strip = (it: Item) => ({ ...it, base: it.key.replace(/#\d+$/, '') });
+    return {
+      day: i + 1, id: `new${i}`, tg: `07:04 ${14 + i}/10/2026`, status: 'Hoàn tất', thoiGian: `07:04 ${14 + i}/10/2026`, thoiGianThucHien: `07:05 ${14 + i}/10/2026`,
+      dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN,
+      thuoc: keep.filter((x) => x.kind === 'thuoc').map(strip), dvkt: keep.filter((x) => x.kind === 'dvkt').map(strip),
+      removed: all.filter((it) => del.includes(it.key)).map((it) => it.name),
+      problems: i === 1 && del.some((k) => k.startsWith('t|lirystad')) ? ['"Lirystad 150" vẫn còn, cần xóa'] : [],
+      warnings: [],
+    };
+  });
+  return { at: Date.now(), ok: !days.some((d) => d.problems.length), days };
+}
+
 export function demoApi() {
   const data: Data = {
     settings: { baseUrl: 'http://192.168.30.19:2026/', autoComplete: true, stepMode: false, hinhThuc: '1', defaultDays: 3 },
@@ -91,8 +109,30 @@ export function demoApi() {
           pushState({ busy: true, task: 'Sao chép y lệnh', progress: { patient: payload.plans[0].patient.hoTen, index: 0, total: payload.plans.length } });
           if (q.get('step')) { pushState({ stepWaiting: 'Ngày 2: xóa "Lirystad 150"' }); return new Promise(() => {}) as Promise<T>; }
           await sleep(1500); addLog('ok', 'Xong'); pushState({ busy: false, task: '', progress: null });
-          return payload.plans.map((p: any) => ({ noitruid: p.patient.noitruid, ok: true })) as T;
+          return payload.plans.map((p: any) => {
+            const dels: string[][] = p.deletions || Array.from({ length: p.days }, () => []);
+            const check = demoCheck(dels);
+            data.runs[p.patient.noitruid] = { at: Date.now(), ok: true, message: `${p.days} ngày`, days: check.days.map((d) => ({ day: d.day, id: d.id, time: d.tg })), check };
+            return { noitruid: p.patient.noitruid, ok: true, check };
+          }) as T;
         }
+        case 'patient:check': {
+          pushState({ busy: true, task: 'Kiểm tra lại' }); await sleep(800); pushState({ busy: false, task: '' });
+          const r = data.runs[payload.patient.noitruid];
+          r.check = { ...r.check!, at: Date.now() };
+          return { ...r } as T;
+        }
+        case 'order:delete': {
+          pushState({ busy: true, task: 'Xóa y lệnh' }); await sleep(800); pushState({ busy: false, task: '' });
+          const r: RunInfo = data.runs[payload.patient.noitruid];
+          r.days = r.days!.map((d) => (d.id === payload.id ? { ...d, deleted: true } : d));
+          r.check = { ...r.check!, days: r.check!.days.map((d) => (d.id === payload.id ? { ...d, deleted: true } : d)) };
+          addLog('ok', `Đã xóa y lệnh ${payload.id}`);
+          return { ...r } as T;
+        }
+        case 'view:nav':
+          if (payload?.action === 'list' && q.get('navfail')) throw new Error('Hãy đăng nhập OneMES trước');
+          return undefined as T;
         default: return undefined as T;
       }
     },

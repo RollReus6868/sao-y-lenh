@@ -73,6 +73,12 @@ function createStore(dir) {
       data.runs[id] = { ...r, at: Date.now() };
       save();
     },
+    patchRun(id, patch) {
+      if (!data.runs[id]) return null;
+      data.runs[id] = { ...data.runs[id], ...patch };
+      save();
+      return data.runs[id];
+    },
     appendLog,
   };
 }

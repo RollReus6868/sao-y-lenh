@@ -44,6 +44,13 @@ const { createDriver } = require('../src/driver');
     await page.waitForTimeout(500);
     check(!(await d.call('swal')).visible, 'dialog closed');
     check(m.mock.getState().patients[0].orders[0].thuoc.length === 5, 'cancel kept the drug');
+
+    // A page without the menu (start page after login) still yields the list address from usid.
+    await page.goto(m.base + '/nomenu.aspx?scope=sys&lang=vi&usid=10.0.0.1_abc&st=1');
+    const link = await d.call('listLink', '61');
+    check(link === m.base + '/home.aspx?scope=sys&lang=vi&wpid=danhsachdieutrinoitrudraw&role=61&usid=10.0.0.1_abc', 'list link rebuilt from usid: ' + link);
+    await page.goto(m.base + '/nomenu.aspx');
+    check((await d.call('listLink', '61')) === '', 'no usid, no link');
   } finally {
     await browser.close();
     await m.close();
