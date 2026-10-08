@@ -24,10 +24,15 @@ function list(dir) {
     const dir = b === 'default' ? path.join(process.env.LOCALAPPDATA, 'Programs', 'SaoYLenh') : b;
     console.log('installer', setup, fs.existsSync(setup) ? fs.statSync(setup).size : 'MISSING');
     // NSIS wants /D last and unquoted, even with spaces.
-    const r = spawnSync(b === 'default' ? `"${setup}" /S` : `"${setup}" /S /D=${dir}`, { shell: true, windowsVerbatimArguments: true, stdio: 'inherit' });
-    console.log('installer exit', r.status, r.error || '');
     const exe = path.join(dir, 'SaoYLenh.exe');
-    for (let i = 0; i < 60 && !fs.existsSync(exe); i++) await sleep(2000);
+    // A freshly written installer occasionally crashes on the runner (0xC0000005, likely
+    // the virus scanner); retry, and say so in the log.
+    for (let attempt = 1; attempt <= 3 && !fs.existsSync(exe); attempt++) {
+      await sleep(attempt === 1 ? 3000 : 10000);
+      const r = spawnSync(b === 'default' ? `"${setup}" /S` : `"${setup}" /S /D=${dir}`, { shell: true, windowsVerbatimArguments: true, stdio: 'inherit' });
+      console.log(`attempt ${attempt}: installer exit`, r.status, r.error || '');
+      for (let i = 0; i < 30 && !fs.existsSync(exe); i++) await sleep(2000);
+    }
     console.log('install dir:', list(dir));
     const local = path.join(process.env.LOCALAPPDATA || '', 'Programs');
     console.log('LOCALAPPDATA\\Programs:', list(local), '| sao-y-lenh:', list(path.join(local, 'sao-y-lenh')));
