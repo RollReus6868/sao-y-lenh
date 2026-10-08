@@ -34,6 +34,25 @@ function list(dir) {
     console.log(ok ? 'ok  installed' : 'FAIL not installed');
     process.exit(ok ? 0 : 1);
   }
+  if (mode === 'debug') {
+    // Try variants and report which one installs.
+    const setup = path.resolve(a, fs.readdirSync(a).find((f) => f.endsWith('.exe')));
+    const run = (cmd) => { const t = Date.now(); const r = spawnSync(cmd, { shell: true, windowsVerbatimArguments: true, stdio: 'inherit' }); return `exit ${r.status} in ${Date.now() - t} ms`; };
+    const local = path.join(process.env.LOCALAPPDATA, 'Programs');
+    const tries = [
+      ['default', `"${setup}" /S`, path.join(local, 'sao-y-lenh')],
+      ['D no spaces', `"${setup}" /S /D=C:\\TestApps\\SYL`, 'C:\\TestApps\\SYL'],
+      ['D spaces', `"${setup}" /S /D=C:\\Test Apps\\Sao Y Lenh`, 'C:\\Test Apps\\Sao Y Lenh'],
+      ['D spaces user', `"${setup}" /S /D=${process.env.LOCALAPPDATA}\\Test Apps\\SYL`, `${process.env.LOCALAPPDATA}\\Test Apps\\SYL`],
+    ];
+    for (const [name, cmd, dir] of tries) {
+      const r = run(cmd);
+      for (let i = 0; i < 30 && !fs.existsSync(path.join(dir, 'SaoYLenh.exe')); i++) await sleep(2000);
+      console.log(`== ${name}: ${r}; ${dir}: ${list(dir)}`);
+    }
+    console.log('Programs:', list(local));
+    process.exit(1);
+  }
   if (mode === 'uninstall') {
     const dir = a;
     const un = path.join(dir, 'Uninstall SaoYLenh.exe');

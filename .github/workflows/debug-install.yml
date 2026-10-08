@@ -1,0 +1,18 @@
+name: debug-install
+# Manual: try silent-install variants on the installer from an earlier build run.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id: { description: 'build run id with the windows artifact', required: true }
+permissions:
+  contents: read
+  actions: read
+jobs:
+  win:
+    runs-on: windows-2025
+    defaults: { run: { shell: bash } }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with: { name: windows, path: dist, run-id: '${{ inputs.run_id }}', github-token: '${{ github.token }}' }
+      - run: node tests/ci-run.js try-install node tests/win-install.js debug dist

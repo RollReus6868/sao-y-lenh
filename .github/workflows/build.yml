@@ -50,6 +50,8 @@ jobs:
       - name: Build installer
         env: { CSC_IDENTITY_AUTO_DISCOVERY: 'false' }
         run: node tests/ci-run.js build-win npx electron-builder --win --x64 --publish never
+      - uses: actions/upload-artifact@v7
+        with: { name: windows, path: 'dist/*.exe', if-no-files-found: error }
       - name: Silent install into a path with spaces
         run: |
           V=$(node -p "require('./package.json').version")
@@ -64,8 +66,6 @@ jobs:
         run: node tests/ci-run.js e2e-after-update node tests/e2e-app.js "C:\Test Apps\Sao Y Lenh\SaoYLenh.exe"
       - name: Uninstall
         run: node tests/ci-run.js uninstall node tests/win-install.js uninstall "C:\Test Apps\Sao Y Lenh"
-      - uses: actions/upload-artifact@v7
-        with: { name: windows, path: 'dist/*.exe', if-no-files-found: error }
 
   macos:
     needs: test
