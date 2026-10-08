@@ -5,7 +5,7 @@ import { useApp } from '@/lib/useApp';
 import { Button } from '@/kit/ui';
 
 // The real OneMES page is a native view painted over the placeholder; we only report
-// where the placeholder is, and show the view only while this page is open.
+// where the placeholder is. App shows the view only while this page is open.
 export function BrowserPage() {
   const { state, call } = useApp();
   const ref = useRef<HTMLDivElement>(null);
@@ -28,12 +28,10 @@ export function BrowserPage() {
     window.addEventListener('resize', send);
     const t = setInterval(send, 400); // sidebar width animates
     send();
-    api.call('view:visible', true).catch(() => {});
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', send);
       clearInterval(t);
-      api.call('view:visible', false).catch(() => {});
     };
   }, []);
 

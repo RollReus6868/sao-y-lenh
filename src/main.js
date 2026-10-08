@@ -48,8 +48,7 @@ function setupView() {
   view = new WebContentsView({ webPreferences: { session: ses, backgroundThrottling: false } });
   win.contentView.addChildView(view);
   // Hidden until the Trình duyệt page shows it; the page keeps its size so OneMES lays out normally.
-  view.setBounds({ x: 0, y: 0, width: 1280, height: 800 });
-  view.setVisible(false);
+  placeView();
   const wc = view.webContents;
   const upd = () => {
     const u = wc.getURL();
@@ -82,14 +81,21 @@ function loadURL(url) {
   });
 }
 
+// The view is shown only on the Trình duyệt page. Hiding moves it out of the window as
+// well as setVisible(false): on some Windows setups setVisible alone leaves it painted
+// over the rest of the UI. It keeps its size so OneMES lays out normally while hidden.
+let viewShown = false;
+let viewBounds = { x: 0, y: 0, width: 1280, height: 800 };
+function placeView() {
+  if (!view) return;
+  const { width, height } = viewBounds;
+  view.setBounds(viewShown ? viewBounds : { x: -width - 200, y: -height - 200, width, height });
+  view.setVisible(viewShown);
+}
 function applyBounds(b) {
-  if (!view || !b || b.width < 10 || b.height < 10) return;
-  view.setBounds({
-    x: Math.round(b.x),
-    y: Math.round(b.y),
-    width: Math.round(b.width),
-    height: Math.round(b.height),
-  });
+  if (!b || b.width < 10 || b.height < 10) return;
+  viewBounds = { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) };
+  if (viewShown) placeView();
 }
 
 // ---------- automation ----------
@@ -144,8 +150,10 @@ const commands = {
   'choice:set': ({ id, choice }) => store.setChoice(id, choice),
   'view:bounds': (b) => applyBounds(b),
   'view:visible': (v) => {
-    view.setVisible(!!v);
+    viewShown = !!v;
+    placeView();
   },
+  'view:state': () => ({ shown: viewShown, visible: view.getVisible(), bounds: view.getBounds() }),
   'view:nav': async ({ action }) => {
     const wc = view.webContents;
     if (action === 'home') goHome();
@@ -300,7 +308,7 @@ app.whenReady().then(() => {
   ipcMain.handle('call', async (_e, cmd, payload) => {
     const fn = commands[cmd];
     if (!fn) throw new Error('Lệnh lạ: ' + cmd);
-    return fn(payload || {});
+    return fn(payload === undefined || payload === null ? {} : payload);
   });
   createWindow();
   if (!process.env.SYL_NO_UPDATE_CHECK) setTimeout(() => checkUpdate(false), 4000);

@@ -69,6 +69,23 @@ async function waitFor(what, fn, ms = 30000) {
     await waitFor('list page', async () => /danhsachdieutrinoitrudraw/.test(view.url()) && !(await ui.$('[data-action=goto-list][disabled]')), 30000);
     check(/danhsachdieutrinoitrudraw/.test(view.url()), 'Ds Điều trị nội trú button opens the list');
 
+    const vs = () => ui.evaluate(() => window.app.call('view:state'));
+    let st0 = await vs();
+    check(st0.shown && st0.visible && st0.bounds.x >= 0, 'view shown on the browser page');
+
+    // Leaving the page must take the view out of the way of the rest of the UI.
+    for (const nav of ['patients', 'templates', 'log', 'settings']) {
+      await ui.click(`[data-nav=${nav}]`);
+      st0 = await waitFor('view hidden', async () => { const x = await vs(); return !x.shown ? x : null; }, 5000);
+      const win = await ui.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+      const b = st0.bounds;
+      const outside = b.x + b.width <= 0 || b.y + b.height <= 0 || b.x >= win.w || b.y >= win.h;
+      check(!st0.visible && outside, `view hidden on ${nav}`);
+    }
+    await ui.click('[data-nav=browser]');
+    st0 = await waitFor('view shown', async () => { const x = await vs(); return x.shown ? x : null; }, 5000);
+    check(st0.visible && st0.bounds.x >= 0 && st0.bounds.width > 300, 'view back when returning to the browser page');
+
     await ui.click('[data-nav=patients]');
     await ui.waitForSelector('[data-action=scan]');
     await ui.click('[data-action=scan]');
