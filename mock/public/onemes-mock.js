@@ -96,6 +96,17 @@
     document.getElementById('txtThoigianThucHienThamKham').value = ylenh.tgth;
     document.getElementById('txtDienBienYLenhThamKham').value = ylenh.dienBien;
     document.getElementById('txtDienBienPHCNThamKham').value = ylenh.dienBienPHCN;
+    document.getElementById('txtThoigianThamKham').setAttribute('data-value', ylenh.tg);
+    // Like OneMES: the pickers hold just the chosen entry, appended as an option.
+    var bs = document.getElementById('cboBacSiThamKham');
+    bs.innerHTML = '';
+    if (ylenh.bacSiObj) bs.appendChild(new Option(ylenh.bacSiObj.name, ylenh.bacSiObj.id, true, true));
+    var cd = document.getElementById('cboCapDoChamSocThamKham');
+    cd.innerHTML = '';
+    if (ylenh.capDo) cd.appendChild(new Option(ylenh.capDo.text, ylenh.capDo.id, true, true));
+    var ro = done;
+    ['txtThoigianThamKham', 'txtThoigianThucHienThamKham', 'txtDienBienYLenhThamKham', 'txtDienBienPHCNThamKham'].forEach(function (k) { document.getElementById(k).readOnly = ro; });
+    show('btnSaveThamKhamDraw', !done);
     show('btnSaoChep', done); show('btnPopupTHUHOI', done); show('btnPopupHOANTAT', !done); show('btnPopupXOA', !done);
     // Like OneMES, the drug and service tables arrive a moment later (async callbacks).
     document.querySelector('.divThuocVTYT').innerHTML = '';
@@ -162,6 +173,110 @@
     drawList();
   };
   window.OnLoadFormPopupThamKhamDraw = function () { drawOrder(); toastr.info('Cập nhập thông tin y lệnh thành công!'); };
+
+  function parseT(t) {
+    var m = /(\d{1,2}):(\d{2})\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(t || '');
+    return m ? new Date(+m[5], +m[4] - 1, +m[3], +m[1], +m[2]) : null;
+  }
+  window.CheckSuaThoiGianYLenh = function () {
+    var cd = document.getElementById('txtThoigianThamKham');
+    var th = document.getElementById('txtThoigianThucHienThamKham');
+    if (parseT(cd.value) > parseT(th.value)) {
+      window.callGallAlert('Thời gian thực hiện y lệnh không được nhỏ hơn thời gian chỉ định!');
+      cd.value = cd.getAttribute('data-value');
+    }
+  };
+  window.CheckSuaThoiGianThucHienYLenh = function () {
+    var cd = document.getElementById('txtThoigianThamKham');
+    var th = document.getElementById('txtThoigianThucHienThamKham');
+    if (parseT(cd.value) > parseT(th.value)) {
+      window.callGallAlert('Thời gian thực hiện y lệnh không được nhỏ hơn thời gian chỉ định!');
+      th.value = cd.value;
+    }
+  };
+  window.OnSaveFormPopupThamKhamDraw = function () {
+    if (!ylenh || ylenh.status === 'Hoàn tất') return;
+    var v = function (id) { return document.getElementById(id).value; };
+    var opt = function (id) { var s = document.getElementById(id); var o = s.options[s.selectedIndex]; return s.value ? { id: s.value, text: o ? o.text : '' } : null; };
+    var bs = opt('cboBacSiThamKham');
+    var r = call('luu', {
+      id: window._ylenh_ID, thoiGian: v('txtThoigianThamKham'), thoiGianThucHien: v('txtThoigianThucHienThamKham'),
+      dienBien: v('txtDienBienYLenhThamKham'), dienBienPHCN: v('txtDienBienPHCNThamKham'),
+      bacSi: bs ? { id: bs.id, name: bs.text } : null, capDo: opt('cboCapDoChamSocThamKham'),
+    }).value;
+    if (r.Error) { window.callSweetAlert(r.InfoMessage); return; }
+    toastr.info('Đã lưu!');
+  };
+  window.OnLoadActionFormPopup = function () { setTimeout(drawOrder, 200); };
+
+  // ----- Thông tin bệnh án (Tổng kết > Lập bìa bệnh án) -----
+  var schema = null;
+  window.onShowTtBenhAn = function (benhAnId, container) {
+    if (!schema) {
+      var x = new XMLHttpRequest();
+      x.open('GET', '/benh-an-schema.json', false);
+      x.send();
+      schema = JSON.parse(x.responseText);
+    }
+    var vals = call('benhAn', { id: benhAnId }).value.RetObject || {};
+    var ctl = function (f) {
+      var v = vals[f.id];
+      if (f.kind === 'textarea') return '<textarea class="form-control" id="' + f.id + '">' + esc(v || '') + '</textarea>';
+      if (f.kind === 'check') return '<input type="checkbox" id="' + f.id + '"' + (v ? ' checked' : '') + '>';
+      if (f.kind === 'radio') return f.options.map(function (o) {
+        return '<label><input type="radio" name="' + f.id + '" value="' + esc(o.value) + '"' + (v === o.value ? ' checked' : '') + '><span>' + esc(o.label) + '</span></label>';
+      }).join(' ');
+      if (f.kind === 'select' || f.kind === 'multi') {
+        var list = Array.isArray(v) ? v : [v];
+        return '<select id="' + f.id + '"' + (f.kind === 'multi' ? ' multiple class="chosen-select"' : ' class="selectpicker"') + '>' +
+          (f.kind === 'select' ? '<option value=""></option>' : '') +
+          f.options.map(function (o) { return '<option value="' + esc(o.value) + '"' + (list.indexOf(o.value) >= 0 ? ' selected' : '') + '>' + esc(o.label) + '</option>'; }).join('') + '</select>';
+      }
+      return '<input type="' + (f.kind === 'number' ? 'number' : 'text') + '" class="form-control" id="' + f.id + '" value="' + esc(v == null ? '' : v) + '">';
+    };
+    var part = function (n) {
+      return schema.groups.filter(function (g) { return g.part === n; }).map(function (g) {
+        return '<fieldset><legend>' + esc(g.title) + '</legend>' + g.fields.map(function (f) {
+          return '<div class="form-group"><span class="leftLabel">' + esc(f.label) + ': </span>' + ctl(f) + '</div>';
+        }).join('') + '</fieldset>';
+      }).join('');
+    };
+    var q = '&quot;' + benhAnId + '&quot;';
+    document.getElementById(container).innerHTML = '<h3>B. PHẦN BỆNH ÁN</h3>' +
+      '<form action="javascript:SaveTtChung(' + q + ');">' + part(1) + '<input type="submit" id="btnSaveTtChung" value="Lưu" style="display:none;"></form>' +
+      '<div class="divba"><form action="javascript:SaveTtChuyenKhoa(' + q + ');">' + part(2) + '<input type="submit" id="btnSaveTtChuyenKhoa" value="Lưu" style="display:none;"></form></div>' +
+      '<h3>C. TỔNG KẾT BỆNH ÁN</h3>';
+  };
+  function collect(n) {
+    var out = {};
+    schema.groups.filter(function (g) { return g.part === n; }).forEach(function (g) {
+      g.fields.forEach(function (f) {
+        if (f.kind === 'radio') {
+          var c = document.querySelector('input[name="' + f.id + '"]:checked');
+          out[f.id] = c ? c.value : '';
+        } else {
+          var el = document.getElementById(f.id);
+          if (f.kind === 'check') out[f.id] = el.checked;
+          else if (f.kind === 'multi') out[f.id] = [].slice.call(el.options).filter(function (o) { return o.selected; }).map(function (o) { return o.value; });
+          else out[f.id] = el.value;
+        }
+      });
+    });
+    return out;
+  }
+  window.SaveTtChung = function (id) {
+    var r = call('saveBenhAn', { id: id, part: 1, values: collect(1) }).value;
+    if (r.Error) { window.callGallAlert(r.InfoMessage); return; }
+    toastr.info('Lưu Thông tin chung thành công.');
+  };
+  window.SaveTtChuyenKhoa = function (id) {
+    // OneMES first fetches the list of fields (async), then saves.
+    setTimeout(function () {
+      var r = call('saveBenhAn', { id: id, part: 2, values: collect(2) }).value;
+      if (r.Error) { window.callGallAlert(r.InfoMessage); return; }
+      toastr.info('Lưu Thông tin chuyên khoa thành công.');
+    }, 300);
+  };
 
   window.onSaoChep = function () {
     swal({ title: 'Thông báo', text: 'Bạn có muốn sao chép Y lệnh này cho ngày hôm sau không?!', type: 'warning', showCancelButton: true,

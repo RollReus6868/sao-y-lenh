@@ -66,6 +66,10 @@ export function Input({ className, ...p }: React.InputHTMLAttributes<HTMLInputEl
   return <input className={cn('h-9 w-full rounded-md border border-input bg-background/60 px-3 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring/40', className)} {...p} />;
 }
 
+export function Textarea({ className, ...p }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea className={cn('min-h-[60px] w-full rounded-md border border-input bg-background/60 px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring/40', className)} {...p} />;
+}
+
 export function Segmented<T extends string | number>({ value, options, onChange, disabled }: { value: T; options: { value: T; label: ReactNode; title?: string }[]; onChange: (v: T) => void; disabled?: boolean }) {
   return (
     <div className="inline-flex rounded-lg bg-muted/60 p-0.5">

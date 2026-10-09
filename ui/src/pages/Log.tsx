@@ -2,11 +2,12 @@ import { useEffect, useRef } from 'react';
 import { FolderOpen, ScrollText } from 'lucide-react';
 import { cn } from '@/kit/cn';
 import { Button, EmptyState, PageHeader } from '@/kit/ui';
-import { useApp } from '@/lib/useApp';
+import { useApp, useLog } from '@/lib/useApp';
 import { clock, levelLabel, levelTone } from '@/components/common';
 
 export function LogPage() {
-  const { log, call } = useApp();
+  const { call } = useApp();
+  const log = useLog();
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });

@@ -14,9 +14,11 @@ Tool desktop sao chép và sửa y lệnh nội trú trên OneMES 3.0: quét dan
 2. **Quét danh sách**.
 3. Bấm một bệnh nhân. Tool mở Lịch sử y lệnh và chọn y lệnh nguồn.
 4. Chọn **Số ngày tạo** (1 = chỉ Sao chép; 2–4 = Sao chép + Sao y lệnh 1–3 ngày).
-5. Tick ô đỏ ở mục cần xóa cho từng ngày. Bấm tên mục để chọn cả hàng; bấm tiêu đề cột để chọn nhanh hoặc áp mẫu.
-6. **Sao chép & xóa cho N ngày** → xem lại → **Bắt đầu**.
-7. Xong, tool tự kiểm tra lại và mở thẻ **Kết quả**: xem từng ngày vừa tạo. Ngày nào sai thì bấm **Xóa** (tool Thu hồi rồi Xóa trên OneMES).
+5. Tick ô đỏ ở mục cần xóa cho từng ngày. Bấm tên mục để chọn cả hàng; bấm tiêu đề cột để chọn nhanh hoặc áp mẫu. Vật tư y tế có ghi (Hao phí) hoặc (Bảo hiểm).
+6. Muốn đổi giờ thực hiện, bác sĩ, cấp độ chăm sóc hay diễn biến của ngày nào thì bấm ngày đó ở **Sửa từng ngày**.
+7. **Sao chép & xóa cho N ngày** → xem lại → **Bắt đầu**.
+8. Xong, tool tự kiểm tra lại và mở thẻ **Kết quả**: xem từng ngày vừa tạo. Ngày nào sai thì bấm **Sửa** rồi **Cập nhật lên OneMES**, hoặc **Xóa** (tool Thu hồi rồi Xóa trên OneMES).
+9. Thẻ **Bệnh án**: lần đầu bấm **Nhập mẫu từ file HTML** và chọn trang Thông tin bệnh án đã hoàn tất (lưu bằng Ctrl+S trong Chrome). Bệnh nhân mới bắt đầu từ mẫu đó; sửa rồi **Cập nhật bệnh án lên OneMES**.
 
 Lần đầu nên bật **Từng bước** và thử với 1 bệnh nhân.
 
@@ -29,6 +31,8 @@ Nhật ký: `%APPDATA%\SaoYLenh\logs`.
 - Ngày 1 được Hoàn tất với Sao y lệnh (ngày) = N−1 (hình thức trong Cài đặt), OneMES tạo các ngày tiếp theo.
 - Nếu ngày 1 còn mục riêng cần xóa: Thu hồi ngày 1, xóa, Hoàn tất lại.
 - Mỗi ngày tiếp theo: mở, kiểm tra trạng thái Mới, xóa, Hoàn tất.
+- Sửa giờ, bác sĩ, cấp độ, diễn biến: ngày 1 sửa trước khi Sao y lệnh; ngày sau chỉ Thu hồi khi khác với điều đã chọn. Điền vào ô, bấm Lưu, đọc lại, rồi Hoàn tất.
+- Bệnh án: Tổng kết → Lập bìa bệnh án, điền mục B, gọi Lưu Thông tin chung và Lưu Thông tin chuyên khoa của chính trang đó, rồi mở lại để so.
 - Khi OneMES báo cảnh báo hoặc trang không như mong đợi, tool dừng bệnh nhân đó và ghi nhật ký, không đoán.
 
 ## Phát triển

@@ -2,13 +2,13 @@ import type { ReactNode } from 'react';
 import { CheckCircle2, Info, Loader2, Pause, Play, Square, TriangleAlert, XCircle } from 'lucide-react';
 import { cn } from '@/kit/cn';
 import { Button } from '@/kit/ui';
-import { useApp } from '@/lib/useApp';
+import { useApp, useLog } from '@/lib/useApp';
 
 // A layer over the control column only (never `fixed`: the OneMES view would hide it).
 export function Sheet({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode }) {
   if (!open) return null;
   return (
-    <div className="absolute inset-0 z-30 flex flex-col justify-end bg-background/60 p-3 backdrop-blur-sm animate-in fade-in-0" onMouseDown={onClose} data-sheet>
+    <div className="absolute inset-0 z-30 flex flex-col justify-end bg-background/70 p-3 animate-in fade-in-0" onMouseDown={onClose} data-sheet>
       <div className="solid-panel max-h-[85%] overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4" onMouseDown={(e) => e.stopPropagation()}>
         <div className="border-b border-border/50 px-4 py-3 font-bold">{title}</div>
         <div className="scroll-thin max-h-[60vh] overflow-auto p-4">{children}</div>
@@ -41,7 +41,8 @@ export const clock = (t: number) => new Date(t).toLocaleTimeString('vi-VN', { ho
 
 // Shown in the action bar while the tool works: progress, current step, Stop / Continue.
 export function RunBar({ onBrowser }: { onBrowser?: () => void }) {
-  const { state, log, call } = useApp();
+  const { state, call } = useApp();
+  const log = useLog();
   const last = log.slice(-3);
   const p = state.progress;
   return (

@@ -11,10 +11,16 @@ const DEFAULTS = {
     stepMode: false,
     hinhThuc: '1',
     defaultDays: 3,
+    bacSiFav: [], // [{ id, name }] shown first in the per-day Bác sĩ dropdown
+    esBase: 'http://192.168.30.88:9200', // fallback when the page does not name its search service
+    gpuOff: process.platform === 'win32', // software rendering: stops the window flicker on some PCs
   },
   templates: [],
   choices: {}, // noitruid -> { days, deletions: [[baseKey...]...], hinhThuc, savedAt }
   runs: {}, // noitruid -> { at, ok, message }
+  lists: null, // { at, bacSi: [{ id, name, login }], capDo: [{ id, ma, ten, text }] } read from OneMES
+  benhAn: {}, // noitruid -> { values, savedAt, readAt, sentAt } Thông tin bệnh án being prepared
+  benhAnMau: null, // { values, name, at } the filled-in example new patients start from
 };
 
 function createStore(dir) {
@@ -28,10 +34,11 @@ function createStore(dir) {
   } catch {
     data = {};
   }
+  const fresh = JSON.parse(JSON.stringify(DEFAULTS));
   data = {
-    ...DEFAULTS,
+    ...fresh,
     ...data,
-    settings: { ...DEFAULTS.settings, ...(data.settings || {}) },
+    settings: { ...fresh.settings, ...(data.settings || {}) },
   };
 
   function save() {
@@ -78,6 +85,18 @@ function createStore(dir) {
       data.runs[id] = { ...data.runs[id], ...patch };
       save();
       return data.runs[id];
+    },
+    // Plain top-level entries (lists, benhAnMau).
+    set(key, value) {
+      data[key] = value;
+      save();
+      return data[key];
+    },
+    setBenhAn(id, patch) {
+      if (patch === null) delete data.benhAn[id];
+      else data.benhAn[id] = { ...(data.benhAn[id] || {}), ...patch };
+      save();
+      return data.benhAn[id] || null;
     },
     appendLog,
   };

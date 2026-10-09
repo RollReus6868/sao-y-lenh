@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BedDouble, ClipboardCheck, Globe, MousePointerClick, Check, ChevronDown, ClipboardCopy, Copy, ListChecks, Pill as PillIcon, Play, RefreshCw, ScanLine, Search, Stethoscope, Users, X } from 'lucide-react';
+import { BedDouble, ClipboardCheck, FileText, Globe, MousePointerClick, Check, ChevronDown, ClipboardCopy, Copy, CopyCheck, ListChecks, PencilLine, Pill as PillIcon, Play, RefreshCw, RotateCcw, ScanLine, Search, Stethoscope, Users, X } from 'lucide-react';
 import { cn } from '@/kit/cn';
 import { Button, Chip, EmptyState, Input, PageHeader, Pill, Segmented, Select, Switch } from '@/kit/ui';
 import { useApp } from '@/lib/useApp';
-import { baseKey, type Choice, type Item, type LoadResult, type Patient, type Plan, type RunResult, type Template } from '@/lib/types';
+import { baseKey, itemName, type Choice, type DayEdit, type Item, type LoadResult, type Patient, type Plan, type RunResult, type Template } from '@/lib/types';
 import { ActionBar, RunBar, Sheet } from '@/components/common';
+import { OrderFields, editSummary, type OrderBase } from '@/components/OrderFields';
+import { addDays, dayLabel, ddmm, hhmmOf, parseDay, weekdayShort } from '@/lib/dates';
 import { ResultView } from '@/pages/Result';
+import { BenhAnView } from '@/pages/BenhAn';
+
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 const today = () => new Date().toDateString();
@@ -62,7 +66,7 @@ function PatientList({ onOpen, selected, onBrowser }: { onOpen: (p: Patient) => 
     setConfirm(false);
     const plans: Plan[] = patients
       .filter((p) => picked.has(p.noitruid) && choices[p.noitruid])
-      .map((p) => ({ patient: p, days: choices[p.noitruid].days, baseDeletions: choices[p.noitruid].deletions }));
+      .map((p) => ({ patient: p, days: choices[p.noitruid].days, baseDeletions: choices[p.noitruid].deletions, edits: choices[p.noitruid].edits }));
     const r = await call<RunResult[]>('run', { plans }).catch(() => null);
     await refresh();
     if (r) {
@@ -198,12 +202,8 @@ function PatientList({ onOpen, selected, onBrowser }: { onOpen: (p: Patient) => 
 }
 
 // ---------------- một bệnh nhân ----------------
-const parseDate = (s: string) => {
-  const m = /(\d{1,2}):(\d{2})\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s || '');
-  return m ? new Date(+m[5], +m[4] - 1, +m[3]) : null;
-};
-const ddmm = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 const EMPTY: string[][] = [[], [], [], []];
+const NO_EDITS: (DayEdit | null)[] = [null, null, null, null];
 
 function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBack: () => void; onBrowser: () => void }) {
   const { data, state, call, toast, refresh, setData } = useApp();
@@ -215,7 +215,9 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const [saveTpl, setSaveTpl] = useState<number | null>(null);
   const [tplName, setTplName] = useState('');
   const [confirm, setConfirm] = useState(false);
-  const [tab, setTab] = useState<'pick' | 'result'>('pick');
+  const [tab, setTab] = useState<'pick' | 'result' | 'benhan'>('pick');
+  const [edits, setEdits] = useState<(DayEdit | null)[]>(NO_EDITS);
+  const [eday, setEday] = useState<number | null>(null);
   const loaded = useRef(false);
 
   const load = async (sourceId?: string) => {
@@ -224,13 +226,18 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     const r = await call<LoadResult>('patient:load', { patient, sourceId }).catch(() => null);
     setLoading(false);
     setRes(r);
+    if (r?.lists) refresh(); // doctor / care level lists were read for the first time
     if (r?.source) {
       const items = [...r.source.thuoc, ...r.source.dvkt];
       const ch = data?.choices[patient.noitruid];
       if (ch) {
         setDays(ch.days);
         setSel([0, 1, 2, 3].map((i) => items.filter((it) => (ch.deletions[i] || []).includes(baseKey(it.key))).map((it) => it.key)));
-      } else setSel(EMPTY);
+        setEdits([0, 1, 2, 3].map((i) => (ch.edits && ch.edits[i]) || null));
+      } else {
+        setSel(EMPTY);
+        setEdits(NO_EDITS);
+      }
       loaded.current = true;
     }
   };
@@ -242,17 +249,23 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   useEffect(() => {
     if (!loaded.current || !data) return;
     const t = setTimeout(() => {
-      const choice: Choice = { days, deletions: sel.slice(0, days).map((d) => d.map(baseKey)) };
+      const choice: Choice = { days, deletions: sel.slice(0, days).map((d) => d.map(baseKey)), edits: edits.slice(0, days) };
       call('choice:set', { id: patient.noitruid, choice }).catch(() => {});
       setData({ ...data, choices: { ...data.choices, [patient.noitruid]: choice } });
     }, 400);
     return () => clearTimeout(t);
-  }, [sel, days]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sel, days, edits]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const src = res?.source;
   const items = useMemo(() => (src ? [...src.thuoc, ...src.dvkt] : []), [src]);
-  const base = src ? parseDate(src.thoiGian) : null;
-  const dayDate = (k: number) => (base ? ddmm(new Date(base.getFullYear(), base.getMonth(), base.getDate() + k + 1)) : '');
+  const base = src ? parseDay(src.thoiGian) : null;
+  const dayOf = (k: number) => (base ? addDays(base, k + 1) : null);
+  const dayDate = (k: number) => dayLabel(dayOf(k));
+  const srcBase: OrderBase | null = src
+    ? { gio: hhmmOf(src.thoiGianThucHien || src.thoiGian), dienBien: src.dienBien, dienBienPHCN: src.dienBienPHCN, bacSi: src.bacSi, capDo: src.capDo }
+    : null;
+  const setEdit = (k: number, e: DayEdit | null) => setEdits((x) => x.map((y, i) => (i === k ? e : y)));
+  const editCount = edits.slice(0, days).filter(Boolean).length;
   const templates = data?.templates || [];
 
   const toggle = (k: number, key: string) => setSel((s) => s.map((d, i) => (i !== k ? d : d.includes(key) ? d.filter((x) => x !== key) : [...d, key])));
@@ -275,10 +288,16 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const run = async () => {
     setConfirm(false);
     if (!src) return;
-    const plan: Plan = { patient, sourceId: src.id, days, deletions: sel.slice(0, days) };
+    const plan: Plan = { patient, sourceId: src.id, days, deletions: sel.slice(0, days), edits: edits.slice(0, days) };
     const r = await call<RunResult[]>('run', { plans: [plan] }).catch(() => null);
     await refresh();
     if (r && r[0] && (r[0].check || r[0].ok)) setTab('result');
+    // The copied days now hold the corrected notes; the newest becomes the next source.
+    if (r && r[0]?.ok) setEdits((x) => x.map((e) => {
+      if (!e) return e;
+      const { dienBien, dienBienPHCN, ...rest } = e; // eslint-disable-line @typescript-eslint/no-unused-vars
+      return Object.keys(rest).length ? rest : null;
+    }));
     load(); // the newest order is now the source for next time
     if (r && r[0]) {
       if (r[0].ok) toast('success', `Xong ${days} ngày cho ${patient.hoTen}`);
@@ -308,8 +327,13 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
             const allDays = sel.slice(0, days).every((d) => d.includes(it.key));
             return (
               <div key={it.key} className="contents" data-item={it.name}>
-                <button type="button" onClick={() => toggleRow(it.key)} title={`${it.name}${it.moTa ? ` (${it.moTa})` : ''}\nBấm để chọn/bỏ cả hàng`} className="min-w-0 rounded-lg px-1.5 py-1.5 text-left hover:bg-muted/50">
-                  <div className={cn('truncate text-[13px] font-semibold', allDays && 'text-muted-foreground line-through')}>{it.name}</div>
+                <button type="button" onClick={() => toggleRow(it.key)} title={`${itemName(it)}${it.moTa ? ` (${it.moTa})` : ''}\nBấm để chọn/bỏ cả hàng`} className="min-w-0 rounded-lg px-1.5 py-1.5 text-left hover:bg-muted/50">
+                  <div className={cn('truncate text-[13px] font-semibold', allDays && 'text-muted-foreground line-through')}>
+                    {it.name}
+                    {it.kind === 'thuoc' && /vật tư/i.test(it.group) && it.doiTuong && (
+                      <span className={cn('ml-1 font-bold', /hao phí/i.test(it.doiTuong) ? 'text-amber-600 dark:text-amber-400' : 'text-sky-600 dark:text-sky-400')} data-doituong>({it.doiTuong})</span>
+                    )}
+                  </div>
                   <div className="truncate text-[11px] text-muted-foreground">
                     {it.kind === 'thuoc' ? [it.hamLuong, `${it.sl} ${it.dvt || ''}`.trim(), it.cachDung].filter(Boolean).join(' · ') : it.moTa}
                   </div>
@@ -356,9 +380,13 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
             lastRun.check.days.some((d) => !d.deleted && d.problems.length) ? <span className="h-2 w-2 rounded-full bg-red-500" /> : <span className="h-2 w-2 rounded-full bg-emerald-500" />
           ) : null}
         </TabBtn>
+        <TabBtn on={tab === 'benhan'} onClick={() => setTab('benhan')} data-tab="benhan">
+          <FileText /> Bệnh án
+          {data?.benhAn?.[patient.noitruid]?.sentAt ? <span className="h-2 w-2 rounded-full bg-emerald-500" /> : null}
+        </TabBtn>
       </div>
 
-      {tab === 'result' ? <ResultView patient={patient} /> : <>
+      {tab === 'benhan' ? <BenhAnView patient={patient} /> : tab === 'result' ? <ResultView patient={patient} /> : <>
       <div className="scroll-thin min-h-0 flex-1 overflow-auto px-3 pb-4 sm:px-4" data-detail>
         {loading && !src ? (
           <div className="space-y-3 pt-2">{[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-muted/50" />)}</div>
@@ -389,12 +417,40 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
             </div>
             <p className="mt-1 text-[11px] text-muted-foreground">Ngày 1 là bản Sao chép. {days > 1 ? `Ngày 2–${days} do Sao y lệnh (ngày) = ${days - 1} tạo ra.` : 'Không dùng Sao y lệnh.'} Tick ô đỏ = xóa mục đó ở ngày đó.</p>
 
+            <div className="mt-3 rounded-xl border border-border/50 bg-card/50" data-day-edits>
+              <div className="flex flex-wrap items-center gap-1.5 px-3 py-2">
+                <PencilLine className="h-4 w-4 shrink-0 text-primary" />
+                <span className="mr-1 text-sm font-bold">Sửa từng ngày</span>
+                {Array.from({ length: days }, (_, k) => (
+                  <button key={k} type="button" onClick={() => setEday(eday === k ? null : k)} data-eday={k + 1}
+                    className={cn('flex h-7 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold transition-colors', eday === k ? 'border-primary bg-primary/15 text-primary' : 'border-border/60 hover:border-primary/40')}>
+                    N{k + 1} · {dayOf(k) ? `${weekdayShort(dayOf(k)!)} ${ddmm(dayOf(k)!)}` : ''}
+                    {edits[k] && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                  </button>
+                ))}
+                <span className="ml-auto text-[11px] text-muted-foreground">{editCount ? `${editCount} ngày có sửa` : 'Giờ, bác sĩ, cấp độ CS, diễn biến'}</span>
+              </div>
+              {eday !== null && eday < days && srcBase && (
+                <div className="border-t border-border/40 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-xs">
+                    <span className="font-bold">Ngày {eday + 1} · {dayDate(eday)}</span>
+                    <span className="text-muted-foreground">Ô không sửa giữ như y lệnh nguồn</span>
+                    <span className="ml-auto flex gap-1">
+                      {days > 1 && <Button variant="ghost" size="xs" disabled={!edits[eday]} onClick={() => setEdits((x) => x.map((e, i) => (i < days ? edits[eday] : e)))} title="Chép phần sửa của ngày này sang mọi ngày" data-action="edit-all"><CopyCheck /> Dùng cho mọi ngày</Button>}
+                      <Button variant="ghost" size="xs" disabled={!edits[eday]} onClick={() => setEdit(eday, null)} data-action="edit-reset"><RotateCcw /> Bỏ sửa</Button>
+                    </span>
+                  </div>
+                  <OrderFields edit={edits[eday]} base={srcBase} onChange={(e) => setEdit(eday, e)} disabled={state.busy} />
+                </div>
+              )}
+            </div>
+
             <div className="mt-3 grid items-center gap-x-1" style={{ gridTemplateColumns: cols }} data-grid>
-              <div className="sticky top-0 z-10 self-stretch bg-background/80 px-1.5 py-2 text-[11px] font-semibold text-muted-foreground backdrop-blur">Bấm tên để chọn cả hàng</div>
+              <div className="sticky top-0 z-10 self-stretch bg-card px-1.5 py-2 text-[11px] font-semibold text-muted-foreground">Bấm tên để chọn cả hàng</div>
               {Array.from({ length: days }, (_, k) => (
-                <button key={k} type="button" onClick={() => setMenu(k)} className="sticky top-0 z-10 flex flex-col items-center rounded-lg bg-background/80 py-1 backdrop-blur hover:bg-muted/60" data-col={k + 1} title="Chọn nhanh cho ngày này">
+                <button key={k} type="button" onClick={() => setMenu(k)} className="sticky top-0 z-10 flex flex-col items-center rounded-lg bg-card py-1 hover:bg-muted/60" data-col={k + 1} title={`${dayDate(k)}: chọn nhanh cho ngày này`}>
                   <span className="flex items-center text-xs font-bold">N{k + 1}<ChevronDown className="h-3 w-3" /></span>
-                  <span className="text-[10px] text-muted-foreground">{dayDate(k)}</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground">{dayOf(k) ? `${weekdayShort(dayOf(k)!)} ${ddmm(dayOf(k)!)}` : ''}</span>
                   <span className={cn('text-[10px] font-bold', sel[k].length ? 'text-red-500' : 'text-muted-foreground/60')}>−{sel[k].length}</span>
                 </button>
               ))}
@@ -451,8 +507,9 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
           {days > 1 && <li><b>Hoàn tất</b> ngày 1 với Sao y lệnh (ngày) = {days - 1} → ngày 2–{days}.</li>}
           {Array.from({ length: days }, (_, k) => (
             <li key={k} className="rounded-lg bg-muted/40 px-3 py-2">
-              <div className="font-semibold">Ngày {k + 1} ({dayDate(k)}): {sel[k].length ? `xóa ${sel[k].length} mục` : 'giữ nguyên'}</div>
-              {!!sel[k].length && <div className="mt-0.5 text-xs text-muted-foreground">{items.filter((i) => sel[k].includes(i.key)).map((i) => i.name).join(', ')}</div>}
+              <div className="font-semibold">Ngày {k + 1} ({dayDate(k)}): {sel[k].length ? `xóa ${sel[k].length} mục` : edits[k] ? 'không xóa mục nào' : 'giữ nguyên'}</div>
+              {!!sel[k].length && <div className="mt-0.5 text-xs text-muted-foreground">{items.filter((i) => sel[k].includes(i.key)).map(itemName).join(', ')}</div>}
+              {edits[k] && <div className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">Sửa: {editSummary(edits[k])}</div>}
             </li>
           ))}
           <li className="text-xs text-muted-foreground">{data?.settings.autoComplete ? 'Mỗi ngày sửa xong sẽ được Hoàn tất.' : 'Các ngày 2+ để ở trạng thái Mới cho anh/chị tự xem và Hoàn tất.'}{data?.settings.stepMode ? ' Chạy từng bước: tool dừng trước mỗi thao tác.' : ''}</li>

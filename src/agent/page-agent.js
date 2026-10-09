@@ -2,7 +2,7 @@
 // calls OneMES's own functions; it never calls the server directly.
 // Every function returns plain data so it survives structured clone.
 (function () {
-  if (window.__SYL && window.__SYL.version === 5) return;
+  if (window.__SYL && window.__SYL.version === 6) return;
 
   const txt = (el) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
   const norm = (s) =>
@@ -50,7 +50,8 @@
   function where() {
     hookToastr();
     const url = location.href;
-    const login = !!document.querySelector('input[type=password]') && /login/i.test(url);
+    const pw = [...document.querySelectorAll('input[type=password]')].some(isShown);
+    const login = pw && (/login|dangnhap/i.test(url) || !/usid=/i.test(url));
     const list = !!byId('tblNoiTru') || /wpid=danhsachdieutrinoitrudraw/i.test(url);
     const bacsi = /wpid=bacsidraw/i.test(url);
     const popup = byId('divWebpartPopup');
@@ -136,25 +137,51 @@
   }
 
   // Link to Ds Điều trị nội trú from the menu (carries the session's usid). Pages
-  // without that menu (e.g. the start page after login) still carry usid in their
-  // address, so the link is rebuilt from it with the last known role.
+  // without that menu (e.g. the start page after login) may still carry usid in their
+  // address or in other links, so the link is rebuilt from it with the last known role.
   function listLink(role) {
     const a = [...document.querySelectorAll('a[href*="wpid=danhsachdieutrinoitrudraw"]')].find(
       (x) => !/bacsidraw/i.test(x.href) && /^https?:/i.test(x.href)
     );
     if (a) return a.href.replace(/#.*$/, '');
     const u = new URL(location.href);
-    const usid = u.searchParams.get('usid');
-    if (!usid) return '';
+    let usid = u.searchParams.get('usid') || '';
     let r = role || '';
-    for (const x of document.querySelectorAll('a[href*="role="]')) {
-      const m = /[?&]role=(\d+)/.exec(x.getAttribute('href') || '');
-      if (m) { r = r || m[1]; break; }
+    const html = document.documentElement.innerHTML;
+    if (!usid) usid = (/[?&;]usid=([\w.\-]+)/.exec(html) || [])[1] || '';
+    if (!usid) {
+      try {
+        usid = (/(?:^|[;\s])usid=([\w.\-]+)/i.exec(document.cookie) || [])[1] || '';
+      } catch (e) {}
     }
+    if (!usid) return '';
+    if (!r) r = (/[?&;]role=(\d+)/.exec(html) || [])[1] || '';
     const q = new URLSearchParams({ scope: 'sys', lang: u.searchParams.get('lang') || 'vi', wpid: 'danhsachdieutrinoitrudraw' });
     if (r) q.set('role', r);
     q.set('usid', usid);
     return `${u.origin}/home.aspx?${q}`;
+  }
+
+  // Last resort: a menu entry named like the list, clicked as a person would.
+  function clickListMenu() {
+    const want = [norm('Ds Điều trị nội trú'), norm('Danh sách điều trị nội trú'), norm('Điều trị nội trú')];
+    const els = [...document.querySelectorAll('a, li, span, div')].filter((x) => x.children.length <= 2 && want.includes(norm(x.textContent)));
+    const el = els.find((x) => x.tagName === 'A') || els[0];
+    if (!el) return { ok: false };
+    (el.closest('a') || el).click();
+    return { ok: true, text: txt(el) };
+  }
+
+  // What the start page looks like, for the log when the list cannot be reached.
+  function pageInfo() {
+    const u = new URL(location.href);
+    return {
+      path: u.pathname,
+      params: [...u.searchParams.keys()].join(','),
+      title: document.title,
+      usidInPage: /usid=/i.test(document.documentElement.innerHTML),
+      menuLinks: document.querySelectorAll('a[href*="wpid="]').length,
+    };
   }
 
   // Page numbers offered by the patient list pager (NextPage(n) links), if any.
@@ -377,6 +404,8 @@
       thoiGianThucHien: val('txtThoigianThucHienThamKham'),
       dienBien: val('txtDienBienYLenhThamKham'),
       dienBienPHCN: val('txtDienBienPHCNThamKham'),
+      bacSi: picked('cboBacSiThamKham'),
+      capDo: picked('cboCapDoChamSocThamKham'),
       buttons: buttons(),
       busy: isBusy(),
       tables: { thuoc: !!tblThuoc, dvkt: !!tblDV },
@@ -385,6 +414,239 @@
       thuoc,
       dvkt,
     };
+  }
+
+  // The chosen entry of a (select2) dropdown: { id, text }.
+  function picked(id) {
+    const s = byId(id);
+    if (!s || !s.value) return null;
+    const o = s.options[s.selectedIndex];
+    return { id: s.value, text: o ? txt(o) : '' };
+  }
+
+  // A select2 fed by a search service only holds the chosen option, so a new choice
+  // is added as an option first, the way OneMES itself does when it opens an order.
+  function setPicked(id, value, text) {
+    const s = byId(id);
+    if (!s) return false;
+    let o = [...s.options].find((x) => x.value === value);
+    if (!o) {
+      o = new Option(text || value, value, false, false);
+      s.appendChild(o);
+    }
+    if (window.jQuery) window.jQuery(s).val(value).trigger('change');
+    else {
+      s.value = value;
+      s.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    return s.value === value;
+  }
+
+  // Sets a field the way typing would: value, change, then the field's own blur check
+  // (OneMES validates the two times on blur and puts the old value back if wrong).
+  function setText(id, value, blur) {
+    const el = byId(id);
+    if (!el) return false;
+    el.value = value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    if (blur) el.dispatchEvent(new Event('blur'));
+    return el.value === value;
+  }
+
+  const timeVal = (s) => {
+    const m = /(\d{1,2}):(\d{2})\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s || '');
+    return m ? new Date(+m[5], +m[4] - 1, +m[3], +m[1], +m[2]).getTime() : NaN;
+  };
+
+  // Fills the order form. f = { thoiGian, thoiGianThucHien, dienBien, dienBienPHCN,
+  // bacSi: {id, text}, capDo: {id, text} }; fields left out stay as they are.
+  function setOrderFields(f) {
+    const w = where();
+    if (!w.popupOpen) return { ok: false, reason: 'popup-closed' };
+    const bad = [];
+    const CD = 'txtThoigianThamKham';
+    const TH = 'txtThoigianThucHienThamKham';
+    const setT = (id, v, name) => v !== undefined && v !== null && !setText(id, String(v), true) && bad.push(name);
+    // Chỉ định may never be after thực hiện, so the order of the two depends on the move.
+    const cdNow = timeVal(byId(CD) && byId(CD).value);
+    if (f.thoiGianThucHien && !(timeVal(f.thoiGianThucHien) >= cdNow)) {
+      setT(CD, f.thoiGian, 'Thời gian chỉ định');
+      setT(TH, f.thoiGianThucHien, 'Thời gian thực hiện');
+    } else {
+      setT(TH, f.thoiGianThucHien, 'Thời gian thực hiện');
+      setT(CD, f.thoiGian, 'Thời gian chỉ định');
+    }
+    if (f.thoiGian && byId(CD)) byId(CD).setAttribute('data-value', f.thoiGian);
+    const t = (id, v, name) => v !== undefined && v !== null && !setText(id, String(v), false) && bad.push(name);
+    t('txtDienBienYLenhThamKham', f.dienBien, 'Diễn biến bệnh');
+    t('txtDienBienPHCNThamKham', f.dienBienPHCN, 'Diễn biến PHCN');
+    if (f.bacSi && f.bacSi.id && !setPicked('cboBacSiThamKham', f.bacSi.id, f.bacSi.text)) bad.push('Bác sĩ');
+    if (f.capDo && f.capDo.id && !setPicked('cboCapDoChamSocThamKham', f.capDo.id, f.capDo.text)) bad.push('Cấp độ chăm sóc');
+    return bad.length ? { ok: false, reason: 'Không điền được: ' + bad.join(', ') } : { ok: true };
+  }
+
+  // ---------- danh sách bác sĩ, cấp độ chăm sóc ----------
+  // The addresses come from the page's own scripts (CallInitSelect2ES...), so a
+  // change on the hospital side is picked up; `base` is the fallback.
+  function esUrls(base) {
+    const src = [...document.scripts].map((x) => x.textContent).join('\n');
+    const find = (index) => {
+      const m = new RegExp(`['"](https?://[^'"]+/${index}/_search)['"]`).exec(src);
+      return m ? m[1] : base ? `${base.replace(/\/+$/, '')}/${index}/_search` : '';
+    };
+    return { bacSi: find('owneruser'), capDo: find('chedochamsoc') };
+  }
+
+  async function esLists(base) {
+    const u = esUrls(base);
+    if (!u.bacSi || !u.capDo) return { ok: false, reason: 'không biết địa chỉ dịch vụ tìm kiếm', urls: u };
+    const post = async (url, body) => {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error(`${url}: ${r.status}`);
+      const j = await r.json();
+      return (j.hits && j.hits.hits) || [];
+    };
+    try {
+      // Same filters as the Bác sĩ field of an order (bsdd = 3) and the Cấp độ chăm sóc field.
+      const bs = await post(u.bacSi, {
+        query: { bool: { must: [{ match: { active: 1 } }, { match: { bacSi: true } }], must_not: [{ match: { 'certificateCode.keyword': '' } }] } },
+        from: 0,
+        size: 2000,
+      });
+      const cd = await post(u.capDo, { query: { bool: { filter: [{ term: { hieuLuc: 1 } }] } }, from: 0, size: 200 });
+      return {
+        ok: true,
+        urls: u,
+        bacSi: bs.map((h) => ({ id: String(h._id), name: String((h._source && h._source.fullName) || ''), login: String((h._source && h._source.loginName) || '') })).filter((x) => x.name),
+        capDo: cd.map((h) => {
+          const ma = String((h._source && h._source.ma) || '');
+          const ten = String((h._source && h._source.ten) || '');
+          return { id: String(h._id), ma, ten, text: ma ? `(${ma}) ${ten}` : ten };
+        }),
+      };
+    } catch (e) {
+      return { ok: false, reason: String((e && e.message) || e), urls: u };
+    }
+  }
+
+  // ---------- Thông tin bệnh án (Tổng kết > Lập bìa bệnh án) ----------
+  function benhAnLink() {
+    const a = [...document.querySelectorAll('[onclick*="onShowTtBenhAn"]')][0];
+    if (!a) return null;
+    const m = /onShowTtBenhAn\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]/.exec(a.getAttribute('onclick') || '');
+    return m ? { id: m[1], container: m[2] } : null;
+  }
+
+  function openBenhAn() {
+    hookToastr();
+    const l = benhAnLink();
+    if (!l) return { ok: false, reason: 'Không thấy mục Lập bìa bệnh án' };
+    if (typeof window.onShowTtBenhAn !== 'function') return { ok: false, reason: 'no-onShowTtBenhAn' };
+    window.onShowTtBenhAn(l.id, l.container);
+    return { ok: true, id: l.id };
+  }
+
+  // The id each save button's form passes to SaveTtChung / SaveTtChuyenKhoa.
+  function benhAnForms() {
+    const out = {};
+    for (const [k, fn, btn] of [['chung', 'SaveTtChung', 'btnSaveTtChung'], ['chuyenKhoa', 'SaveTtChuyenKhoa', 'btnSaveTtChuyenKhoa']]) {
+      const b = byId(btn);
+      const f = b && b.closest('form');
+      const m = f && new RegExp(fn + '\\(\\s*["\']([^"\']+)["\']').exec(decodeURIComponent(f.getAttribute('action') || ''));
+      out[k] = m ? m[1] : '';
+    }
+    return out;
+  }
+
+  function benhAnState() {
+    const f = benhAnForms();
+    return { ready: !!(byId('txtLyDoVaoVien') && f.chung && f.chuyenKhoa), forms: f, busy: isBusy() };
+  }
+
+  const radios = (name) => [...document.querySelectorAll('input[type=radio]')].filter((r) => r.name === name);
+
+  // fields = [{ id, kind }]; returns { values: {id: value}, missing: [id] }.
+  function readBenhAn(fields) {
+    const values = {};
+    const missing = [];
+    for (const f of fields) {
+      if (f.kind === 'radio') {
+        const rs = radios(f.id);
+        if (!rs.length) missing.push(f.id);
+        const c = rs.find((r) => r.checked);
+        values[f.id] = c ? c.value : '';
+        continue;
+      }
+      const el = byId(f.id);
+      if (!el) {
+        missing.push(f.id);
+        continue;
+      }
+      if (f.kind === 'check') values[f.id] = !!el.checked;
+      else if (f.kind === 'multi') values[f.id] = [...el.options].filter((o) => o.selected).map((o) => o.value);
+      else values[f.id] = el.value || '';
+    }
+    return { ok: true, values, missing };
+  }
+
+  function writeBenhAn(fields, values) {
+    const $ = window.jQuery;
+    const missing = [];
+    for (const f of fields) {
+      if (!(f.id in values)) continue;
+      const v = values[f.id];
+      if (f.kind === 'radio') {
+        const rs = radios(f.id);
+        if (!rs.length) {
+          missing.push(f.id);
+          continue;
+        }
+        // Some OneMES choices carry stray spaces ("Cấp I "); match them loosely.
+        const want = norm(v);
+        let hit = false;
+        for (const r of rs) {
+          r.checked = !!want && (r.value === v || norm(r.value) === want);
+          hit = hit || r.checked;
+        }
+        if (want && !hit) missing.push(f.id);
+        const c = rs.find((r) => r.checked) || rs[0];
+        c.dispatchEvent(new Event('change', { bubbles: true }));
+        continue;
+      }
+      const el = byId(f.id);
+      if (!el) {
+        missing.push(f.id);
+        continue;
+      }
+      if (f.kind === 'check') {
+        el.checked = !!v;
+      } else if (f.kind === 'multi') {
+        const want = (Array.isArray(v) ? v : []).map(String);
+        for (const o of el.options) o.selected = want.includes(o.value);
+      } else {
+        el.value = v === undefined || v === null ? '' : String(v);
+      }
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      if ($) {
+        try {
+          if (f.kind === 'multi' && el.classList.contains('chosen-select')) $(el).trigger('chosen:updated');
+          if (el.classList.contains('selectpicker') && $.fn.selectpicker) $(el).selectpicker('refresh');
+        } catch (e) {}
+      }
+    }
+    return { ok: true, missing };
+  }
+
+  function saveBenhAn(part) {
+    hookToastr();
+    const f = benhAnForms();
+    const fn = part === 1 ? 'SaveTtChung' : 'SaveTtChuyenKhoa';
+    const id = part === 1 ? f.chung : f.chuyenKhoa;
+    if (!id) return { ok: false, reason: 'no-form:' + fn };
+    if (typeof window[fn] !== 'function') return { ok: false, reason: 'no-' + fn };
+    window[fn](id);
+    return { ok: true };
   }
 
   function clickButton(id) {
@@ -471,10 +733,12 @@
   }
 
   window.__SYL = {
-    version: 5,
+    version: 6,
     where,
     readPatients,
     listLink,
+    clickListMenu,
+    pageInfo,
     listPages,
     gotoListPage,
     searchPatients,
@@ -484,6 +748,13 @@
     readOrder,
     clickButton,
     setSelect,
+    setOrderFields,
+    esLists,
+    openBenhAn,
+    benhAnState,
+    readBenhAn,
+    writeBenhAn,
+    saveBenhAn,
     deleteThuoc,
     deleteDichVu,
     swal,

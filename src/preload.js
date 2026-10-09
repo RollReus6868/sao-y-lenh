@@ -10,7 +10,8 @@ contextBridge.exposeInMainWorld('app', {
     return () => ipcRenderer.removeListener('state', h);
   },
   onLog: (cb) => {
-    const h = (_e, e) => cb(e);
+    // Lines arrive in batches; React groups the updates into one render.
+    const h = (_e, list) => (Array.isArray(list) ? list : [list]).forEach((e) => cb(e));
     ipcRenderer.on('log', h);
     return () => ipcRenderer.removeListener('log', h);
   },

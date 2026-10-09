@@ -131,6 +131,86 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     check(again instanceof Error && /Không thấy/.test(again.message), 'delete: a missing order is refused');
     v = await d.verify(pts[1], r.expect, r.days);
     check(v.days[2].gone && v.days[2].problems.length, 'check: deleted day reported as gone');
+
+    // --- per-day corrections: time, notes, doctor, care level ---
+    console.log('sửa từng ngày');
+    m.mock.reset();
+    pts = await d.scanPatients();
+    const viaBase = await d.loadLists(m.base + '/es');
+    check(viaBase.bacSi.length === 4, 'lists: list page uses the fallback address');
+    ({ source } = await d.loadPatient(pts[0]));
+    const lists = await d.loadLists('http://192.0.2.1:9');
+    check(lists.bacSi.length === 4 && lists.capDo.length === 3 && lists.capDo[0].text === '(I) Cấp I', 'lists: on the patient page the address comes from the page script');
+    check(source.bacSi && source.bacSi.id === 'd1' && source.capDo && source.capDo.id === 'c3', 'source: doctor and care level read');
+    before = ids(0);
+    m.mock.getState().log.length = 0;
+    const bs2 = { id: 'd2', text: 'BS. Trần Thị Hai' };
+    const cd1 = lists.capDo[0];
+    r = await d.run({
+      patient: pts[0], sourceId: source.id, days: 3, deletions: [[], [], []],
+      edits: [{ gio: '07:30', bacSi: bs2 }, { dienBien: 'Ngày 2: đỡ đau' }, { gio: '08:15', capDo: cd1 }],
+    });
+    fresh = newOrders(0, before);
+    const hm = (d0) => `${String(d0.getHours()).padStart(2, '0')}:${String(d0.getMinutes()).padStart(2, '0')}`;
+    check(r.ok && fresh.length === 3 && fresh.every((o) => o.status === 'Hoàn tất'), 'edits: three days completed');
+    check(hm(fresh[0].dateTH) === '07:30' && hm(fresh[0].date) === '07:29', 'edits: day 1 thực hiện 07:30, chỉ định 07:29');
+    check(hm(fresh[1].dateTH) === hm(source.thoiGianThucHien ? new Date(0, 0, 1, ...source.thoiGianThucHien.slice(0, 5).split(':').map(Number)) : new Date()), 'edits: day 2 keeps the source time');
+    check(hm(fresh[2].dateTH) === '08:15' && hm(fresh[2].date) === '08:14', 'edits: day 3 at 08:15');
+    check(fresh[0].dateTH.getDate() + 1 === fresh[1].dateTH.getDate(), 'edits: dates unchanged');
+    check(fresh[0].bacSi.id === 'd2' && fresh[1].bacSi.id === 'd1' && fresh[2].bacSi.id === 'd1', 'edits: doctor changed on day 1 only (copies put back to the source doctor)');
+    check(fresh[1].dienBien === 'Ngày 2: đỡ đau' && fresh[0].dienBien === source.dienBien && fresh[2].dienBien === source.dienBien, 'edits: notes changed on day 2 only');
+    check(fresh[2].capDo.id === 'c1' && fresh[0].capDo.id === 'c3' && fresh[1].capDo.id === 'c3', 'edits: care level changed on day 3 only');
+    check(m.mock.getState().log.filter((x) => x[0] === 'luu').length === 3, 'edits: Lưu once per day that changed');
+    v = await d.verify(pts[0], r.expect, r.days);
+    check(v.ok && v.days[0].bacSi.id === 'd2' && v.days[2].capDo.id === 'c1', 'edits: check reads doctor and care level back: ' + JSON.stringify(v.days.map((x) => x.problems)));
+    fresh[1].dienBien = 'đổi tay';
+    v = await d.verify(pts[0], r.expect, r.days);
+    check(!v.ok && v.days[1].problems.some((x) => /Diễn biến bệnh/.test(x)), 'edits: a changed note is flagged');
+
+    // --- correct a created day from the Kết quả tab ---
+    console.log('sửa lại một ngày');
+    m.mock.getState().log.length = 0;
+    const kim = v.days[1].thuoc.find((x) => x.name.startsWith('Kim châm'));
+    const u = await d.updateDay(pts[0], r.days[1].id, { gio: '09:00', dienBien: 'Ngày 2: sửa lại', bacSi: { id: 'd3', text: 'BS. Lê Văn Ba' } }, [{ id: kim.id, base: kim.base, name: kim.name }], true);
+    const o2 = m.mock.getState().patients[0].orders.find((o) => o.id === r.days[1].id);
+    check(u.changed && o2.status === 'Hoàn tất' && hm(o2.dateTH) === '09:00' && hm(o2.date) === '08:59', 'update: time changed, completed again');
+    check(o2.dienBien === 'Ngày 2: sửa lại' && o2.bacSi.id === 'd3' && !names(o2).some((n) => n.startsWith('Kim châm')), 'update: notes, doctor and item deletion applied');
+    const lg = m.mock.getState().log.map((x) => x[0]);
+    check(lg.indexOf('thuHoi') < lg.indexOf('xoaThuoc') && lg.indexOf('xoaThuoc') < lg.indexOf('luu') && lg.indexOf('luu') < lg.indexOf('hoanTat'), 'update: Thu hồi, xóa, Lưu, Hoàn tất in order');
+    const same = await d.updateDay(pts[0], r.days[1].id, { gio: '09:00' }, [], true);
+    check(!same.changed, 'update: nothing to do when already right');
+    // An earlier time than chỉ định must still go in (chỉ định is moved first).
+    await d.updateDay(pts[0], r.days[1].id, { gio: '06:05' }, [], true);
+    check(hm(o2.dateTH) === '06:05' && hm(o2.date) === '06:04', 'update: moving the time earlier works');
+
+    // --- Thông tin bệnh án ---
+    console.log('bệnh án');
+    const schema = require('../src/benh-an-schema.json');
+    const fields = schema.groups.flatMap((g) => g.fields.map((f) => ({ id: f.id, kind: f.kind, part: g.part })));
+    const blank = await d.readBenhAn(pts[2], fields);
+    check(!blank.missing.length && blank.values.txtLyDoVaoVien === '' && Array.isArray(blank.values.HinhThai), 'bệnh án: blank page read, every field found');
+    const want = { ...blank.values, txtLyDoVaoVien: 'Đau lưng', ckTsThuocLa: true, txtTgBAThuocLa: '5', HinhThai: ['1', '3'], CDCS: ' Cấp II', BieuHienHanNhiet: blank.values.BieuHienHanNhiet, ToanThans: 'Tỉnh\nTiếp xúc tốt' };
+    const sel = fields.find((f) => f.kind === 'select');
+    want[sel.id] = schema.groups.flatMap((g) => g.fields).find((f) => f.id === sel.id).options[1].value;
+    const saved = await d.saveBenhAn(pts[2], fields, want);
+    const ba = m.mock.getState().patients[2].benhAn;
+    check(!saved.diff.length && !saved.missing.length, 'bệnh án: saved and read back the same');
+    check(ba.txtLyDoVaoVien === 'Đau lưng' && ba.ckTsThuocLa === true && ba.HinhThai.join() === '1,3' && ba.CDCS === ' Cấp II' && ba.ToanThans === 'Tỉnh\nTiếp xúc tốt', 'bệnh án: values stored on OneMES (both parts)');
+    check(m.mock.getState().log.filter((x) => x[0] === 'saveBenhAn').map((x) => x[2]).join() === '1,2', 'bệnh án: Thông tin chung then chuyên khoa saved');
+    const again2 = await d.readBenhAn(pts[2], fields);
+    check(again2.values.HinhThai.join() === '1,3' && again2.values.CDCS === ' Cấp II', 'bệnh án: read back from OneMES');
+    // radio given without its stray spaces still matches
+    await d.saveBenhAn(pts[2], fields, { ...want, CDCS: 'Cấp III' });
+    check(m.mock.getState().patients[2].benhAn.CDCS === ' Cấp III', 'bệnh án: radio matched loosely');
+
+    // --- Ds Điều trị nội trú from start pages without the link ---
+    console.log('nút Ds');
+    await page.goto(m.base + '/start-usid.aspx');
+    await d.gotoList(true);
+    check(/wpid=danhsachdieutrinoitrudraw/.test(page.url()) && /usid=10.0.0.1_start/.test(page.url()), 'Ds: usid found in another link: ' + page.url());
+    await page.goto(m.base + '/start-menu.aspx');
+    await d.gotoList(true);
+    check(/wpid=danhsachdieutrinoitrudraw/.test(page.url()), 'Ds: menu entry clicked when no address is known');
   } catch (e) {
     console.log('ERROR', e);
     process.exitCode = 1;

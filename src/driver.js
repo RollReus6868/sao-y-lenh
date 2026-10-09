@@ -28,6 +28,8 @@ function parseTime(s) {
   if (!m) return null;
   return new Date(+m[5], +m[4] - 1, +m[3], +m[1], +m[2]);
 }
+const pad2 = (n) => String(n).padStart(2, '0');
+const fmtTime = (d) => `${pad2(d.getHours())}:${pad2(d.getMinutes())} ${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
 const ddmmOf = (d) => `${d.getDate()}/${d.getMonth() + 1}`;
 const dayStamp = (d) => (d ? `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}` : '');
 const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, d.getHours(), d.getMinutes());
@@ -62,7 +64,7 @@ function createDriver(host) {
 
   async function call(fn, ...args) {
     const a = args.map((x) => JSON.stringify(x)).join(',');
-    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==5){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
+    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==6){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
   }
 
   function checkStop() {
@@ -134,8 +136,14 @@ function createDriver(host) {
     if (w.page !== 'list' || force) {
       const role = host.listRole ? host.listRole() : '';
       const link = (w.page === 'list' ? w.url.replace(/#.*$/, '') : '') || (await call('listLink', role)) || listUrl || (host.listUrl ? host.listUrl() : '');
-      if (!link) throw new PageError('Không tìm thấy đường dẫn Ds Điều trị nội trú. Hãy mở trang đó một lần bằng menu của OneMES');
-      await loadURL(link);
+      if (link) await loadURL(link);
+      else {
+        // No address to open: try the page's own menu entry before giving up.
+        const info = await call('pageInfo').catch(() => ({}));
+        log('info', `Trang hiện tại: ${info.path || '?'} (${info.params || 'không tham số'}), ${info.menuLinks || 0} liên kết menu`);
+        const c = await call('clickListMenu');
+        if (!c.ok) throw new PageError('Không tìm thấy đường dẫn Ds Điều trị nội trú trên trang này. Hãy mở trang đó một lần bằng menu của OneMES');
+      }
     }
     const w2 = await waitFor('Ds Điều trị nội trú', async () => {
       const x = await where();
@@ -188,6 +196,11 @@ function createDriver(host) {
 
   // ---------- một bệnh nhân ----------
   async function openPatient(p) {
+    await gotoPatient(p);
+    return listOrders();
+  }
+
+  async function gotoPatient(p) {
     const w = await where().catch(() => ({}));
     if (!(w.page === 'bacsi' && norm(w.noitruid) === norm(p.noitruid))) {
       await loadURL(p.url);
@@ -197,7 +210,6 @@ function createDriver(host) {
       if (x.page === 'login') throw new PageError('Chưa đăng nhập OneMES');
       return x.page === 'bacsi' && norm(x.noitruid) === norm(p.noitruid) ? x : null;
     });
-    return listOrders();
   }
 
   async function listOrders() {
@@ -379,6 +391,76 @@ function createDriver(host) {
     return keys.filter((k) => have.has(k));
   };
 
+  // What must change on order o so it matches edit = { gio: 'HH:mm' (thực hiện),
+  // dienBien, dienBienPHCN, bacSi: {id, text}, capDo: {id, text} }. Thời gian chỉ định
+  // is set one minute before thời gian thực hiện. Fields already right are left out.
+  function fieldsFor(o, edit) {
+    const f = {};
+    if (!edit) return f;
+    if (edit.gio && /^\d{1,2}:\d{2}$/.test(edit.gio)) {
+      const d = parseTime(o.thoiGianThucHien) || parseTime(o.thoiGian);
+      if (d) {
+        const [h, m] = edit.gio.split(':').map(Number);
+        const th = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m);
+        const cd = new Date(th.getTime() - 60000);
+        if (o.thoiGianThucHien !== fmtTime(th)) f.thoiGianThucHien = fmtTime(th);
+        if (o.thoiGian !== fmtTime(cd)) f.thoiGian = fmtTime(cd);
+      }
+    }
+    const same = (a, b) => String(a || '').replace(/\r\n/g, '\n').trim() === String(b || '').replace(/\r\n/g, '\n').trim();
+    if (typeof edit.dienBien === 'string' && !same(edit.dienBien, o.dienBien)) f.dienBien = edit.dienBien;
+    if (typeof edit.dienBienPHCN === 'string' && !same(edit.dienBienPHCN, o.dienBienPHCN)) f.dienBienPHCN = edit.dienBienPHCN;
+    if (edit.bacSi && edit.bacSi.id && norm(edit.bacSi.id) !== norm(o.bacSi && o.bacSi.id)) f.bacSi = { id: edit.bacSi.id, text: edit.bacSi.text || edit.bacSi.name || '' };
+    if (edit.capDo && edit.capDo.id && norm(edit.capDo.id) !== norm(o.capDo && o.capDo.id)) f.capDo = { id: edit.capDo.id, text: edit.capDo.text || '' };
+    return f;
+  }
+
+  function describeFields(f) {
+    const out = [];
+    if (f.thoiGianThucHien) out.push(`giờ thực hiện ${f.thoiGianThucHien.slice(0, 5)}`);
+    if (f.dienBien !== undefined) out.push('diễn biến bệnh');
+    if (f.dienBienPHCN !== undefined) out.push('diễn biến PHCN');
+    if (f.bacSi) out.push(`bác sĩ ${f.bacSi.text}`);
+    if (f.capDo) out.push(`cấp độ ${f.capDo.text}`);
+    return out.join(', ');
+  }
+
+  // Fills the open (Mới) order and presses Lưu, then reads it back.
+  async function applyFields(orderId, label, f) {
+    const what = describeFields(f);
+    await step(`${label}: sửa ${what}`);
+    await settle();
+    const r = await call('setOrderFields', f);
+    await settle(); // a time OneMES rejects shows a warning here
+    if (!r.ok) throw new PageError(`${label}: ${r.reason}`);
+    const since = await call('now');
+    const c = await call('clickButton', 'btnSaveThamKhamDraw');
+    if (!c.ok) throw new PageError(`${label}: không thấy nút Lưu`);
+    await waitFor('Lưu y lệnh', async () => {
+      const a = await failOnAlert();
+      // OneMES reports a refused save in a plain "Thông báo" box.
+      if (a.visible && a.ready && !a.cancelText) {
+        await call('swalClick', 'confirm');
+        throw new PageError(`${label}: OneMES báo "${a.text || a.title}"`);
+      }
+      const t = await call('toasts', since);
+      const err = t.find((x) => x.type === 'error' || x.type === 'warning');
+      if (err) throw new PageError(`${label}: OneMES báo "${err.msg}"`);
+      return t.some((x) => /đã lưu/i.test(x.msg));
+    }, 60000);
+    const o = await readStable(orderId);
+    const left = fieldsFor(o, {
+      gio: f.thoiGianThucHien ? f.thoiGianThucHien.slice(0, 5) : undefined,
+      dienBien: f.dienBien,
+      dienBienPHCN: f.dienBienPHCN,
+      bacSi: f.bacSi,
+      capDo: f.capDo,
+    });
+    if (Object.keys(left).length) throw new PageError(`${label}: đã bấm Lưu nhưng OneMES chưa nhận ${describeFields(left)}`);
+    log('ok', `${label}: đã sửa ${what}`);
+    return o;
+  }
+
   /**
    * plan = { patient, sourceId, days: 1..4, deletions: [[keys of day1], [keys of day2], ...],
    *          hinhThuc: '1', autoComplete: true }
@@ -405,10 +487,11 @@ function createDriver(host) {
     const beforeIds = new Set(before.map((r) => r.id));
     const src = await openOrder(plan.sourceId);
     if (!isDone(src)) throw new PageError(`Y lệnh nguồn đang ở trạng thái "${src.status}", cần Hoàn tất để sao chép`);
+    const edits = resolveEdits(src, plan.edits, N);
 
     // Never create a second order for a day that already has one.
     const srcDate = parseTime(before.find((r) => r.id === norm(src.id))?.tg) || parseTime(src.thoiGian);
-    result.expect = expectations(src, del, srcDate, autoComplete);
+    result.expect = expectations(src, del, srcDate, autoComplete, edits);
     if (srcDate) {
       const taken = [];
       for (let k = 1; k <= N; k++) {
@@ -437,6 +520,10 @@ function createDriver(host) {
     log('ok', `Đã sao chép: ngày 1 (${day1.thoiGian || day1.info})`);
     if (!isNew(day1)) throw new PageError(`Y lệnh mới có trạng thái "${day1.status}", dừng`);
     result.days.push({ day: 1, id: d1, time: day1.thoiGian });
+
+    // Day 1's own changes go in before Sao y lệnh, which copies them to the next days.
+    const f1 = fieldsFor(day1, edits[0]);
+    if (Object.keys(f1).length) await applyFields(d1, 'Ngày 1', f1);
 
     if (N === 1) {
       result.days[0].del = await deleteKeys(d1, del[0], 'Ngày 1');
@@ -494,17 +581,20 @@ function createDriver(host) {
       log('info', `${label}: mở y lệnh ${row.tg} (${o.status})`);
       const keys = present(o, del[k]);
       const gone = del[k].filter((x) => !keys.includes(x));
+      const f = fieldsFor(o, edits[k]);
+      const change = Object.keys(f).length > 0;
       let r = { deleted: [], missing: [], failed: [] };
-      // OneMES creates these copies already Hoàn tất: Thu hồi only when something must go.
-      if (keys.length) {
+      // OneMES creates these copies already Hoàn tất: Thu hồi only when something must change.
+      if (keys.length || change) {
         if (isDone(o)) await recall(row.id, label);
         else if (!isNew(o)) throw new PageError(`${label} có trạng thái "${o.status}", không sửa`);
         r = await deleteKeys(row.id, keys, label);
+        if (change) await applyFields(row.id, label, f);
         if (autoComplete) await complete(row.id, label);
       } else if (isNew(o) && autoComplete) {
         await complete(row.id, label);
       } else {
-        log('info', `${label}: không có mục cần xóa, giữ nguyên`);
+        log('info', `${label}: không có gì cần sửa, giữ nguyên`);
       }
       r.alreadyGone = gone;
       result.days.push({ day: k + 1, id: row.id, time: row.tg, del: r });
@@ -554,6 +644,14 @@ function createDriver(host) {
         const d = parseTime(row.tg);
         if (e.date && d && dayStamp(d) !== dayStamp(new Date(e.date))) problems.push(`Sai ngày: ${row.tg}, mong đợi ${ddmmOf(new Date(e.date))}`);
       }
+      if (e && e.edit) {
+        const left = fieldsFor(o, e.edit);
+        if (left.thoiGianThucHien) problems.push(`Giờ thực hiện là ${(o.thoiGianThucHien || '').slice(0, 5)}, đã chọn ${e.edit.gio}`);
+        if (left.dienBien !== undefined) problems.push('Diễn biến bệnh khác với nội dung đã sửa');
+        if (left.dienBienPHCN !== undefined) problems.push('Diễn biến PHCN khác với nội dung đã sửa');
+        if (left.bacSi) problems.push(`Bác sĩ là ${(o.bacSi && o.bacSi.text) || 'trống'}, đã chọn ${left.bacSi.text}`);
+        if (left.capDo) problems.push(`Cấp độ chăm sóc là ${(o.capDo && o.capDo.text) || 'trống'}, đã chọn ${left.capDo.text}`);
+      }
       if (expect && expect.autoComplete && !isDone(o)) problems.push(`Chưa Hoàn tất (đang "${o.status}")`);
       if (!o.dienBien) warnings.push('Trống Diễn biến bệnh');
       if (!o.dienBienPHCN) warnings.push('Trống Diễn biến PHCN');
@@ -570,6 +668,8 @@ function createDriver(host) {
         thoiGianThucHien: o.thoiGianThucHien,
         dienBien: o.dienBien,
         dienBienPHCN: o.dienBienPHCN,
+        bacSi: o.bacSi || null,
+        capDo: o.capDo || null,
         thuoc: o.thuoc.map(slim),
         dvkt: o.dvkt.map(slim),
         removed: e ? Object.keys(e.gone).map(label) : [],
@@ -622,7 +722,116 @@ function createDriver(host) {
     return { ok: true, id: row.id, tg: row.tg };
   }
 
-  return { call, where, scanPatients, openPatient, listOrders, pickSource, loadPatient, openOrder, readOrder, run, gotoList, verify, deleteOrder };
+  // ---------- sửa lại một ngày đã tạo ----------
+  /**
+   * Brings one created order in line with what the user corrected on the Kết quả tab:
+   * edit as in fieldsFor, remove = [{ id, base, name }] items to delete.
+   * A Hoàn tất order is recalled first and completed again afterwards.
+   */
+  async function updateDay(patient, id, edit, remove = [], autoComplete = true) {
+    const rows = await openPatient(patient);
+    const row = rows.find((r) => r.id === norm(id));
+    if (!row) throw new PageError('Không thấy y lệnh này trong Lịch sử y lệnh (có thể đã xóa)');
+    const label = `Y lệnh ${row.tg}`;
+    const o = await openOrder(row.id);
+    const f = fieldsFor(o, edit);
+    const items = [...o.thuoc, ...o.dvkt];
+    const keys = [];
+    for (const it of remove) {
+      const hit = items.find((x) => x.id === norm(it.id) && !keys.includes(x.key)) || items.find((x) => baseKey(x) === it.base && !keys.includes(x.key));
+      if (hit) keys.push(hit.key);
+      else log('warn', `${label}: không thấy "${it.name}", bỏ qua`);
+    }
+    if (!keys.length && !Object.keys(f).length) {
+      log('info', `${label}: không có gì cần sửa`);
+      return { changed: false };
+    }
+    const wasDone = isDone(o);
+    if (wasDone) await recall(row.id, label);
+    else if (!isNew(o)) throw new PageError(`${label} có trạng thái "${o.status}", không sửa`);
+    const r = await deleteKeys(row.id, keys, label);
+    if (Object.keys(f).length) await applyFields(row.id, label, f);
+    if (wasDone || autoComplete) await complete(row.id, label);
+    await call('back').catch(() => {});
+    log('ok', `${label}: đã cập nhật lên OneMES`);
+    return { changed: true, del: r };
+  }
+
+  // ---------- danh sách bác sĩ, cấp độ chăm sóc ----------
+  async function loadLists(esBase) {
+    const w = await waitFor('trang OneMES', () => where());
+    if (w.page === 'login') throw new PageError('Chưa đăng nhập OneMES');
+    const r = await call('esLists', esBase || '');
+    if (!r.ok) throw new PageError(`Không đọc được danh sách bác sĩ / cấp độ chăm sóc (${r.reason})`);
+    log('info', `Đọc được ${r.bacSi.length} bác sĩ, ${r.capDo.length} cấp độ chăm sóc`);
+    return r;
+  }
+
+  // ---------- Thông tin bệnh án ----------
+  // fields = [{ id, kind, part }] from benh-an-schema.json; part 1 = Thông tin chung,
+  // part 2 = Thông tin chuyên khoa.
+  async function openBenhAn(patient) {
+    await gotoPatient(patient);
+    await settle();
+    const r = await waitFor('mục Lập bìa bệnh án', async () => {
+      const x = await call('openBenhAn');
+      if (!x.ok && /Không thấy/.test(x.reason)) return null;
+      if (!x.ok) throw new PageError(x.reason);
+      return x;
+    }, 15000);
+    await waitFor('trang Thông tin bệnh án', async () => {
+      await failOnAlert();
+      const s = await call('benhAnState');
+      return s.ready && !s.busy ? s : null;
+    });
+    return r;
+  }
+
+  async function readBenhAn(patient, fields) {
+    const name = patient.hoTen || patient.maBN;
+    await openBenhAn(patient);
+    const r = await call('readBenhAn', fields);
+    if (r.missing.length) log('warn', `${name}: trang bệnh án không có ${r.missing.length} mục (${r.missing.slice(0, 5).join(', ')})`);
+    log('info', `${name}: đã đọc Thông tin bệnh án`);
+    return { values: r.values, missing: r.missing, at: Date.now() };
+  }
+
+  async function saveBenhAn(patient, fields, values) {
+    const name = patient.hoTen || patient.maBN;
+    log('info', `${name}: ghi Thông tin bệnh án`);
+    await openBenhAn(patient);
+    const w = await call('writeBenhAn', fields, values);
+    if (w.missing.length) log('warn', `${name}: không điền được ${w.missing.length} mục (${w.missing.slice(0, 5).join(', ')})`);
+    const parts = [
+      [1, /thông tin chung thành công/i, 'Thông tin chung'],
+      [2, /chuyên khoa thành công/i, 'Thông tin chuyên khoa'],
+    ];
+    for (const [part, ok, title] of parts) {
+      if (!fields.some((f) => f.part === part)) continue;
+      await step(`${name}: Lưu ${title}`);
+      await settle();
+      const since = await call('now');
+      const r = await call('saveBenhAn', part);
+      if (!r.ok) throw new PageError(`${name}: không lưu được ${title} (${r.reason})`);
+      await waitFor(`Lưu ${title}`, async () => {
+        await failOnAlert();
+        const t = await call('toasts', since);
+        const err = t.find((x) => x.type === 'error');
+        if (err) throw new PageError(`${name}: OneMES báo "${err.msg}"`);
+        return t.some((x) => ok.test(x.msg));
+      }, 60000);
+      log('ok', `${name}: đã lưu ${title}`);
+    }
+    // Read the page again from OneMES to be sure what was saved.
+    await openBenhAn(patient);
+    const back = await call('readBenhAn', fields);
+    const diff = fields.filter((f) => f.id in values && !w.missing.includes(f.id) && !sameValue(f.kind, values[f.id], back.values[f.id])).map((f) => f.id);
+    if (diff.length) log('warn', `${name}: sau khi lưu, ${diff.length} mục khác với bản đã sửa (${diff.slice(0, 5).join(', ')})`);
+    else log('ok', `${name}: Thông tin bệnh án đã lưu đúng`);
+    return { values: back.values, missing: w.missing, diff, at: Date.now() };
+  }
+
+  return { call, where, scanPatients, openPatient, listOrders, pickSource, loadPatient, openOrder, readOrder, run, gotoList, verify, deleteOrder, updateDay, loadLists, readBenhAn, saveBenhAn, fieldsFor };
 }
 
 function countBy(list) {
@@ -632,7 +841,7 @@ function countBy(list) {
 }
 
 // What each created day should hold: the source minus that day's deletions.
-function expectations(src, del, srcDate, autoComplete) {
+function expectations(src, del, srcDate, autoComplete, edits = []) {
   const items = [...src.thuoc, ...src.dvkt];
   const names = {};
   for (const it of items) names[baseKey(it)] = it.name;
@@ -644,8 +853,40 @@ function expectations(src, del, srcDate, autoComplete) {
       want: countBy(items.filter((it) => !keys.includes(it.key)).map(baseKey)),
       gone: countBy(items.filter((it) => keys.includes(it.key)).map(baseKey)),
       date: srcDate ? addDays(srcDate, i + 1).getTime() : null,
+      edit: edits[i] || null,
     })),
   };
+}
+
+// Per-day corrections as the user left them: a field changed on any day is pinned on
+// every day, taking the source's value where that day was left alone. Otherwise a
+// change made on day 1 would also reach the days Sao y lệnh copies from it.
+function resolveEdits(src, edits, N) {
+  const list = Array.from({ length: N }, (_, i) => ({ ...((edits && edits[i]) || {}) }));
+  const fromSrc = {
+    gio: (/^(\d{1,2}:\d{2})/.exec(src.thoiGianThucHien || src.thoiGian || '') || [])[1],
+    dienBien: src.dienBien || '',
+    dienBienPHCN: src.dienBienPHCN || '',
+    bacSi: src.bacSi && src.bacSi.id ? src.bacSi : undefined,
+    capDo: src.capDo && src.capDo.id ? src.capDo : undefined,
+  };
+  for (const k of Object.keys(fromSrc)) {
+    const used = list.some((e) => e[k] !== undefined && e[k] !== null && e[k] !== '' && !(typeof e[k] === 'object' && !e[k].id));
+    for (const e of list) {
+      const empty = e[k] === undefined || e[k] === null || e[k] === '' || (typeof e[k] === 'object' && !e[k].id);
+      if (!used) delete e[k];
+      else if (empty && fromSrc[k] !== undefined) e[k] = fromSrc[k];
+      else if (empty) delete e[k];
+    }
+  }
+  return list.map((e) => (Object.keys(e).length ? e : null));
+}
+
+function sameValue(kind, a, b) {
+  if (kind === 'check') return !!a === !!b;
+  if (kind === 'multi') return [...(a || [])].map(String).sort().join('|') === [...(b || [])].map(String).sort().join('|');
+  if (kind === 'radio') return norm(a) === norm(b);
+  return String(a == null ? '' : a).replace(/\r\n/g, '\n').trim() === String(b == null ? '' : b).replace(/\r\n/g, '\n').trim();
 }
 
 function mergeRes(a, b) {
@@ -657,4 +898,4 @@ function keyName(key) {
   return String(key).split('|')[1] || key;
 }
 
-module.exports = { createDriver, withKeys, baseKey, parseTime, norm, StopError, PageError, AGENT };
+module.exports = { createDriver, resolveEdits, withKeys, baseKey, parseTime, fmtTime, norm, StopError, PageError, AGENT };

@@ -1,0 +1,2606 @@
+{
+ "source": "OneMES Thông tin bệnh án, mục B. PHẦN BỆNH ÁN",
+ "groups": [
+  {
+   "title": "I. THÔNG TIN CHUNG",
+   "level": 1,
+   "fields": [
+    {
+     "id": "txtLyDoVaoVien",
+     "label": "Lý do vào viện",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtBenhSu",
+     "label": "Bệnh sử",
+     "kind": "textarea"
+    },
+    {
+     "id": "ckTsThuocLa",
+     "label": "Thuốc lá",
+     "kind": "check"
+    },
+    {
+     "id": "ckTsThuocLao",
+     "label": "Thuốc lào",
+     "kind": "check"
+    },
+    {
+     "id": "ckTsRuouBia",
+     "label": "Rượu bia",
+     "kind": "check"
+    },
+    {
+     "id": "ckTsMaTuy",
+     "label": "Ma túy",
+     "kind": "check"
+    },
+    {
+     "id": "ckTsDiUng",
+     "label": "Dị ứng",
+     "kind": "check"
+    },
+    {
+     "id": "ckTsKhac",
+     "label": "Khác",
+     "kind": "check"
+    },
+    {
+     "id": "txtTgBAThuocLa",
+     "label": "TGSD thuốc lá (tháng)",
+     "kind": "number"
+    },
+    {
+     "id": "txtTgBAThuocLao",
+     "label": "TGSD thuốc lào (tháng)",
+     "kind": "number"
+    },
+    {
+     "id": "txtTgBARuouBia",
+     "label": "TGSD rượu bia (tháng)",
+     "kind": "number"
+    },
+    {
+     "id": "txtTgBAMaTuy",
+     "label": "TGSD ma túy (tháng)",
+     "kind": "number"
+    },
+    {
+     "id": "txtTgBADiUng",
+     "label": "TG dị ứng (tháng)",
+     "kind": "number"
+    },
+    {
+     "id": "txtTgBAKhac",
+     "label": "TG khác (tháng)",
+     "kind": "number"
+    },
+    {
+     "id": "txtTsBanThan",
+     "label": "Tiền sử bản thân",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtTsGiaDinh",
+     "label": "Tiền sử gia đình",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamToanThan",
+     "label": "Toàn thân",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamTuanHoan",
+     "label": "Tuần hoàn",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamHoHap",
+     "label": "Hô hấp",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamTieuHoa",
+     "label": "Tiêu hóa",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamThanTietNieu",
+     "label": "Tiết niệu-sinh dục",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamThanKinh",
+     "label": "Thần kinh",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamCoXuongKhop",
+     "label": "Cơ-xương-khớp",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamCotSongThatLung",
+     "label": "Cột sống, thắt lưng",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamTaiMuiHong",
+     "label": "Tai-mũi-họng",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamRangHamMat",
+     "label": "Răng-hàm-mặt",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamMat",
+     "label": "Mắt",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamNoiTiet",
+     "label": "Nội tiết",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamDinhDuong",
+     "label": "Dinh dưỡng",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtKhamCoQuanKhac",
+     "label": "Bộ phận khác",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtMoTaCoQuanBenhLy",
+     "label": "Mô tả chi tiết cơ quan bệnh lý",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtCanLamSang",
+     "label": "Cận lâm sàng",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtTomTatBenhAn",
+     "label": "Tóm tắt bệnh án",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtTienLuong",
+     "label": "Tiên lượng",
+     "kind": "textarea"
+    },
+    {
+     "id": "txtPpDieuTri",
+     "label": "Phương pháp điều trị",
+     "kind": "textarea"
+    }
+   ],
+   "part": 1
+  },
+  {
+   "title": "II. THÔNG TIN CHUYÊN KHOA",
+   "level": 1,
+   "fields": [
+    {
+     "id": "SoNhapVien",
+     "label": "Vào viện do bệnh này lần thứ",
+     "kind": "number"
+    }
+   ],
+   "part": 2
+  },
+  {
+   "title": "Chẩn đoán theo YHHĐ",
+   "level": 2,
+   "fields": [
+    {
+     "id": "TTYHHD",
+     "label": "Thủ thuật",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "PTYHHD",
+     "label": "Phẫu thuật",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "TBYHHD",
+     "label": "Tai biến",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "BCYHHD",
+     "label": "Biến chứng",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    }
+   ],
+   "part": 2
+  },
+  {
+   "title": "Chẩn đoán theo YHCT",
+   "level": 2,
+   "fields": [
+    {
+     "id": "ThuThuatCDYHCT",
+     "label": "Thủ thuật",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "PhauThuatCDYHCT",
+     "label": "Phẫu thuật",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "BienChung",
+     "label": "Biến chứng",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "TaiBien",
+     "label": "Tai biến",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    }
+   ],
+   "part": 2
+  },
+  {
+   "title": "Khám bệnh",
+   "level": 2,
+   "fields": [
+    {
+     "id": "ToanThans",
+     "label": "Toàn thân",
+     "kind": "textarea"
+    },
+    {
+     "id": "TuanHoan",
+     "label": "Tuần hoàn",
+     "kind": "textarea"
+    },
+    {
+     "id": "HoHap",
+     "label": "Hô hấp",
+     "kind": "textarea"
+    },
+    {
+     "id": "TieuHoa",
+     "label": "Tiêu hóa",
+     "kind": "textarea"
+    },
+    {
+     "id": "ThanTietNieuSinhDuc",
+     "label": "Tiết niệu- Sinh dục",
+     "kind": "textarea"
+    },
+    {
+     "id": "ThanKinh",
+     "label": "Thần kinh",
+     "kind": "textarea"
+    },
+    {
+     "id": "CoXuongKhop",
+     "label": "Cơ xương khớp",
+     "kind": "textarea"
+    },
+    {
+     "id": "TaiMuiHong",
+     "label": "Tai mũi họng",
+     "kind": "textarea"
+    },
+    {
+     "id": "RangHamMat",
+     "label": "Răng hàm mặt",
+     "kind": "textarea"
+    },
+    {
+     "id": "NoiTiet",
+     "label": "Nội tiết, dinh dưỡng và các bệnh lý khác",
+     "kind": "textarea"
+    },
+    {
+     "id": "Mat",
+     "label": "Mắt",
+     "kind": "textarea"
+    },
+    {
+     "id": "MoTaCoQuan",
+     "label": "Mô tả cơ quan",
+     "kind": "textarea"
+    },
+    {
+     "id": "XetNghiem",
+     "label": "Kết quả Cận lâm sàng",
+     "kind": "textarea"
+    },
+    {
+     "id": "TomTatBa",
+     "label": "Tóm tắt bệnh án",
+     "kind": "textarea"
+    },
+    {
+     "id": "ChanDoanMoTa",
+     "label": "Mô tả thêm (chẩn đoán phân biệt, cho phép tự nhập)",
+     "kind": "text"
+    },
+    {
+     "id": "BSDieuTri",
+     "label": "Bs điều trị",
+     "kind": "text"
+    }
+   ],
+   "part": 2
+  },
+  {
+   "title": "I. VỌNG CHẨN",
+   "level": 2,
+   "fields": [
+    {
+     "id": "HinhThai",
+     "label": "1. Hình thái",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Gầy"
+      },
+      {
+       "value": "2",
+       "label": "Béo"
+      },
+      {
+       "value": "3",
+       "label": "Cân đối"
+      },
+      {
+       "value": "4",
+       "label": "Nằm co"
+      },
+      {
+       "value": "5",
+       "label": "Nằm duỗi"
+      },
+      {
+       "value": "6",
+       "label": "Ưa tĩnh"
+      },
+      {
+       "value": "7",
+       "label": "Hiếu động"
+      },
+      {
+       "value": "8",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "Than",
+     "label": "2. Thần",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Còn thần"
+      },
+      {
+       "value": "2",
+       "label": "Không còn thần"
+      },
+      {
+       "value": "3",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "Sac",
+     "label": "3. Sắc",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Bệch(trắng)"
+      },
+      {
+       "value": "2",
+       "label": "Đỏ"
+      },
+      {
+       "value": "3",
+       "label": "Vàng"
+      },
+      {
+       "value": "4",
+       "label": "Xanh"
+      },
+      {
+       "value": "5",
+       "label": "Đen"
+      },
+      {
+       "value": "6",
+       "label": "Bình thường"
+      },
+      {
+       "value": "7",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "Trach",
+     "label": "4. Trạch",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Tươi nhuận"
+      },
+      {
+       "value": "2",
+       "label": "Khô"
+      },
+      {
+       "value": "3",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "Luoi",
+     "label": "5. Lưỡi: - Hình thái",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Bình thường"
+      },
+      {
+       "value": "2",
+       "label": "Lệch"
+      },
+      {
+       "value": "3",
+       "label": "Rụt"
+      },
+      {
+       "value": "4",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "ChatLuoi",
+     "label": "- Chất lưỡi, sắc lưỡi",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Đạm"
+      },
+      {
+       "value": "2",
+       "label": "Bệu"
+      },
+      {
+       "value": "3",
+       "label": "Gầy mỏng"
+      },
+      {
+       "value": "4",
+       "label": "Nứt"
+      },
+      {
+       "value": "5",
+       "label": "Cứng"
+      },
+      {
+       "value": "6",
+       "label": "Loét"
+      },
+      {
+       "value": "7",
+       "label": "Hồng"
+      },
+      {
+       "value": "8",
+       "label": "Nhợt"
+      },
+      {
+       "value": "9",
+       "label": "Đỏ"
+      },
+      {
+       "value": "10",
+       "label": "Đỏ sẫm"
+      },
+      {
+       "value": "11",
+       "label": "Tím"
+      },
+      {
+       "value": "12",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "ReuLuoi",
+     "label": "- Rêu lưỡi",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      },
+      {
+       "value": "3",
+       "label": "Bong"
+      },
+      {
+       "value": "4",
+       "label": "Dầy"
+      },
+      {
+       "value": "5",
+       "label": "Mỏng"
+      },
+      {
+       "value": "6",
+       "label": "Ướt"
+      },
+      {
+       "value": "7",
+       "label": "Khô"
+      },
+      {
+       "value": "8",
+       "label": "Nhuận"
+      },
+      {
+       "value": "9",
+       "label": "Dính"
+      },
+      {
+       "value": "10",
+       "label": "Trắng"
+      },
+      {
+       "value": "11",
+       "label": "Vàng"
+      },
+      {
+       "value": "12",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "MoTaVongChan",
+     "label": "Mô tả khác (nếu có)",
+     "kind": "textarea"
+    },
+    {
+     "id": "SacLuoi",
+     "label": "Sắc lưỡi (Dành cho mẫu BA 4604/QĐ-BYT)",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Hồng"
+      },
+      {
+       "value": "2",
+       "label": "Nhợt"
+      },
+      {
+       "value": "3",
+       "label": "Đỏ"
+      },
+      {
+       "value": "4",
+       "label": "Đỏ sẫm"
+      },
+      {
+       "value": "5",
+       "label": "Xanh tím"
+      },
+      {
+       "value": "6",
+       "label": "Đám ứ huyết"
+      },
+      {
+       "value": "7",
+       "label": "Khô"
+      },
+      {
+       "value": "8",
+       "label": "Nhuận"
+      },
+      {
+       "value": "9",
+       "label": "khác"
+      }
+     ]
+    }
+   ],
+   "part": 2
+  },
+  {
+   "title": "II. VĂN CHẨN",
+   "level": 2,
+   "fields": [
+    {
+     "id": "TiengNoi",
+     "label": "1. Âm thanh: 1.1. Tiếng nói",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Bình thường"
+      },
+      {
+       "value": "2",
+       "label": "To"
+      },
+      {
+       "value": "3",
+       "label": "Nhỏ"
+      },
+      {
+       "value": "4",
+       "label": "Đứt quãng"
+      },
+      {
+       "value": "5",
+       "label": "Khàn"
+      },
+      {
+       "value": "6",
+       "label": "Ngọng"
+      },
+      {
+       "value": "7",
+       "label": "Mất"
+      },
+      {
+       "value": "8",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "HoiTho",
+     "label": "1.2. Hơi thở",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Bình thường"
+      },
+      {
+       "value": "2",
+       "label": "Đứt quãng"
+      },
+      {
+       "value": "3",
+       "label": "Ngắn"
+      },
+      {
+       "value": "4",
+       "label": "Mạnh"
+      },
+      {
+       "value": "5",
+       "label": "Yếu"
+      },
+      {
+       "value": "6",
+       "label": "Thô"
+      },
+      {
+       "value": "7",
+       "label": "Rít"
+      },
+      {
+       "value": "8",
+       "label": "Khò khè"
+      },
+      {
+       "value": "9",
+       "label": "Chậm"
+      },
+      {
+       "value": "10",
+       "label": "Gấp"
+      },
+      {
+       "value": "11",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "Hos",
+     "label": "1.3. Ho",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "Ho",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Ho liên tục"
+      },
+      {
+       "value": "2",
+       "label": "Cơn"
+      },
+      {
+       "value": "3",
+       "label": "Ít"
+      },
+      {
+       "value": "4",
+       "label": "Nhiều"
+      },
+      {
+       "value": "5",
+       "label": "Khan"
+      },
+      {
+       "value": "6",
+       "label": "Có đờm"
+      },
+      {
+       "value": "7",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "O",
+     "label": "1.4. Ợ",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "Nac",
+     "label": "1.5. Nấc",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "Mui",
+     "label": "2. Mùi: 2.1 Mùi cơ thể, mùi hơi thở",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "MuiCoThe",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Chua"
+      },
+      {
+       "value": "2",
+       "label": "Khắm"
+      },
+      {
+       "value": "3",
+       "label": "Tanh"
+      },
+      {
+       "value": "4",
+       "label": "Thối"
+      },
+      {
+       "value": "5",
+       "label": "Hôi"
+      },
+      {
+       "value": "6",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "ChatThaiBieuHien",
+     "label": "2.2 Chất thải biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "ChatThai",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Đờm"
+      },
+      {
+       "value": "2",
+       "label": "Chất nôn"
+      },
+      {
+       "value": "3",
+       "label": "Phân"
+      },
+      {
+       "value": "4",
+       "label": "Nước tiểu"
+      },
+      {
+       "value": "5",
+       "label": "Khí hư"
+      },
+      {
+       "value": "6",
+       "label": "Kinh nguyệt"
+      },
+      {
+       "value": "7",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "MoTaVanChan",
+     "label": "3. Mô tả khác (nếu có)",
+     "kind": "textarea"
+    }
+   ],
+   "part": 2
+  },
+  {
+   "title": "III. VẤN CHẨN",
+   "level": 2,
+   "fields": [
+    {
+     "id": "BieuHienHanNhiet",
+     "label": "1. Hàn nhiệt: Biểu hiện bệnh lý",
+     "kind": "select",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "BHHanNhiet",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Thích nóng"
+      },
+      {
+       "value": "2",
+       "label": "Sợ nóng"
+      },
+      {
+       "value": "3",
+       "label": "Thích mát"
+      },
+      {
+       "value": "4",
+       "label": "Sợ lạnh"
+      },
+      {
+       "value": "5",
+       "label": "Trong người nóng"
+      },
+      {
+       "value": "6",
+       "label": "Trong người lạnh"
+      },
+      {
+       "value": "7",
+       "label": "Rét run"
+      },
+      {
+       "value": "8",
+       "label": "Hàn nhiệt vãng lai"
+      },
+      {
+       "value": "9",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "MoHoi",
+     "label": "2. Mồ hôi",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Bình thường"
+      },
+      {
+       "value": "2",
+       "label": "Không có mồ hôi"
+      },
+      {
+       "value": "3",
+       "label": "Tự hãn"
+      },
+      {
+       "value": "4",
+       "label": "Đạo hãn"
+      },
+      {
+       "value": "5",
+       "label": "Nhiều"
+      },
+      {
+       "value": "6",
+       "label": "Ít"
+      },
+      {
+       "value": "7",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "DauMat",
+     "label": "3. Đầu mặt cổ: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "DauDau",
+     "label": "- Đau đầu",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Một chỗ"
+      },
+      {
+       "value": "2",
+       "label": "Nửa đầu"
+      },
+      {
+       "value": "3",
+       "label": "Cả đầu"
+      },
+      {
+       "value": "4",
+       "label": "Di chuyển"
+      },
+      {
+       "value": "5",
+       "label": "Ê ẩm"
+      },
+      {
+       "value": "6",
+       "label": "Nhói"
+      },
+      {
+       "value": "7",
+       "label": "Căng"
+      },
+      {
+       "value": "8",
+       "label": "Nặng đầu"
+      },
+      {
+       "value": "9",
+       "label": "Đau thắt"
+      },
+      {
+       "value": "10",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "HoaMat",
+     "label": "- Hoa mắt chóng mặt",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "DauMats",
+     "label": "- Mắt",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Nhìn không rõ"
+      },
+      {
+       "value": "2",
+       "label": "Đau"
+      },
+      {
+       "value": "3",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "DauTai",
+     "label": "- Tai",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Ù"
+      },
+      {
+       "value": "2",
+       "label": "Điếc"
+      },
+      {
+       "value": "3",
+       "label": "Đau"
+      },
+      {
+       "value": "4",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "DauMui",
+     "label": "- Mũi",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Ngạt"
+      },
+      {
+       "value": "2",
+       "label": "Chảy nước"
+      },
+      {
+       "value": "3",
+       "label": "Chảy máu cam"
+      },
+      {
+       "value": "4",
+       "label": "Đau"
+      },
+      {
+       "value": "5",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "DauHong",
+     "label": "- Họng",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Đau"
+      },
+      {
+       "value": "2",
+       "label": "Khô"
+      },
+      {
+       "value": "3",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "DauCoVai",
+     "label": "- Cổ vai",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Mỏi"
+      },
+      {
+       "value": "2",
+       "label": "Đau"
+      },
+      {
+       "value": "3",
+       "label": "Khó vận động"
+      },
+      {
+       "value": "4",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "LungBieuHien",
+     "label": "4. Lưng: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "DauLung",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Mỏi lưng"
+      },
+      {
+       "value": "2",
+       "label": "Đau"
+      },
+      {
+       "value": "3",
+       "label": "Khó vận động"
+      },
+      {
+       "value": "4",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "BungNgucBieuHien",
+     "label": "5. Ngực: Biển hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "DauBungNguc",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Tức"
+      },
+      {
+       "value": "2",
+       "label": "Đau"
+      },
+      {
+       "value": "3",
+       "label": "Ngột ngạt khó thở"
+      },
+      {
+       "value": "4",
+       "label": "Đau tức cạnh sườn"
+      },
+      {
+       "value": "5",
+       "label": "Đánh trống ngực"
+      },
+      {
+       "value": "6",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "BungBieuHien",
+     "label": "6. Bung: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "DauBung",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Đau"
+      },
+      {
+       "value": "2",
+       "label": "Sôi bụng"
+      },
+      {
+       "value": "3",
+       "label": "Nóng ruột"
+      },
+      {
+       "value": "4",
+       "label": "Đầy trướng"
+      },
+      {
+       "value": "5",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "ChanTayBieuHien",
+     "label": "7. Chân tay: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "DauChanTay",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Đau"
+      },
+      {
+       "value": "2",
+       "label": "Tê"
+      },
+      {
+       "value": "3",
+       "label": "Buồn"
+      },
+      {
+       "value": "4",
+       "label": "Mỏi"
+      },
+      {
+       "value": "5",
+       "label": "Nhức"
+      },
+      {
+       "value": "6",
+       "label": "Nóng"
+      },
+      {
+       "value": "7",
+       "label": "Lạnh"
+      },
+      {
+       "value": "8",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "AnBieuHien",
+     "label": "8. Ăn: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "An",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Thích nóng"
+      },
+      {
+       "value": "2",
+       "label": "Thích mát"
+      },
+      {
+       "value": "3",
+       "label": "Ăn nhiều"
+      },
+      {
+       "value": "4",
+       "label": "Ăn ít"
+      },
+      {
+       "value": "5",
+       "label": "Đắng miệng"
+      },
+      {
+       "value": "6",
+       "label": "Nhạt miệng"
+      },
+      {
+       "value": "7",
+       "label": "Thèm ăn"
+      },
+      {
+       "value": "8",
+       "label": "Chán ăn"
+      },
+      {
+       "value": "9",
+       "label": "Ăn vào bụng chướng"
+      },
+      {
+       "value": "10",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "UongBieuHien",
+     "label": "9. Uống Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "Uong",
+     "label": "Thích uống",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Mát"
+      },
+      {
+       "value": "2",
+       "label": "Ấm nóng"
+      },
+      {
+       "value": "3",
+       "label": "Nhiều"
+      },
+      {
+       "value": "4",
+       "label": "Ít"
+      },
+      {
+       "value": "5",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "TieuTienBieuHien",
+     "label": "10. Đại, tiểu tiện: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "TieuTien",
+     "label": "- Tiểu tiện",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Vàng"
+      },
+      {
+       "value": "2",
+       "label": "Đỏ"
+      },
+      {
+       "value": "3",
+       "label": "Đục"
+      },
+      {
+       "value": "4",
+       "label": "Buốt"
+      },
+      {
+       "value": "5",
+       "label": "Rắt"
+      },
+      {
+       "value": "6",
+       "label": "Không tự chủ"
+      },
+      {
+       "value": "7",
+       "label": "Bí"
+      },
+      {
+       "value": "8",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "DaiTien",
+     "label": "- Đại tiện",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Táo"
+      },
+      {
+       "value": "2",
+       "label": "Nát"
+      },
+      {
+       "value": "3",
+       "label": "Sống"
+      },
+      {
+       "value": "4",
+       "label": "Lỏng"
+      },
+      {
+       "value": "5",
+       "label": "Nhầy mũi"
+      },
+      {
+       "value": "6",
+       "label": "Bí"
+      },
+      {
+       "value": "7",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "NguBieuHien",
+     "label": "11. Ngủ: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "Ngu",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Khó vào giấc ngủ"
+      },
+      {
+       "value": "2",
+       "label": "Hay tỉnh"
+      },
+      {
+       "value": "3",
+       "label": "Hay mê"
+      },
+      {
+       "value": "4",
+       "label": "Ngủ ít"
+      },
+      {
+       "value": "5",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "KhaNangSD",
+     "label": "12. Khả năng sinh dục, sinh sản: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      },
+      {
+       "value": "3",
+       "label": "Mãn dục"
+      }
+     ]
+    },
+    {
+     "id": "NamGioiSD",
+     "label": "12.1 Nam giới",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Liệt dương"
+      },
+      {
+       "value": "2",
+       "label": "Di tinh"
+      },
+      {
+       "value": "3",
+       "label": "Hoạt tinh"
+      },
+      {
+       "value": "4",
+       "label": "Mộng tinh"
+      },
+      {
+       "value": "5",
+       "label": "Lãnh tinh"
+      },
+      {
+       "value": "6",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "NuGioiSD",
+     "label": "12.2 Nữ giới",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Vô sinh"
+      },
+      {
+       "value": "2",
+       "label": "Động thai"
+      },
+      {
+       "value": "3",
+       "label": "Sảy thai"
+      },
+      {
+       "value": "4",
+       "label": "Sải thai liên tiếp"
+      },
+      {
+       "value": "5",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "SinhDucBieuHien",
+     "label": "- Kinh nguyệt: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "KinhNguyet",
+     "label": "+ Kinh nguyệt",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Trước kỳ"
+      },
+      {
+       "value": "2",
+       "label": "Sau kỳ"
+      },
+      {
+       "value": "3",
+       "label": "Bế kinh"
+      },
+      {
+       "value": "4",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "ThongKinh",
+     "label": "+ Thống kinh",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Trước kỳ"
+      },
+      {
+       "value": "2",
+       "label": "Trong kỳ"
+      },
+      {
+       "value": "3",
+       "label": "Sau kỳ"
+      },
+      {
+       "value": "4",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "DoiHaBH",
+     "label": "- Đới hạ: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "DoiHa",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Vàng"
+      },
+      {
+       "value": "2",
+       "label": "Trằng"
+      },
+      {
+       "value": "3",
+       "label": "Hồng"
+      },
+      {
+       "value": "4",
+       "label": "Hôi"
+      },
+      {
+       "value": "5",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "DieuKienXuatHienBenh",
+     "label": "13. Các yếu tố liên quan đến xuất hiện bệnh",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "MoTaVanaChan",
+     "label": "14. Mô tả khác (nếu có)",
+     "kind": "textarea"
+    },
+    {
+     "id": "RoiLoanSinhDuc",
+     "label": "Rối loạn sinh dục (Dành cho mẫu BA 4604/QĐ-BYT)",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "0",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "RoiLoanSD",
+     "label": "Rối loạn sinh dục (Dành cho mẫu BA 4604/QĐ-BYT)",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Yếu khi giao hợp"
+      },
+      {
+       "value": "2",
+       "label": "Liệt dương"
+      },
+      {
+       "value": "3",
+       "label": "Di tinh"
+      },
+      {
+       "value": "4",
+       "label": "Hoạt tinh"
+      },
+      {
+       "value": "5",
+       "label": "Mộng tinh"
+      },
+      {
+       "value": "6",
+       "label": "Lãnh tinh"
+      },
+      {
+       "value": "7",
+       "label": "Không thụ thai"
+      },
+      {
+       "value": "8",
+       "label": "Sẩy thai/động thai"
+      },
+      {
+       "value": "9",
+       "label": "Sảy thai liên tiếp"
+      },
+      {
+       "value": "10",
+       "label": "khác"
+      }
+     ]
+    }
+   ],
+   "part": 2
+  },
+  {
+   "title": "IV. THIẾT CHẨN",
+   "level": 2,
+   "fields": [
+    {
+     "id": "XucChan",
+     "label": "1. Xúc chẩn: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "Da",
+     "label": "- Da",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Khô"
+      },
+      {
+       "value": "2",
+       "label": "Nóng"
+      },
+      {
+       "value": "3",
+       "label": "Lạnh"
+      },
+      {
+       "value": "4",
+       "label": "Ướt"
+      },
+      {
+       "value": "5",
+       "label": "Chân tay nóng"
+      },
+      {
+       "value": "6",
+       "label": "Chân tay lạnh"
+      },
+      {
+       "value": "7",
+       "label": "Ấn lõm"
+      },
+      {
+       "value": "8",
+       "label": "Ấn đau"
+      },
+      {
+       "value": "9",
+       "label": "U/cục"
+      },
+      {
+       "value": "10",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "CoXuongBH",
+     "label": "- Cơ - xương - khớp: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "CoXuongKhops",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Mềm nhẽo"
+      },
+      {
+       "value": "2",
+       "label": "Căng cứng"
+      },
+      {
+       "value": "3",
+       "label": "Ấn đau"
+      },
+      {
+       "value": "4",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "BungBH",
+     "label": "- Bụng : Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "Bung",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Chướng"
+      },
+      {
+       "value": "2",
+       "label": "Tích"
+      },
+      {
+       "value": "3",
+       "label": "Tụ"
+      },
+      {
+       "value": "4",
+       "label": "Thiện án"
+      },
+      {
+       "value": "5",
+       "label": "Cự án"
+      },
+      {
+       "value": "6",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "MoHoiBH",
+     "label": "- Mồ hôi: Biểu hiện bệnh lý",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Có"
+      },
+      {
+       "value": "2",
+       "label": "Không"
+      }
+     ]
+    },
+    {
+     "id": "MoHois",
+     "label": "",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Toàn thân"
+      },
+      {
+       "value": "2",
+       "label": "Trán"
+      },
+      {
+       "value": "3",
+       "label": "Tay"
+      },
+      {
+       "value": "4",
+       "label": "Chân"
+      },
+      {
+       "value": "5",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "MachChan",
+     "label": "2. Mạch chẩn",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Trầm"
+      },
+      {
+       "value": "2",
+       "label": "Trì"
+      },
+      {
+       "value": "3",
+       "label": "Phù"
+      },
+      {
+       "value": "4",
+       "label": "Sác"
+      },
+      {
+       "value": "5",
+       "label": "Hoạt"
+      },
+      {
+       "value": "6",
+       "label": "Huyền"
+      },
+      {
+       "value": "7",
+       "label": "Nhu"
+      },
+      {
+       "value": "8",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "TongKhanPhai",
+     "label": "Tổng khán phải",
+     "kind": "text"
+    },
+    {
+     "id": "TongKhanTrai",
+     "label": "Tổng khán trái",
+     "kind": "text"
+    },
+    {
+     "id": "ThonT",
+     "label": "Mạch tay trái-Thốn",
+     "kind": "text"
+    },
+    {
+     "id": "QuanT",
+     "label": "Mạch tay trái-Quan",
+     "kind": "text"
+    },
+    {
+     "id": "XichT",
+     "label": "Mạch tay trái-Xích",
+     "kind": "text"
+    },
+    {
+     "id": "ThonP",
+     "label": "Mạch tay phải-Thốn",
+     "kind": "text"
+    },
+    {
+     "id": "QuanP",
+     "label": "Mạch tay phải-Quan",
+     "kind": "text"
+    },
+    {
+     "id": "XichP",
+     "label": "Mạch tay phải-Xích",
+     "kind": "text"
+    },
+    {
+     "id": "MoTaThietChan",
+     "label": "3. Mô tả khác (nếu có)",
+     "kind": "textarea"
+    },
+    {
+     "id": "Tomtattuchan",
+     "label": "V. TÓM TẮT TỨ CHẨN",
+     "kind": "textarea"
+    },
+    {
+     "id": "BienChungLuanTri",
+     "label": "VI. BIỆN CHỨNG LUẬN TRỊ",
+     "kind": "textarea"
+    }
+   ],
+   "part": 2
+  },
+  {
+   "title": "VII. CHẨN ĐOÁN",
+   "level": 2,
+   "fields": [
+    {
+     "id": "BenhDanhCD",
+     "label": "Bệnh danh",
+     "kind": "text"
+    },
+    {
+     "id": "BatCuongsCD",
+     "label": "Bát cương",
+     "kind": "text"
+    },
+    {
+     "id": "BatCuong",
+     "label": "Bát cương",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Biểu"
+      },
+      {
+       "value": "2",
+       "label": "Lý"
+      },
+      {
+       "value": "3",
+       "label": "Hư"
+      },
+      {
+       "value": "4",
+       "label": "Thực"
+      },
+      {
+       "value": "5",
+       "label": "Hàn"
+      },
+      {
+       "value": "6",
+       "label": "Nhiệt"
+      },
+      {
+       "value": "7",
+       "label": "Âm"
+      },
+      {
+       "value": "8",
+       "label": "Dương"
+      }
+     ]
+    },
+    {
+     "id": "NguyenNhan",
+     "label": "Nguyên nhân",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Nội nhân"
+      },
+      {
+       "value": "2",
+       "label": "Ngoại nhân"
+      },
+      {
+       "value": "3",
+       "label": "Bất nội ngoại nhân"
+      }
+     ]
+    },
+    {
+     "id": "TangPhu",
+     "label": "Tạng phủ",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Tâm"
+      },
+      {
+       "value": "2",
+       "label": "Can"
+      },
+      {
+       "value": "3",
+       "label": "Tỳ"
+      },
+      {
+       "value": "4",
+       "label": "Phế"
+      },
+      {
+       "value": "5",
+       "label": "Thận"
+      },
+      {
+       "value": "6",
+       "label": "Tâm bào"
+      },
+      {
+       "value": "7",
+       "label": "Vị"
+      },
+      {
+       "value": "8",
+       "label": "Đởm"
+      },
+      {
+       "value": "9",
+       "label": "Tiểu trường"
+      },
+      {
+       "value": "10",
+       "label": "Đại tràng"
+      },
+      {
+       "value": "11",
+       "label": "Bàng quang"
+      },
+      {
+       "value": "12",
+       "label": "Tam tiêu"
+      },
+      {
+       "value": "13",
+       "label": "Phủ kỳ hằng"
+      }
+     ]
+    },
+    {
+     "id": "KinhMach",
+     "label": "Kinh mạch",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Tâm"
+      },
+      {
+       "value": "2",
+       "label": "Can"
+      },
+      {
+       "value": "3",
+       "label": "Tỳ"
+      },
+      {
+       "value": "4",
+       "label": "Phế"
+      },
+      {
+       "value": "5",
+       "label": "Thận"
+      },
+      {
+       "value": "6",
+       "label": "Tâm bào"
+      },
+      {
+       "value": "7",
+       "label": "Tiểu trường"
+      },
+      {
+       "value": "8",
+       "label": "Đởm"
+      },
+      {
+       "value": "9",
+       "label": "Vị"
+      },
+      {
+       "value": "10",
+       "label": "Đại trường"
+      },
+      {
+       "value": "11",
+       "label": "Bàng quang"
+      },
+      {
+       "value": "12",
+       "label": "Tam tiêu"
+      },
+      {
+       "value": "13",
+       "label": "Mạch đốc"
+      },
+      {
+       "value": "14",
+       "label": "Mạch nhâm"
+      }
+     ]
+    },
+    {
+     "id": "DinhViBenh",
+     "label": "Định vị bệnh theo",
+     "kind": "multi",
+     "options": [
+      {
+       "value": "1",
+       "label": "Vệ"
+      },
+      {
+       "value": "2",
+       "label": "Khí"
+      },
+      {
+       "value": "3",
+       "label": "Dinh"
+      },
+      {
+       "value": "4",
+       "label": "Huyết"
+      }
+     ]
+    },
+    {
+     "id": "BenhDanh",
+     "label": "Bệnh danh (Dành cho mẫu BA 4604/QĐ-BYT)",
+     "kind": "text"
+    },
+    {
+     "id": "BatCuongs",
+     "label": "Bát cương (Dành cho mẫu BA 4604/QĐ-BYT)",
+     "kind": "text"
+    },
+    {
+     "id": "TangPhuKinhLac",
+     "label": "Tạng phủ kinh lạc (Dành cho mẫu BA 4604/QĐ-BYT)",
+     "kind": "text"
+    },
+    {
+     "id": "NguyenNhanCD",
+     "label": "Nguyên nhân (Dành cho mẫu BA 4604.QĐ-BYT)",
+     "kind": "text"
+    }
+   ],
+   "part": 2
+  },
+  {
+   "title": "Điều trị đơn thuần YHCT",
+   "level": 2,
+   "fields": [
+    {
+     "id": "PhapDieuTri",
+     "label": "Pháp điều trị",
+     "kind": "text"
+    },
+    {
+     "id": "PhuongThuoc",
+     "label": "Phương thuốc",
+     "kind": "text"
+    },
+    {
+     "id": "PhuongHuyet",
+     "label": "Phương huyệt",
+     "kind": "text"
+    },
+    {
+     "id": "XoaBopBamHuyet",
+     "label": "Xoa bóp bấm huyệt",
+     "kind": "text"
+    },
+    {
+     "id": "DieuTriDonThuanKhac",
+     "label": "Điều trị đơn thuần khác",
+     "kind": "text"
+    },
+    {
+     "id": "DieuTriKetHopYHHD",
+     "label": "Điều trị kết hợp với YHHD",
+     "kind": "textarea"
+    },
+    {
+     "id": "CDDD",
+     "label": "Chế độ dinh dưỡng",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "1",
+       "label": "Lỏng"
+      },
+      {
+       "value": "2",
+       "label": "Đặc"
+      },
+      {
+       "value": "3",
+       "label": "Kiêng"
+      },
+      {
+       "value": "4",
+       "label": "Khác"
+      }
+     ]
+    },
+    {
+     "id": "CDCS",
+     "label": "Chế độ chăm sóc",
+     "kind": "radio",
+     "options": [
+      {
+       "value": "Cấp I ",
+       "label": "Cấp I"
+      },
+      {
+       "value": " Cấp II",
+       "label": "Cấp II"
+      },
+      {
+       "value": " Cấp III",
+       "label": "Cấp III"
+      }
+     ]
+    },
+    {
+     "id": "TienLuong",
+     "label": "Tiên lượng",
+     "kind": "textarea"
+    }
+   ],
+   "part": 2
+  },
+  {
+   "title": "",
+   "level": 2,
+   "fields": [
+    {
+     "id": "ThoiGianLamBA",
+     "label": "Thời gian làm bệnh án",
+     "kind": "text",
+     "format": "HH:mm dd/MM/yyyy"
+    }
+   ],
+   "part": 2
+  },
+  {
+   "title": "Tổng kết bệnh án",
+   "level": 2,
+   "fields": [
+    {
+     "id": "PPDieuTriYHHD",
+     "label": "Phương pháp điều trị YHHD",
+     "kind": "textarea"
+    },
+    {
+     "id": "PPDieuTriYHCT",
+     "label": "Phương pháp điều trị YHCT",
+     "kind": "textarea"
+    }
+   ],
+   "part": 2
+  }
+ ]
+}

@@ -2,14 +2,28 @@
 // UI calls. Automation lives in driver.js; this file only wires it up.
 'use strict';
 const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, net } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const { createStore } = require('./store');
 const { createDriver } = require('./driver');
 const { createUpdater } = require('./updater');
 const pkg = require('../package.json');
+const BENH_AN = require('./benh-an-schema.json');
+const BA_FIELDS = BENH_AN.groups.flatMap((g) => g.fields.map((f) => ({ id: f.id, kind: f.kind, part: g.part })));
 
 if (process.env.SYL_DATA_DIR) app.setPath('userData', path.resolve(process.env.SYL_DATA_DIR));
 if (!app.requestSingleInstanceLock()) app.quit();
+
+// Software rendering is chosen before the window exists: on some Windows PCs the
+// GPU path makes the whole window flicker while the OneMES page repaints.
+const gpuOff = (() => {
+  try {
+    const s = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'data.json'), 'utf8')).settings || {};
+    if (typeof s.gpuOff === 'boolean') return s.gpuOff;
+  } catch {}
+  return process.platform === 'win32';
+})();
+if (gpuOff && !process.env.SYL_GPU_ON) app.disableHardwareAcceleration();
 
 let win = null;
 let view = null;
@@ -29,25 +43,42 @@ const logBuf = [];
 let stopFlag = false;
 let stepResolve = null;
 
+// State and log lines reach the UI in batches (at most ~8 a second), so a busy run
+// does not make the window redraw on every step.
+let outbox = { state: false, logs: [] };
+let flushTimer = null;
+function flush() {
+  flushTimer = null;
+  if (!win || win.isDestroyed()) return;
+  if (outbox.logs.length) win.webContents.send('log', outbox.logs);
+  if (outbox.state) win.webContents.send('state', state);
+  outbox = { state: false, logs: [] };
+}
+function schedule() {
+  if (!flushTimer) flushTimer = setTimeout(flush, 120);
+}
 function push(extra = {}) {
   Object.assign(state, extra);
-  if (win && !win.isDestroyed()) win.webContents.send('state', state);
+  outbox.state = true;
+  schedule();
 }
 function log(level, msg) {
   const e = { at: Date.now(), level, msg };
   logBuf.push(e);
   if (logBuf.length > 1000) logBuf.shift();
   store.appendLog(e);
-  if (win && !win.isDestroyed()) win.webContents.send('log', e);
+  outbox.logs.push(e);
+  schedule();
 }
 
 // ---------- OneMES view ----------
 function setupView() {
   const ses = session.fromPartition('persist:onemes');
   ses.setUserAgent(ses.getUserAgent().replace(/\s(Electron|SaoYLenh|sao-y-lenh)\/\S+/gi, ''));
-  view = new WebContentsView({ webPreferences: { session: ses, backgroundThrottling: false } });
-  win.contentView.addChildView(view);
-  // Hidden until the Trình duyệt page shows it; the page keeps its size so OneMES lays out normally.
+  view = new WebContentsView({
+    webPreferences: { session: ses, backgroundThrottling: false, sandbox: true, preload: path.join(__dirname, 'view-preload.js') },
+  });
+  // Not in the window until the Trình duyệt page shows it; it keeps its size so OneMES lays out normally.
   placeView();
   const wc = view.webContents;
   const upd = () => {
@@ -85,21 +116,27 @@ function loadURL(url) {
   });
 }
 
-// The view is shown only on the Trình duyệt page. Hiding moves it out of the window as
-// well as setVisible(false): on some Windows setups setVisible alone leaves it painted
-// over the rest of the UI. It keeps its size so OneMES lays out normally while hidden.
+// The view is part of the window only while the Trình duyệt page is shown. Taken out
+// of the window it paints nothing, so a page loading in the background cannot make
+// the rest of the UI flicker or cover it. The page keeps running and keeps its size.
 let viewShown = false;
 let viewBounds = { x: 0, y: 0, width: 1280, height: 800 };
 function placeView() {
-  if (!view) return;
-  const { width, height } = viewBounds;
-  view.setBounds(viewShown ? viewBounds : { x: -width - 200, y: -height - 200, width, height });
-  view.setVisible(viewShown);
+  if (!view || !win || win.isDestroyed()) return;
+  const attached = win.contentView.children.includes(view);
+  view.setBounds(viewBounds);
+  if (viewShown) {
+    if (!attached) win.contentView.addChildView(view);
+    view.setVisible(true);
+  } else {
+    view.setVisible(false);
+    if (attached) win.contentView.removeChildView(view);
+  }
 }
 function applyBounds(b) {
   if (!b || b.width < 10 || b.height < 10) return;
   viewBounds = { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) };
-  if (viewShown) placeView();
+  placeView();
 }
 
 // ---------- automation ----------
@@ -144,7 +181,13 @@ const commands = {
     state,
     log: logBuf.slice(-300),
     logDir: store.logDir,
+    gpuOff,
+    benhAnSchema: BENH_AN,
   }),
+  'app:restart': () => {
+    app.relaunch();
+    setTimeout(() => app.exit(0), 200);
+  },
   'settings:set': (s) => {
     const before = store.get().settings.baseUrl;
     const r = store.setSettings(s || {});
@@ -158,7 +201,7 @@ const commands = {
     viewShown = !!v;
     placeView();
   },
-  'view:state': () => ({ shown: viewShown, visible: view.getVisible(), bounds: view.getBounds() }),
+  'view:state': () => ({ shown: viewShown, visible: view.getVisible(), attached: win.contentView.children.includes(view), bounds: view.getBounds() }),
   'view:nav': async ({ action }) => {
     const wc = view.webContents;
     if (action === 'home') goHome();
@@ -185,8 +228,12 @@ const commands = {
     task('Đọc y lệnh', async (d) => {
       const r = await d.loadPatient(patient, sourceId);
       if (!r.source) log('warn', `${patient.hoTen}: không có y lệnh Hoàn tất nào đủ Diễn biến bệnh và Diễn biến PHCN`);
-      return r;
+      // The Bác sĩ / Cấp độ chăm sóc choices are read once and kept.
+      let lists = null;
+      if (!store.get().lists) lists = await readLists(d).catch(() => null);
+      return { ...r, lists };
     }),
+  'lists:load': () => task('Đọc danh sách bác sĩ', (d) => readLists(d)),
   run: ({ plans }) =>
     task('Sao chép y lệnh', async (d) => {
       const out = [];
@@ -203,6 +250,7 @@ const commands = {
           const r = await d.run(p);
           const check = await checkAfter(d, p.patient, r);
           store.setRun(p.patient.noitruid, { ok: true, message: `${p.days} ngày`, ...runRecord(r), check });
+          forgetNotes(p.patient.noitruid);
           out.push({ noitruid: p.patient.noitruid, ok: true, result: r, check });
           if (stopFlag) break;
         } catch (e) {
@@ -238,6 +286,33 @@ const commands = {
       const check = run.check && { ...run.check, days: run.check.days.map((x) => (x.id === id ? { ...x, deleted: true } : x)) };
       return store.patchRun(patient.noitruid, { days, check });
     }),
+  'order:update': ({ patient, id, edit, remove }) =>
+    task('Sửa y lệnh', async (d) => {
+      const run = store.get().runs[patient.noitruid];
+      const day = run && (run.days || []).find((x) => x.id === id && !x.deleted);
+      if (!day) throw new Error('Chỉ sửa được y lệnh do tool vừa tạo');
+      log('info', `${patient.hoTen}: sửa y lệnh ngày ${day.day} (${day.time || ''})`);
+      await d.updateDay(patient, id, edit || null, remove || [], store.get().settings.autoComplete);
+      // What this day should now hold, then read it back.
+      const expect = run.expect ? { ...run.expect, days: run.expect.days.map((e) => (e.day === day.day ? expectAfterEdit(e, edit, remove) : e)) } : null;
+      const one = await d.verify(patient, expect, [{ day: day.day, id }]);
+      const days = ((run.check && run.check.days) || []).filter((x) => x.id !== id).concat(one.days).sort((a, b) => a.day - b.day);
+      return store.patchRun(patient.noitruid, { expect, check: { at: one.at, ok: !days.some((x) => !x.deleted && x.problems.length), days } });
+    }),
+  'benhAn:set': ({ id, values }) => store.setBenhAn(id, { values, savedAt: Date.now() }),
+  'benhAn:clear': ({ id }) => store.setBenhAn(id, null),
+  'benhAnMau:set': (m) => store.set('benhAnMau', m && m.values ? { values: m.values, name: m.name || '', at: Date.now() } : null),
+  'benhAn:read': ({ patient }) =>
+    task('Đọc bệnh án', async (d) => {
+      const r = await d.readBenhAn(patient, BA_FIELDS);
+      return store.setBenhAn(patient.noitruid, { values: r.values, readAt: r.at, savedAt: r.at });
+    }),
+  'benhAn:save': ({ patient, values }) =>
+    task('Ghi bệnh án', async (d) => {
+      store.setBenhAn(patient.noitruid, { values, savedAt: Date.now() });
+      const r = await d.saveBenhAn(patient, BA_FIELDS, values);
+      return store.setBenhAn(patient.noitruid, { values: r.values, sentAt: r.at, readAt: r.at, savedAt: r.at, diff: r.diff, missing: r.missing });
+    }),
   stop: () => {
     stopFlag = true;
     if (stepResolve) stepResolve();
@@ -251,6 +326,38 @@ const commands = {
   'update:install': () => installUpdate(),
   'open:releases': () => shell.openExternal(`https://github.com/RollReus6868/sao-y-lenh/releases/latest`),
 };
+
+async function readLists(d) {
+  const r = await d.loadLists(store.get().settings.esBase);
+  return store.set('lists', { at: Date.now(), bacSi: r.bacSi, capDo: r.capDo });
+}
+
+// After a run the copied days hold the corrected notes, so they are not applied again
+// next time (the newest day becomes the source). Time, doctor and care level stay.
+function forgetNotes(id) {
+  const c = store.get().choices[id];
+  if (!c || !c.edits) return;
+  const edits = c.edits.map((e) => {
+    if (!e) return e;
+    const { dienBien, dienBienPHCN, ...rest } = e;
+    return Object.keys(rest).length ? rest : null;
+  });
+  store.setChoice(id, { ...c, edits });
+}
+
+// A corrected day's expectation: removed items are now meant to be gone.
+function expectAfterEdit(e, edit, remove) {
+  const want = { ...e.want };
+  const gone = { ...e.gone };
+  for (const it of remove || []) {
+    if (want[it.base] > 0) want[it.base] -= 1;
+    if (!want[it.base]) delete want[it.base];
+    gone[it.base] = (gone[it.base] || 0) + 1;
+  }
+  const merged = { ...(e.edit || {}) };
+  for (const [k, v] of Object.entries(edit || {})) if (v !== undefined && v !== null && v !== '') merged[k] = v;
+  return { ...e, want, gone, edit: Object.keys(merged).length ? merged : null };
+}
 
 function runRecord(r) {
   return { expect: r.expect || null, days: r.days.map((x) => ({ day: x.day, id: x.id, time: x.time })) };
@@ -337,6 +444,8 @@ function createWindow() {
   setupView();
   win.on('closed', () => {
     win = null;
+    // The view may be out of the window at this point, so close its page explicitly.
+    if (view && !view.webContents.isDestroyed()) view.webContents.close();
   });
 }
 

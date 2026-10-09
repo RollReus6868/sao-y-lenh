@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from './api';
 import type { AppState, Data, LogEntry, Patient } from './types';
 
@@ -9,7 +9,7 @@ interface Ctx {
   version: string;
   data: Data | null;
   state: AppState;
-  log: LogEntry[];
+  gpuOff: boolean;
   patients: Patient[];
   setPatients: (p: Patient[]) => void;
   refresh: () => Promise<void>;
@@ -20,6 +20,10 @@ interface Ctx {
 }
 
 const AppCtx = createContext<Ctx>(null as unknown as Ctx);
+// The log has its own contexts: new lines then redraw only what shows them, not the
+// whole window (part of the flicker fix).
+const LogCtx = createContext<LogEntry[]>([]);
+const ErrCtx = createContext(0);
 const PKEY = 'sao-y-lenh-patients';
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -32,6 +36,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { return JSON.parse(localStorage.getItem(PKEY) || '[]'); } catch { return []; }
   });
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [gpuOff, setGpuOff] = useState(false);
   const tid = useRef(0);
 
   const toast = useCallback((tone: Toast['tone'], text: string) => {
@@ -51,8 +56,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [toast]);
 
   const refresh = useCallback(async () => {
-    const r = await api.call<{ version: string; data: Data; state: AppState; log: LogEntry[] }>('init');
+    const r = await api.call<{ version: string; data: Data; state: AppState; log: LogEntry[]; gpuOff?: boolean }>('init');
     setVersion(r.version);
+    setGpuOff(!!r.gpuOff);
     setData(r.data);
     setState(r.state);
     setLog(r.log);
@@ -72,10 +78,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AppCtx.Provider value={{ ready, version, data, state, log, patients, setPatients, refresh, setData, toasts, toast, call }}>
-      {children}
+    <AppCtx.Provider value={{ ready, version, data, state, gpuOff, patients, setPatients, refresh, setData, toasts, toast, call }}>
+      <LogCtx.Provider value={log}>
+        <ErrCount log={log}>{children}</ErrCount>
+      </LogCtx.Provider>
     </AppCtx.Provider>
   );
 }
 
 export const useApp = () => useContext(AppCtx);
+
+function ErrCount({ log, children }: { log: LogEntry[]; children: ReactNode }) {
+  const n = useMemo(() => log.filter((e) => e.level === 'error' && Date.now() - e.at < 3600_000).length, [log]);
+  return <ErrCtx.Provider value={n}>{children}</ErrCtx.Provider>;
+}
+
+export const useLog = () => useContext(LogCtx);
+export const useErrorCount = () => useContext(ErrCtx);

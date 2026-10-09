@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ClipboardList, Globe, ScrollText, Settings, Users } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
 import { BrowserPage } from '@/components/OnemesPane';
@@ -7,7 +7,7 @@ import { PatientsPage } from '@/pages/Patients';
 import { TemplatesPage } from '@/pages/Templates';
 import { LogPage } from '@/pages/Log';
 import { SettingsPage } from '@/pages/Settings';
-import { useApp } from '@/lib/useApp';
+import { useApp, useErrorCount } from '@/lib/useApp';
 import { api } from '@/lib/api';
 
 const K = 'sao-y-lenh-ui';
@@ -21,14 +21,17 @@ const Panel = ({ children }: { children: ReactNode }) => (
   </main>
 );
 
+const Patients = memo(PatientsPage);
+
 export default function App() {
-  const { ready, state, log } = useApp();
+  const { ready, state } = useApp();
+  const errors = useErrorCount();
   const [page, setPage] = useState<string>(() => new URLSearchParams(location.search).get('page') || load().page || 'patients');
   const [collapsed, setCollapsed] = useState<boolean>(() => !!load().collapsed);
-  const errors = log.filter((e) => e.level === 'error' && Date.now() - e.at < 3600_000).length;
   const showView = ready && page === 'browser';
   useEffect(() => { api.call('view:visible', showView).catch(() => {}); }, [showView]);
-  const go = (p: string) => { setPage(p); store({ page: p === 'browser' ? 'patients' : p }); };
+  const go = useCallback((p: string) => { setPage(p); store({ page: p === 'browser' ? 'patients' : p }); }, []);
+  const toBrowser = useCallback(() => go('browser'), [go]);
 
   return (
     <div className="relative flex h-full gap-3 p-3">
@@ -57,7 +60,7 @@ export default function App() {
       ) : page === 'settings' ? (
         <Panel><SettingsPage /></Panel>
       ) : (
-        <PatientsPage onBrowser={() => go('browser')} />
+        <Patients onBrowser={toBrowser} />
       )}
       <Toasts />
     </div>

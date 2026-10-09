@@ -41,9 +41,10 @@
 .gradient-text { background: linear-gradient(135deg, hsl(var(--gradient-from)), hsl(var(--gradient-via)), hsl(var(--gradient-to))); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .btn-gradient { background: linear-gradient(135deg, hsl(var(--gradient-from)), hsl(var(--gradient-via)), hsl(var(--gradient-to))); color: #fff; transition: all .3s; }
 .btn-gradient:hover:not(:disabled) { box-shadow: 0 4px 20px hsl(var(--gradient-from) / .3), 0 2px 10px hsl(var(--gradient-to) / .2); }
-.glass-panel { background: hsl(var(--card) / var(--panel-alpha, .3)); backdrop-filter: blur(24px); border: 1px solid rgb(255 255 255 / .08); border-radius: calc(var(--radius) + 6px); box-shadow: 0 8px 40px rgba(0,0,0,.06); }
-:root:not(.dark) .glass-panel { border-color: hsl(var(--border)); --panel-alpha: .55; }
-.dark .glass-panel { border-color: rgb(255 255 255 / .05); box-shadow: 0 8px 40px rgba(0,0,0,.25); --panel-alpha: .45; }
+/* No backdrop blur: it makes every repaint expensive and was part of the flicker on some PCs. */
+.glass-panel { background: hsl(var(--card) / var(--panel-alpha, .8)); border: 1px solid rgb(255 255 255 / .08); border-radius: calc(var(--radius) + 6px); box-shadow: 0 8px 40px rgba(0,0,0,.06); }
+:root:not(.dark) .glass-panel { border-color: hsl(var(--border)); --panel-alpha: .82; }
+.dark .glass-panel { border-color: rgb(255 255 255 / .05); box-shadow: 0 8px 40px rgba(0,0,0,.25); --panel-alpha: .78; }
 .app-bg-glow { position: fixed; inset: 0; pointer-events: none; background:
   radial-gradient(ellipse 100% 80% at 10% -30%, hsl(var(--gradient-from) / .15), transparent 50%),
   radial-gradient(ellipse 80% 60% at 90% 10%, hsl(var(--gradient-via) / .12), transparent 50%),
