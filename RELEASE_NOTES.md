@@ -1,4 +1,8 @@
-# Sao Y Lệnh 0.3.0
+# Sao Y Lệnh 0.3.1
+
+- Sửa nút **Ds Điều trị nội trú** ngay sau khi đăng nhập: trang chủ OneMES có một bảng bệnh nhân nhỏ trùng tên với bảng của trang Ds Điều trị nội trú, nên tool tưởng đã ở đúng trang và chỉ tải lại trang chủ. Giờ tool phân biệt hai bảng theo các cột (T/G vào, Họ tên).
+
+## 0.3.0
 
 - **Sửa từng ngày** trước khi sao chép: giờ thực hiện (giờ chỉ định tự lùi 1 phút), bác sĩ, cấp độ chăm sóc, diễn biến bệnh, diễn biến PHCN. Ngày nào sửa thì tool sửa và bấm Lưu trên OneMES cho đúng ngày đó.
 - Các ngày sao chép hiện cả thứ: "T4 14/10", "Thứ 4 14/10".

@@ -303,8 +303,12 @@ function CallInitSelect2ESOW() {}
 </script>
 <script src="/onemes-mock.js"></script></body></html>`;
   }
+  // The real start page has a dashboard widget whose table is also called tblNoiTru
+  // (Mã BN, Tên bệnh nhân, Giường...), which must not be taken for the patient list.
   return `${head}<div id="divHeader">Trang chủ OneMES (mô phỏng)
-<a href="/home.aspx?scope=sys&wpid=danhsachdieutrinoitrudraw">Điều trị nội trú · Ds Điều trị nội trú</a></div></body></html>`;
+<a href="/home.aspx?scope=sys&wpid=danhsachdieutrinoitrudraw">Điều trị nội trú · Ds Điều trị nội trú</a></div>
+<div id="divDanhSachContent"><table id="tblNoiTru"><thead><tr><th>Mã BN</th><th>Tên bệnh nhân</th><th>Giường</th><th>Chẩn đoán</th><th>Mức độ</th><th>Ghi chú</th></tr></thead>
+<tbody><tr><td>BN001</td><td>Nguyễn Văn A</td><td>01</td><td>Đau lưng</td><td></td><td></td></tr></tbody></table></div></body></html>`;
 }
 
 function send(res, code, body, type = 'text/html; charset=utf-8', headers = {}) {

@@ -205,6 +205,10 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
 
     // --- Ds Điều trị nội trú from start pages without the link ---
     console.log('nút Ds');
+    await page.goto(m.base + '/home.aspx?scope=sys&lang=vi');
+    check((await d.where()).page === 'other', 'Ds: start page with its own tblNoiTru widget is not the list');
+    await d.gotoList(true);
+    check(/wpid=danhsachdieutrinoitrudraw/.test(page.url()), 'Ds: opened from the start page right after login: ' + page.url());
     await page.goto(m.base + '/start-usid.aspx');
     await d.gotoList(true);
     check(/wpid=danhsachdieutrinoitrudraw/.test(page.url()) && /usid=10.0.0.1_start/.test(page.url()), 'Ds: usid found in another link: ' + page.url());

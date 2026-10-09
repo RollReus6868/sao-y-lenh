@@ -2,7 +2,7 @@
 // calls OneMES's own functions; it never calls the server directly.
 // Every function returns plain data so it survives structured clone.
 (function () {
-  if (window.__SYL && window.__SYL.version === 6) return;
+  if (window.__SYL && window.__SYL.version === 7) return;
 
   const txt = (el) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
   const norm = (s) =>
@@ -52,7 +52,7 @@
     const url = location.href;
     const pw = [...document.querySelectorAll('input[type=password]')].some(isShown);
     const login = pw && (/login|dangnhap/i.test(url) || !/usid=/i.test(url));
-    const list = !!byId('tblNoiTru') || /wpid=danhsachdieutrinoitrudraw/i.test(url);
+    const list = /wpid=danhsachdieutrinoitrudraw/i.test(url) || !!listTable();
     const bacsi = /wpid=bacsidraw/i.test(url);
     const popup = byId('divWebpartPopup');
     const popupOpen = isShown(popup) && typeof window._ylenh_ID === 'string' && window._ylenh_ID.length > 0 && !!byId('divStatusPopup');
@@ -72,8 +72,17 @@
   }
 
   // ---------- Danh sách điều trị nội trú ----------
-  function readPatients() {
+  // The start page's dashboard widget also has a table called tblNoiTru (Mã BN, Tên
+  // bệnh nhân, Giường...); only the real list has the T/G vào and Họ tên columns.
+  function listTable() {
     const tbl = byId('tblNoiTru');
+    if (!tbl) return null;
+    const heads = [...tbl.querySelectorAll('tr th')].map((th) => norm(th.textContent));
+    return heads.includes(norm('Họ tên')) && heads.includes(norm('T/G vào')) ? tbl : null;
+  }
+
+  function readPatients() {
+    const tbl = listTable();
     if (!tbl) return { ok: false, reason: 'no-table' };
     const heads = [...tbl.querySelectorAll('tr th')].map((th) => norm(th.textContent));
     const col = (name) => heads.indexOf(norm(name));
@@ -733,7 +742,7 @@
   }
 
   window.__SYL = {
-    version: 6,
+    version: 7,
     where,
     readPatients,
     listLink,
