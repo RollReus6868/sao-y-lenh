@@ -1,4 +1,8 @@
-# Sao Y Lệnh 0.3.1
+# Sao Y Lệnh 0.3.2
+
+- Thẻ **Bệnh án**, phần Thông tin chung: bỏ các mục từ **Tuần hoàn** trở xuống (Tuần hoàn, Hô hấp, … đến Phương pháp điều trị) vì khoa không dùng. Tool không hiện và không ghi các mục này lên OneMES nữa; các mục khác giữ nguyên.
+
+## 0.3.1
 
 - Sửa nút **Ds Điều trị nội trú** ngay sau khi đăng nhập: trang chủ OneMES có một bảng bệnh nhân nhỏ trùng tên với bảng của trang Ds Điều trị nội trú, nên tool tưởng đã ở đúng trang và chỉ tải lại trang chủ. Giờ tool phân biệt hai bảng theo các cột (T/G vào, Họ tên).
 

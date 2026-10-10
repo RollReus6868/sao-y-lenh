@@ -9,6 +9,15 @@ import sys
 
 from bs4 import BeautifulSoup, NavigableString
 
+# Thông tin chung from Tuần hoàn down is left out: Khoa Nội B never fills these
+# (asked 2026-10-10). The tool neither shows nor writes them.
+SKIP = {
+    'txtKhamTuanHoan', 'txtKhamHoHap', 'txtKhamTieuHoa', 'txtKhamThanTietNieu', 'txtKhamThanKinh',
+    'txtKhamCoXuongKhop', 'txtKhamCotSongThatLung', 'txtKhamTaiMuiHong', 'txtKhamRangHamMat', 'txtKhamMat',
+    'txtKhamNoiTiet', 'txtKhamDinhDuong', 'txtKhamCoQuanKhac', 'txtMoTaCoQuanBenhLy', 'txtCanLamSang',
+    'txtTomTatBenhAn', 'txtTienLuong', 'txtPpDieuTri',
+}
+
 
 def clean(t):
     t = re.sub(r'\s+', ' ', t or '').strip()
@@ -97,6 +106,8 @@ def main(src, out):
                 f['format'] = 'HH:mm dd/MM/yyyy'
         seen.add(f['id'])
         group['fields'].append(f)
+    for g in groups:
+        g['fields'] = [f for f in g['fields'] if f['id'] not in SKIP]
     groups = [g for g in groups if g['fields']]
     json.dump({'source': 'OneMES Thông tin bệnh án, mục B. PHẦN BỆNH ÁN', 'groups': groups}, open(out, 'w'), ensure_ascii=False, indent=1)
     print(sum(len(g['fields']) for g in groups), 'fields in', len(groups), 'groups')
