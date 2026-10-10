@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BedDouble, ClipboardCheck, FileText, Globe, MousePointerClick, Check, ChevronDown, ClipboardCopy, Copy, CopyCheck, ListChecks, PencilLine, Pill as PillIcon, Play, RefreshCw, RotateCcw, ScanLine, Search, Stethoscope, Users, X } from 'lucide-react';
+import { BedDouble, ClipboardCheck, FileText, Globe, MousePointerClick, Check, ChevronDown, ClipboardCopy, Copy, ListChecks, PencilLine, Pill as PillIcon, Play, Plus, RefreshCw, RotateCcw, ScanLine, Search, Stethoscope, Users, X } from 'lucide-react';
 import { cn } from '@/kit/cn';
 import { Button, Chip, EmptyState, Input, PageHeader, Pill, Segmented, Select, Switch } from '@/kit/ui';
 import { useApp } from '@/lib/useApp';
-import { baseKey, itemName, type Choice, type DayEdit, type Item, type LoadResult, type Patient, type Plan, type RunResult, type Template } from '@/lib/types';
+import { baseKey, itemName, type AddItem, type Choice, type DayEdit, type Item, type LoadResult, type Patient, type Plan, type RunResult, type Template } from '@/lib/types';
 import { ActionBar, RunBar, Sheet } from '@/components/common';
 import { OrderFields, editSummary, type OrderBase } from '@/components/OrderFields';
 import { addDays, dayLabel, ddmm, hhmmOf, parseDay, weekdayShort } from '@/lib/dates';
@@ -66,7 +66,7 @@ function PatientList({ onOpen, selected, onBrowser }: { onOpen: (p: Patient) => 
     setConfirm(false);
     const plans: Plan[] = patients
       .filter((p) => picked.has(p.noitruid) && choices[p.noitruid])
-      .map((p) => ({ patient: p, days: choices[p.noitruid].days, baseDeletions: choices[p.noitruid].deletions, edits: choices[p.noitruid].edits }));
+      .map((p) => ({ patient: p, days: choices[p.noitruid].days, baseDeletions: choices[p.noitruid].deletions, edits: choices[p.noitruid].edits, adds: choices[p.noitruid].adds }));
     const r = await call<RunResult[]>('run', { plans }).catch(() => null);
     await refresh();
     if (r) {
@@ -192,7 +192,7 @@ function PatientList({ onOpen, selected, onBrowser }: { onOpen: (p: Patient) => 
           {patients.filter((p) => picked.has(p.noitruid)).map((p) => (
             <div key={p.noitruid} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm">
               <span className="truncate font-semibold">{p.hoTen}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">{choices[p.noitruid]?.days} ngày · xóa {choices[p.noitruid]?.deletions.reduce((a, d) => a + d.length, 0)} mục</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{choices[p.noitruid]?.days} ngày · xóa {choices[p.noitruid]?.deletions.reduce((a, d) => a + d.length, 0)} mục{choices[p.noitruid]?.adds?.some((d) => d.length) ? ` · thêm ${choices[p.noitruid].adds!.reduce((a, d) => a + d.length, 0)}` : ''}</span>
             </div>
           ))}
         </div>
@@ -204,6 +204,9 @@ function PatientList({ onOpen, selected, onBrowser }: { onOpen: (p: Patient) => 
 // ---------------- một bệnh nhân ----------------
 const EMPTY: string[][] = [[], [], [], []];
 const NO_EDITS: (DayEdit | null)[] = [null, null, null, null];
+const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const fold2 = (s: string) => s.normalize('NFC').toLowerCase().trim();
+const hasDrug = (list: Item[], it: AddItem) => list.some((x) => fold2(x.name).startsWith(fold2(it.ten)));
 
 function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBack: () => void; onBrowser: () => void }) {
   const { data, state, call, toast, refresh, setData } = useApp();
@@ -217,6 +220,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const [confirm, setConfirm] = useState(false);
   const [tab, setTab] = useState<'pick' | 'result' | 'benhan'>('pick');
   const [edits, setEdits] = useState<(DayEdit | null)[]>(NO_EDITS);
+  const [adds, setAdds] = useState<string[][]>(EMPTY);
   const [eday, setEday] = useState<number | null>(null);
   const loaded = useRef(false);
 
@@ -234,9 +238,11 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
         setDays(ch.days);
         setSel([0, 1, 2, 3].map((i) => items.filter((it) => (ch.deletions[i] || []).includes(baseKey(it.key))).map((it) => it.key)));
         setEdits([0, 1, 2, 3].map((i) => (ch.edits && ch.edits[i]) || null));
+        setAdds([0, 1, 2, 3].map((i) => (ch.adds && ch.adds[i]) || []));
       } else {
         setSel(EMPTY);
         setEdits(NO_EDITS);
+        setAdds(EMPTY);
       }
       loaded.current = true;
     }
@@ -249,12 +255,12 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   useEffect(() => {
     if (!loaded.current || !data) return;
     const t = setTimeout(() => {
-      const choice: Choice = { days, deletions: sel.slice(0, days).map((d) => d.map(baseKey)), edits: edits.slice(0, days) };
+      const choice: Choice = { days, deletions: sel.slice(0, days).map((d) => d.map(baseKey)), edits: edits.slice(0, days), adds: adds.slice(0, days) };
       call('choice:set', { id: patient.noitruid, choice }).catch(() => {});
       setData({ ...data, choices: { ...data.choices, [patient.noitruid]: choice } });
     }, 400);
     return () => clearTimeout(t);
-  }, [sel, days, edits]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sel, days, edits, adds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const src = res?.source;
   const items = useMemo(() => (src ? [...src.thuoc, ...src.dvkt] : []), [src]);
@@ -264,7 +270,32 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const srcBase: OrderBase | null = src
     ? { gio: hhmmOf(src.thoiGianThucHien || src.thoiGian), dienBien: src.dienBien, dienBienPHCN: src.dienBienPHCN, bacSi: src.bacSi, capDo: src.capDo }
     : null;
-  const setEdit = (k: number, e: DayEdit | null) => setEdits((x) => x.map((y, i) => (i === k ? e : y)));
+  // A change on one day carries to the days after it, unless a later day was set apart.
+  const setEdit = (k: number, e: DayEdit | null) =>
+    setEdits((x) => {
+      const old = (x[k] || {}) as Record<string, unknown>;
+      const nw = (e || {}) as Record<string, unknown>;
+      const keys = [...new Set([...Object.keys(old), ...Object.keys(nw)])].filter((f) => !same(old[f], nw[f]));
+      return x.map((y, i) => {
+        if (i === k) return e;
+        if (i < k || i >= days) return y;
+        const cur = { ...(y || {}) } as Record<string, unknown>;
+        for (const f of keys) {
+          if (!same(cur[f], old[f])) continue;
+          if (nw[f] === undefined || nw[f] === null || nw[f] === '') delete cur[f];
+          else cur[f] = nw[f];
+        }
+        return Object.keys(cur).length ? (cur as DayEdit) : null;
+      });
+    });
+  const catalog: AddItem[] = data?.settings.themThuoc || [];
+  const toggleAdd = (k: number, id: string) => setAdds((s) => s.map((d, i) => (i !== k ? d : d.includes(id) ? d.filter((x) => x !== id) : [...d, id])));
+  const toggleAddRow = (id: string) => {
+    const all = adds.slice(0, days).every((d) => d.includes(id));
+    setAdds((s) => s.map((d, i) => (i >= days ? d : all ? d.filter((x) => x !== id) : d.includes(id) ? d : [...d, id])));
+  };
+  const addCount = adds.slice(0, days).reduce((a, d) => a + d.filter((id) => catalog.some((c) => c.id === id)).length, 0);
+  const addNames = (k: number) => catalog.filter((c) => adds[k].includes(c.id)).map((c) => c.label);
   const editCount = edits.slice(0, days).filter(Boolean).length;
   const templates = data?.templates || [];
 
@@ -288,7 +319,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const run = async () => {
     setConfirm(false);
     if (!src) return;
-    const plan: Plan = { patient, sourceId: src.id, days, deletions: sel.slice(0, days), edits: edits.slice(0, days) };
+    const plan: Plan = { patient, sourceId: src.id, days, deletions: sel.slice(0, days), edits: edits.slice(0, days), adds: adds.slice(0, days) };
     const r = await call<RunResult[]>('run', { plans: [plan] }).catch(() => null);
     await refresh();
     if (r && r[0] && (r[0].check || r[0].ok)) setTab('result');
@@ -362,6 +393,40 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     </>
   );
 
+
+  const addSection = () => (
+    <>
+      <div className="col-span-full mt-2 flex items-center gap-2 px-1 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 [&_svg]:size-3.5" data-add-section><Plus />Thêm thuốc (Kê Tây y/VTYT)</div>
+      {catalog.map((c) => {
+        const inSrc = src ? hasDrug(src.thuoc, c) : false;
+        return (
+          <div key={c.id} className="contents" data-add={c.id}>
+            <button type="button" onClick={() => toggleAddRow(c.id)} title={`${c.ten} · kho ${c.kho} · SL ${c.sl}\n${c.cachDung}\nBấm để chọn/bỏ cả hàng`} className="min-w-0 rounded-lg px-1.5 py-1.5 text-left hover:bg-muted/50">
+              <div className="truncate text-[13px] font-semibold">{c.label}{inSrc && <span className="ml-1 text-[11px] font-normal text-muted-foreground">(đã có trong y lệnh nguồn)</span>}</div>
+              <div className="truncate text-[11px] text-muted-foreground">{[c.kho, `SL ${c.sl}`, c.cachDung].filter(Boolean).join(' · ')}</div>
+            </button>
+            {Array.from({ length: days }, (_, k) => {
+              const on = adds[k].includes(c.id);
+              return (
+                <div key={k} className="flex items-center justify-center">
+                  <button
+                    type="button"
+                    aria-label={`Thêm ${c.label} ngày ${k + 1}`}
+                    aria-pressed={on}
+                    onClick={() => toggleAdd(k, c.id)}
+                    className={cn('flex h-7 w-7 items-center justify-center rounded-md border transition-all', on ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'border-muted-foreground/30 text-transparent hover:border-primary/60')}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </>
+  );
+
   return (
     <>
       <div className="flex flex-shrink-0 items-center gap-2 px-3 pb-2 pt-3 sm:px-4">
@@ -415,7 +480,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
               <span className="text-sm font-bold">Số ngày tạo</span>
               <Segmented value={days} onChange={setDays} disabled={state.busy} options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n), title: n === 1 ? 'Chỉ Sao chép' : `Sao chép + Sao y lệnh ${n - 1} ngày` }))} />
             </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">Ngày 1 là bản Sao chép. {days > 1 ? `Ngày 2–${days} do Sao y lệnh (ngày) = ${days - 1} tạo ra.` : 'Không dùng Sao y lệnh.'} Tick ô đỏ = xóa mục đó ở ngày đó.</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">Ngày 1 là bản Sao chép. {days > 1 ? `Ngày 2–${days} do Sao y lệnh (ngày) = ${days - 1} tạo ra.` : 'Không dùng Sao y lệnh.'} Tick ô đỏ = xóa mục đó ở ngày đó{catalog.length ? ', ô xanh = thêm thuốc ở ngày đó' : ''}.</p>
 
             <div className="mt-3 rounded-xl border border-border/50 bg-card/50" data-day-edits>
               <div className="flex flex-wrap items-center gap-1.5 px-3 py-2">
@@ -434,9 +499,8 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
                 <div className="border-t border-border/40 p-3">
                   <div className="mb-2 flex items-center gap-2 text-xs">
                     <span className="font-bold">Ngày {eday + 1} · {dayDate(eday)}</span>
-                    <span className="text-muted-foreground">Ô không sửa giữ như y lệnh nguồn</span>
+                    <span className="text-muted-foreground">{eday < days - 1 ? `Sửa ở đây áp dụng luôn cho ngày ${eday + 2}–${days}` : 'Ô không sửa giữ như y lệnh nguồn'}</span>
                     <span className="ml-auto flex gap-1">
-                      {days > 1 && <Button variant="ghost" size="xs" disabled={!edits[eday]} onClick={() => setEdits((x) => x.map((e, i) => (i < days ? edits[eday] : e)))} title="Chép phần sửa của ngày này sang mọi ngày" data-action="edit-all"><CopyCheck /> Dùng cho mọi ngày</Button>}
                       <Button variant="ghost" size="xs" disabled={!edits[eday]} onClick={() => setEdit(eday, null)} data-action="edit-reset"><RotateCcw /> Bỏ sửa</Button>
                     </span>
                   </div>
@@ -454,6 +518,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
                   <span className={cn('text-[10px] font-bold', sel[k].length ? 'text-red-500' : 'text-muted-foreground/60')}>−{sel[k].length}</span>
                 </button>
               ))}
+              {catalog.length > 0 && addSection()}
               {section('Cho thuốc / VTYT', <PillIcon />, src.thuoc)}
               {section('Chỉ định DVKT', <Stethoscope />, src.dvkt)}
             </div>
@@ -469,7 +534,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
             <div className="flex items-center gap-4 text-xs">
               <label className="flex items-center gap-2"><Switch checked={!!data?.settings.stepMode} onChange={(v) => data && call('settings:set', { stepMode: v }).then((s) => setData({ ...data, settings: s as typeof data.settings }))} label="Chạy từng bước" /> Từng bước</label>
               <label className="flex items-center gap-2"><Switch checked={!!data?.settings.autoComplete} onChange={(v) => data && call('settings:set', { autoComplete: v }).then((s) => setData({ ...data, settings: s as typeof data.settings }))} label="Tự Hoàn tất" /> Tự Hoàn tất</label>
-              <span className="ml-auto text-muted-foreground">xóa {total} mục</span>
+              <span className="ml-auto text-muted-foreground">xóa {total} mục{addCount ? ` · thêm ${addCount}` : ''}</span>
             </div>
             <Button variant="gradient" size="xl" className="w-full" disabled={!src || state.busy} onClick={() => setConfirm(true)} data-action="run">
               <Copy /> Sao chép & xóa cho {days} ngày
@@ -507,8 +572,9 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
           {days > 1 && <li><b>Hoàn tất</b> ngày 1 với Sao y lệnh (ngày) = {days - 1} → ngày 2–{days}.</li>}
           {Array.from({ length: days }, (_, k) => (
             <li key={k} className="rounded-lg bg-muted/40 px-3 py-2">
-              <div className="font-semibold">Ngày {k + 1} ({dayDate(k)}): {sel[k].length ? `xóa ${sel[k].length} mục` : edits[k] ? 'không xóa mục nào' : 'giữ nguyên'}</div>
+              <div className="font-semibold">Ngày {k + 1} ({dayDate(k)}): {sel[k].length ? `xóa ${sel[k].length} mục` : edits[k] || addNames(k).length ? 'không xóa mục nào' : 'giữ nguyên'}</div>
               {!!sel[k].length && <div className="mt-0.5 text-xs text-muted-foreground">{items.filter((i) => sel[k].includes(i.key)).map(itemName).join(', ')}</div>}
+              {addNames(k).length > 0 && <div className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-400">Thêm: {addNames(k).join(', ')}</div>}
               {edits[k] && <div className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">Sửa: {editSummary(edits[k])}</div>}
             </li>
           ))}

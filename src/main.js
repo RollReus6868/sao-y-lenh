@@ -76,7 +76,7 @@ function setupView() {
   const ses = session.fromPartition('persist:onemes');
   ses.setUserAgent(ses.getUserAgent().replace(/\s(Electron|SaoYLenh|sao-y-lenh)\/\S+/gi, ''));
   view = new WebContentsView({
-    webPreferences: { session: ses, backgroundThrottling: false, sandbox: true, preload: path.join(__dirname, 'view-preload.js') },
+    webPreferences: { session: ses, backgroundThrottling: false, sandbox: true, spellcheck: false, preload: path.join(__dirname, 'view-preload.js') },
   });
   // Not in the window until the Trình duyệt page shows it; it keeps its size so OneMES lays out normally.
   placeView();
@@ -311,7 +311,7 @@ const commands = {
     task('Ghi bệnh án', async (d) => {
       store.setBenhAn(patient.noitruid, { values, savedAt: Date.now() });
       const r = await d.saveBenhAn(patient, BA_FIELDS, values);
-      return store.setBenhAn(patient.noitruid, { values: r.values, sentAt: r.at, readAt: r.at, savedAt: r.at, diff: r.diff, missing: r.missing });
+      return store.setBenhAn(patient.noitruid, { values: r.values, sentAt: r.at, readAt: r.at, savedAt: r.at, diff: r.diff, missing: r.missing, kept: r.kept, filled: r.filled });
     }),
   stop: () => {
     stopFlag = true;
@@ -356,7 +356,10 @@ function expectAfterEdit(e, edit, remove) {
   }
   const merged = { ...(e.edit || {}) };
   for (const [k, v] of Object.entries(edit || {})) if (v !== undefined && v !== null && v !== '') merged[k] = v;
-  return { ...e, want, gone, edit: Object.keys(merged).length ? merged : null };
+  // A drug the tool added and the user now removes is no longer expected.
+  const low = (x) => String(x || '').normalize('NFC').toLowerCase().trim();
+  const add = (e.add || []).filter((a) => !(remove || []).some((it) => low(it.name).startsWith(low(a.ten))));
+  return { ...e, want, gone, add, edit: Object.keys(merged).length ? merged : null };
 }
 
 function runRecord(r) {
@@ -380,7 +383,7 @@ function keepDeleted(old, fresh) {
 
 function pickSettings() {
   const s = store.get().settings;
-  return { autoComplete: s.autoComplete, hinhThuc: s.hinhThuc };
+  return { autoComplete: s.autoComplete, hinhThuc: s.hinhThuc, addItems: s.themThuoc || [] };
 }
 
 // Saved choices keep base keys (name-based); turn them into this source's item keys.
@@ -433,7 +436,7 @@ function createWindow() {
     autoHideMenuBar: true,
     show: false,
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: false },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: false, spellcheck: false },
   });
   win.once('ready-to-show', () => win.show());
   win.loadFile(path.join(__dirname, '..', 'ui_dist', 'index.html'));

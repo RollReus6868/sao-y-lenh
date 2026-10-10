@@ -1,6 +1,7 @@
 // Demo backend for previewing the UI in a browser. Fake names only.
 import type { AppState, BenhAnDraft, Check, CheckDay, Data, Item, LogEntry, Patient, RunInfo } from './types';
 import { allFields } from './benhAn';
+import { DEFAULT_THUOC } from './thuoc';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const ROOMS = ['Buồng 101', 'Buồng 101', 'Buồng 103', 'Buồng 103', 'Buồng 105', 'Buồng 105', 'Buồng 107'];
@@ -92,7 +93,7 @@ function demoMau() {
 
 export function demoApi() {
   const data: Data = {
-    settings: { baseUrl: 'http://192.168.30.19:2026/', autoComplete: true, stepMode: false, hinhThuc: '1', defaultDays: 3, bacSiFav: DOCTORS.slice(0, 3).map(({ id, name }) => ({ id, name })), esBase: '', gpuOff: true },
+    settings: { baseUrl: 'http://192.168.30.19:2026/', autoComplete: true, stepMode: false, hinhThuc: '1', defaultDays: 3, bacSiFav: DOCTORS.slice(0, 3).map(({ id, name }) => ({ id, name })), esBase: '', gpuOff: true, themThuoc: DEFAULT_THUOC },
     lists: { at: Date.now(), bacSi: DOCTORS, capDo: CARE },
     benhAn: {},
     benhAnMau: q0.get('nomau') ? null : { name: 'Mẫu Tọa cốt phong', at: Date.now(), values: demoMau() },
@@ -131,7 +132,7 @@ export function demoApi() {
           pushState({ busy: true, task }); await sleep(900); pushState({ busy: false, task: '' });
           const id = payload.patient.noitruid;
           const values = cmd === 'benhAn:save' ? payload.values : data.benhAn[id]?.values || demoMau();
-          const d: BenhAnDraft = { values, readAt: Date.now(), savedAt: Date.now(), ...(cmd === 'benhAn:save' ? { sentAt: Date.now(), diff: [], missing: [] } : {}) };
+          const d: BenhAnDraft = { values, readAt: Date.now(), savedAt: Date.now(), ...(cmd === 'benhAn:save' ? { sentAt: Date.now(), diff: [], missing: [], kept: ['txtLyDoVaoVien'], filled: Object.keys(values).slice(0, 40) } : {}) };
           data.benhAn[id] = d;
           return d as T;
         }

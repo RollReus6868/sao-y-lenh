@@ -10,3 +10,11 @@ a{color:#337ab7;cursor:pointer;text-decoration:none}
 #divWebpartPopup label{display:block;margin:6px 0}
 #divWebpartPopup textarea{display:block;width:100%;height:48px}
 h4{margin:12px 0 4px}
+#modalKeDon{position:fixed;inset:20px;background:#fff;border:1px solid #999;z-index:50;overflow:auto;padding:8px}
+.select2-container{display:inline-block;position:relative;vertical-align:middle}
+.select2-selection{border:1px solid #aaa;min-height:24px;padding:2px 6px;display:block;cursor:pointer}
+.select2-container--open .select2-dropdown{display:block;position:absolute;background:#fff;border:1px solid #aaa;z-index:100;width:600px}
+.select2-results__options{list-style:none;margin:0;padding:0;max-height:200px;overflow:auto}
+.select2-results__option{padding:4px}
+.select2-results__option--highlighted{background:#5897fb;color:#fff}
+.select2-hidden-accessible{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden;clip:rect(0 0 0 0)}

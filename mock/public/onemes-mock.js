@@ -327,6 +327,108 @@
     }, 300);
   };
 
+
+  // ----- Kê Tây y/VTYT (popup Kê đơn thuốc) -----
+  var $ = window.jQuery;
+  $.fn.modal = function (a) {
+    return this.each(function () {
+      this.style.display = a === 'hide' ? 'none' : 'block';
+      this.classList.toggle('in', a !== 'hide');
+    });
+  };
+  var urlHang = '';
+  function keDonRows() {
+    var r = call('keDon', { id: window._ylenh_ID }).value;
+    return r.RetObject.map(function (x, i) {
+      return '<tr id="td' + x.id + '" class="td' + x.id + '"><td>' + (i + 1) + '</td><td>' + esc(x.loaiKe) + '</td><td>' + esc(x.kho) + '</td><td>' + esc(x.name) + '</td><td>' + esc(x.hamLuong) +
+        '</td><td>' + esc(x.dvt) + '</td><td>' + esc(x.sl) + '</td><td>' + esc(x.cachDung) + '</td><td>' + esc(x.doiTuong) + '</td></tr>';
+    }).join('');
+  }
+  function formatHang(repo) {
+    if (repo.loading) return repo.text;
+    return '<table style="width:100%"><tr><td style="color:maroon;font-weight:bold">' + repo.Code + '</td><td>' + repo.Name + '</td><td>' + repo.DonViTinh + '</td><td>' + repo.HamLuong + '</td><td>' + repo.Ton + '</td></tr></table>';
+  }
+  function initS2(id, url, place, hang) {
+    $('#' + id).select2({
+      placeholder: place, allowClear: true,
+      ajax: { url: url, dataType: 'json', delay: 350, type: 'POST', data: function (p) { return { q: p.term, page: p.page }; },
+        processResults: function (data) { return { results: data.items }; }, cache: true },
+      escapeMarkup: function (m) { return m; }, minimumInputLength: 0,
+      templateResult: hang ? formatHang : undefined,
+      templateSelection: hang ? function (r) { return r.Code == undefined ? r.text : r.text + ' ( ' + r.Code + ')'; } : undefined,
+    });
+  }
+  window.showKeDon = function () {
+    if (!ylenh || ylenh.status !== 'Mới') { window.callGallAlert('Y lệnh đã hoàn tất'); return; }
+    document.getElementById('divContentModalThamKhamKeDon').innerHTML =
+      '<div class="modal-body"><div class="divThuocVTYTPopupTK"><table class="table" id="tblThuoc"><thead><tr><th>STT</th><th>Loại kê</th><th>Tên kho</th><th>Tên dược</th><th>Hàm lượng</th><th>ĐVT</th><th>SL</th><th>Cách dùng</th><th>Đối tượng</th></tr></thead><tbody>' +
+      keDonRows() + '</tbody></table><span id="spCountThuoc"></span></div>' +
+      '<div id="divChiDinhThuoc">Loại kê: <label><input type="radio" name="cboLoai" value="1"> KÊ LĨNH</label> <label><input type="radio" name="cboLoai" value="2"> TỦ TRỰC</label>' +
+      ' <label><input type="checkbox" id="cbTrongGoiKD"> Hao phí</label> <label><input type="checkbox" id="cbNguoiBenhTTKD"> Tự trả (ngoài BHYT)</label>' +
+      ' <select id="cbbDoiTuongTt"><option value="bh">Bảo hiểm</option></select><br>' +
+      'Kho <select id="cboKho" style="width:300px" onchange="checkToaThuocThamKhamByKho(this.value);"></select> ' +
+      'Thuốc/ VTYT <select id="cboThuoc" style="width:400px" onchange="changeThuocThamKham(this.value);"></select><br>' +
+      'Số lượng <input id="txtSl"> Số ngày <input id="txtSN"> Số lần/ngày <input id="txtSlN"> Số lượng/lần <input id="txtSlL"><br>' +
+      '<input id="txtCachDungThuoc" placeholder="Cách dùng thuốc" style="width:500px"> <button type="button" class="btn btn-primary" onclick="AddNewThuoc();">Thêm</button></div></div>' +
+      '<div class="modal-footer"><button type="button" class="btn" onclick="ChapNhanVaKTTuongTacThuoc();">Chấp nhận và KT tương tác thuốc</button>' +
+      '<button type="button" class="btn" onclick="ChapNhan();">Chấp nhận</button><button type="button" class="btn" onclick="onClosePopup();">Bỏ qua</button></div>';
+    $('input[name=cboLoai][value=1]').prop('checked', true);
+    $('#modalKeDon').modal('show');
+    initS2('cboKho', '/svc/kho', 'Kho');
+    // Like OneMES, a default kho is filled in, not necessarily the one needed.
+    $('#cboKho').append(new Option('KCDTD - Kho Cao đơn - Tân dược', 'k2', true, true)).trigger('change');
+  };
+  window.showKeDonYHCT = function () { window.callGallAlert('Không dùng trong mô phỏng'); };
+  window.checkToaThuocThamKhamByKho = function (kho) {
+    if (!kho) return;
+    urlHang = '/svc/hang?kho=' + kho;
+    $('#cboThuoc').empty();
+    initS2('cboThuoc', urlHang, 'Thuốc', true);
+  };
+  window.changeThuocThamKham = function (hangid) {
+    if (!hangid) return;
+    var d = $('#cboThuoc').select2('data')[0] || {};
+    document.getElementById('txtCachDungThuoc').value = d.DonViTinh === 'Lọ' ? 'Dùng ngoài' : 'Uống';
+    document.getElementById('cboThuoc').innerHTML = '<option value="' + esc(hangid) + '" selected>' + esc((d.Name || d.text) + ' (' + (d.HamLuong || '') + ')') + '</option>';
+    initS2('cboThuoc', urlHang, 'Thuốc', true);
+  };
+  function cleanThuoc() {
+    $('#cboThuoc').empty();
+    initS2('cboThuoc', urlHang, 'Thuốc', true);
+    ['txtCachDungThuoc', 'txtSl', 'txtSN', 'txtSlN', 'txtSlL'].forEach(function (k) { document.getElementById(k).value = ''; });
+    $('#cboThuoc').select2('open');
+  }
+  function insertThuoc() {
+    var r = call('themThuoc', { id: window._ylenh_ID, kho: document.getElementById('cboKho').value, hang: document.getElementById('cboThuoc').value,
+      sl: document.getElementById('txtSl').value, cachDung: document.getElementById('txtCachDungThuoc').value, haoPhi: document.getElementById('cbTrongGoiKD').checked }).value;
+    if (r.Error) { cleanThuoc(); window.callGallAlert(r.InfoMessage); return; }
+    toastr.info('Thêm mới thành công');
+    $('.divThuocVTYTPopupTK tbody').html(keDonRows());
+    cleanThuoc();
+  }
+  window.AddNewThuoc = function () {
+    var hang = document.getElementById('cboThuoc').value;
+    if (!hang) { window.callGallAlert('Chưa nhập thuốc'); return; }
+    if (call('coThuoc', { id: window._ylenh_ID, hang: hang }).value.RetBoolean) {
+      swal({ title: 'Thuốc đã được chỉ định?', text: 'Bạn có muốn kê thêm thuốc này không?', type: 'warning', showCancelButton: true,
+        confirmButtonClass: 'btn-danger', confirmButtonText: 'Có', cancelButtonText: 'Không', closeOnConfirm: false, closeOnCancel: false },
+      function (ok) { swal.close(); if (ok) insertThuoc(); });
+      return;
+    }
+    insertThuoc();
+  };
+  function closeKeDon() {
+    $('#modalKeDon').modal('hide');
+    drawOrder();
+  }
+  window.ChapNhan = function () { closeKeDon(); };
+  window.ChapNhanVaKTTuongTacThuoc = function () { closeKeDon(); };
+  window.onClosePopup = function () {
+    call('xoaHetThuoc', { id: window._ylenh_ID });
+    $('#modalKeDon').modal('hide');
+    drawOrder();
+  };
+
   window.DeleteThuocInThamKham = function (Id) {
     swal({ title: 'Bạn có chắc?', text: 'Bạn có muốn xóa toa thuốc chi tiết không?', type: 'warning', showCancelButton: true,
       confirmButtonClass: 'btn-danger', confirmButtonText: 'Có', cancelButtonText: 'Không', closeOnConfirm: false, closeOnCancel: false },
@@ -335,7 +437,7 @@
         var r = call('xoaThuoc', { id: Id }).value;
         if (r.Error) { window.callGallAlert(r.InfoMessage); return; }
         toastr.info('Xóa yêu cầu toa thuốc chi tiết thành công');
-        var row = document.getElementById('td' + Id); if (row) row.parentNode.removeChild(row);
+        $('.td' + Id).remove(); // by class, like OneMES: the main table and the Kê đơn popup
       }
       swal.close();
     });

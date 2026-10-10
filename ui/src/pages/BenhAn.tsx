@@ -56,7 +56,11 @@ export function BenhAnView({ patient }: { patient: Patient }) {
     setAsk(null);
     const d = await call<BenhAnDraft>('benhAn:save', { patient, values }).catch(() => null);
     putDraft(d);
-    if (d) toast(d.diff?.length || d.missing?.length ? 'warning' : 'success', d.diff?.length || d.missing?.length ? 'Đã lưu, nhưng có mục chưa khớp (xem phía trên)' : `Đã cập nhật bệnh án của ${patient.hoTen} lên OneMES`);
+    if (!d) return;
+    const kept = d.kept?.length ? `, giữ nguyên ${d.kept.length} mục đã có trên OneMES` : '';
+    if (d.diff?.length || d.missing?.length) toast('warning', 'Đã lưu, nhưng có mục chưa khớp (xem phía trên)');
+    else if (!d.filled?.length) toast('info', `Không có mục trống nào cần điền${kept}`);
+    else toast('success', `Đã điền ${d.filled.length} mục trống lên OneMES${kept}`);
   };
   const fillMau = () => {
     setAsk(null);
@@ -106,6 +110,11 @@ export function BenhAnView({ patient }: { patient: Patient }) {
           <span className="truncate">{source}</span>
           <span className="ml-auto shrink-0">{n}/{allFields.length} mục có nội dung</span>
         </div>
+        {!!draft?.sentAt && draft.sentAt >= (draft.readAt || 0) && !dirty && draft.kept !== undefined && (
+          <div className="rounded-lg border border-border/50 bg-muted/40 px-3 py-2 text-xs text-muted-foreground" data-ba-kept>
+            Lần ghi trước: điền {draft.filled?.length || 0} mục trống{draft.kept?.length ? `, giữ nguyên ${draft.kept.length} mục đã có sẵn trên OneMES (${draft.kept.slice(0, 6).map(labelOf).join(', ')}${draft.kept.length > 6 ? '…' : ''})` : ''}.
+          </div>
+        )}
         {(!!draft?.diff?.length || !!draft?.missing?.length) && !dirty && (
           <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300" data-ba-warn>
             <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />Lần ghi trước có mục chưa khớp</div>
@@ -156,8 +165,8 @@ export function BenhAnView({ patient }: { patient: Patient }) {
         title={`Ghi bệnh án của ${patient.hoTen}?`}
         footer={<><Button variant="outline" size="lg" onClick={() => setAsk(null)}>Không</Button><Button size="lg" className="flex-1" onClick={save} data-action="ba-confirm-save"><Upload /> Ghi lên OneMES</Button></>}
       >
-        <p className="text-sm">Tool mở <b>Tổng kết › Lập bìa bệnh án</b> của bệnh nhân này, điền toàn bộ mục B theo nội dung đang có ({n} mục có nội dung), bấm Lưu <b>Thông tin chung</b> và <b>Thông tin chuyên khoa</b>, rồi đọc lại để kiểm tra.</p>
-        {!draft?.readAt && <p className="mt-2 flex gap-1.5 text-sm text-amber-700 dark:text-amber-400"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Chưa đọc bệnh án hiện có trên OneMES. Nội dung đang có trên đó (nếu có) sẽ bị thay bằng nội dung này.</p>}
+        <p className="text-sm">Tool mở <b>Tổng kết › Lập bìa bệnh án</b> của bệnh nhân này, điền mục B theo nội dung đang có ({n} mục có nội dung), bấm Lưu <b>Thông tin chung</b> và <b>Thông tin chuyên khoa</b>, rồi đọc lại để kiểm tra.</p>
+        <p className="mt-2 text-sm">Chỉ điền vào <b>ô còn trống</b> trên OneMES. Ô nào trên OneMES đã có nội dung thì giữ nguyên, không ghi đè.</p>
         <p className="mt-2 text-xs text-muted-foreground">Ô chẩn đoán ICD và mục C. Tổng kết bệnh án không bị đụng tới.</p>
       </Sheet>
       <Sheet

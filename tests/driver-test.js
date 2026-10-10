@@ -199,9 +199,65 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     check(m.mock.getState().log.filter((x) => x[0] === 'saveBenhAn').map((x) => x[2]).join() === '1,2', 'bệnh án: Thông tin chung then chuyên khoa saved');
     const again2 = await d.readBenhAn(pts[2], fields);
     check(again2.values.HinhThai.join() === '1,3' && again2.values.CDCS === ' Cấp II', 'bệnh án: read back from OneMES');
+    // What is already written on OneMES stays; only empty boxes are filled.
+    const empty = fields.find((f) => f.kind === 'textarea' && want[f.id] === '');
+    const r2 = await d.saveBenhAn(pts[2], fields, { ...want, CDCS: 'Cấp III', txtLyDoVaoVien: 'Khác', ckTsThuocLa: false, [empty.id]: 'Mới điền' });
+    const ba2 = m.mock.getState().patients[2].benhAn;
+    check(ba2.CDCS === ' Cấp II' && ba2.txtLyDoVaoVien === 'Đau lưng' && ba2.ckTsThuocLa === true, 'bệnh án: values already on OneMES kept');
+    check(ba2[empty.id] === 'Mới điền' && r2.filled.join() === empty.id, 'bệnh án: only the empty box filled');
+    check(['CDCS', 'txtLyDoVaoVien', 'ckTsThuocLa'].every((id) => r2.kept.includes(id)) && !r2.diff.length, 'bệnh án: kept boxes reported');
+    m.mock.getState().log.length = 0;
+    const r3 = await d.saveBenhAn(pts[2], fields, { ...want, txtLyDoVaoVien: 'Khác' });
+    check(!r3.filled.length && !m.mock.getState().log.some((x) => x[0] === 'saveBenhAn'), 'bệnh án: nothing empty to fill, nothing saved');
     // radio given without its stray spaces still matches
-    await d.saveBenhAn(pts[2], fields, { ...want, CDCS: 'Cấp III' });
-    check(m.mock.getState().patients[2].benhAn.CDCS === ' Cấp III', 'bệnh án: radio matched loosely');
+    await d.saveBenhAn(pts[1], fields, { CDCS: 'Cấp III' });
+    check(m.mock.getState().patients[1].benhAn.CDCS === ' Cấp III', 'bệnh án: radio matched loosely');
+
+    // --- thêm thuốc qua Kê Tây y/VTYT ---
+    console.log('thêm thuốc');
+    const ITEMS = [
+      { id: 'con', label: 'Cồn xoa bóp', kho: 'KCPSX', ten: 'CỒN XOA BÓP', tim: 'cồn xoa', sl: '1', cachDung: 'Mỗi lần dùng 5ml, xoa bóp các chỗ đau 4 lần/ngày', loai: 'KÊ LĨNH' },
+      { id: 'cao', label: 'Cao thông mạch', kho: 'KCPSX', ten: 'CAO THÔNG MẠCH', tim: 'cao thông', sl: '1', cachDung: 'Uống 20ml/lần * 2 lần/ngày * 3 ngày (sáng, chiều) sau ăn', loai: 'KÊ LĨNH' },
+    ];
+    const drugs = (o) => o.thuoc.map((x) => x.name);
+    const count = (o, n) => drugs(o).filter((x) => x === n).length;
+    m.mock.reset();
+    pts = await d.scanPatients();
+    ({ source } = await d.loadPatient(pts[0]));
+    before = ids(0);
+    m.mock.getState().log.length = 0;
+    r = await d.run({ patient: pts[0], sourceId: source.id, days: 3, deletions: [[], [], []], adds: [['con', 'cao'], ['con'], ['cao']], addItems: ITEMS });
+    fresh = newOrders(0, before);
+    check(r.ok && fresh.length === 3 && fresh.every((o) => o.status === 'Hoàn tất'), 'thêm: three days completed');
+    check(count(fresh[0], 'CỒN XOA BÓP') === 1 && count(fresh[0], 'CAO THÔNG MẠCH') === 1, 'thêm: day 1 has both');
+    check(count(fresh[1], 'CỒN XOA BÓP') === 1 && !count(fresh[1], 'CAO THÔNG MẠCH'), 'thêm: day 2 Cồn xoa bóp only');
+    check(!count(fresh[2], 'CỒN XOA BÓP') && count(fresh[2], 'CAO THÔNG MẠCH') === 1, 'thêm: day 3 Cao thông mạch only');
+    const con = fresh[0].thuoc.find((x) => x.name === 'CỒN XOA BÓP');
+    check(con.kho === 'Kho Chế phẩm sản xuất tại khoa Dược' && con.sl === '1' && con.cachDung === ITEMS[0].cachDung && con.doiTuong === 'Bảo hiểm', 'thêm: kho KCPSX, SL 1, cách dùng, Bảo hiểm');
+    check(!m.mock.getState().log.some((x) => x[0] === 'xoaHetThuoc'), 'thêm: never pressed X / Bỏ qua');
+    v = await d.verify(pts[0], r.expect, r.days);
+    check(v.ok && v.days[0].added.length === 2 && !v.days.some((x) => x.warnings.some((w) => /CỒN|CAO/.test(w))), 'thêm: check passes, added drugs not reported as extra: ' + JSON.stringify(v.days.map((x) => [x.problems, x.warnings])));
+    fresh[1].thuoc = fresh[1].thuoc.filter((x) => x.name !== 'CỒN XOA BÓP');
+    v = await d.verify(pts[0], r.expect, r.days);
+    check(!v.ok && v.days[1].problems.some((x) => /Chưa có "Cồn xoa bóp"/.test(x)), 'thêm: a missing added drug is flagged');
+    check((await d.call('keDonClick', 'Bỏ qua')).ok === false, 'thêm: agent refuses the Bỏ qua button');
+
+    // Ticked on every day: added once before Sao y lệnh, which copies it; no Thu hồi.
+    ({ source } = await d.loadPatient(pts[1]));
+    before = ids(1);
+    m.mock.getState().log.length = 0;
+    r = await d.run({ patient: pts[1], sourceId: source.id, days: 2, deletions: [[], []], adds: [['con'], ['con']], addItems: ITEMS });
+    fresh = newOrders(1, before);
+    const lg2 = m.mock.getState().log;
+    check(r.ok && fresh.every((o) => count(o, 'CỒN XOA BÓP') === 1), 'thêm: both days have one Cồn xoa bóp');
+    check(lg2.filter((x) => x[0] === 'themThuoc').length === 1 && !lg2.some((x) => x[0] === 'thuHoi'), 'thêm: added once on day 1, no Thu hồi');
+    // Already in the source: nothing added twice.
+    ({ source } = await d.loadPatient(pts[1]));
+    before = ids(1);
+    m.mock.getState().log.length = 0;
+    r = await d.run({ patient: pts[1], sourceId: source.id, days: 1, deletions: [[]], adds: [['con']], addItems: ITEMS });
+    fresh = newOrders(1, before);
+    check(r.ok && count(fresh[0], 'CỒN XOA BÓP') === 1 && !m.mock.getState().log.some((x) => x[0] === 'themThuoc'), 'thêm: drug already copied from the source is not added again');
 
     // --- Ds Điều trị nội trú from start pages without the link ---
     console.log('nút Ds');

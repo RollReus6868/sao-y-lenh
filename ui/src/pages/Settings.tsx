@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, FileText, Globe, Monitor, Palette, Play, RefreshCw, Settings as Cog, Star, Stethoscope, Trash2, Upload, X } from 'lucide-react';
+import { Download, FileText, Globe, Monitor, Palette, Pill as PillIcon, Play, Plus, RefreshCw, RotateCcw, Settings as Cog, Star, Stethoscope, Trash2, Upload, X } from 'lucide-react';
 import { cn } from '@/kit/cn';
 import { Button, Input, PageHeader, Segmented, Select, SettingsRow, SettingsSection, Switch } from '@/kit/ui';
 import { themes, useTheme } from '@/kit/theme';
 import { useApp } from '@/lib/useApp';
-import type { Data, Settings } from '@/lib/types';
+import type { AddItem, Data, Settings } from '@/lib/types';
+import { DEFAULT_THUOC } from '@/lib/thuoc';
 import { templateFromFile } from '@/lib/benhAn';
 
 const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
@@ -60,6 +61,8 @@ export function SettingsPage() {
           </SettingsRow>
         </SettingsSection>
 
+        <ThuocSection data={data} setData={setData} />
+
         <DoctorSection data={data} setData={setData} />
 
         <MauSection data={data} setData={setData} />
@@ -104,6 +107,61 @@ export function SettingsPage() {
         </SettingsSection>
       </div>
     </>
+  );
+}
+
+// Drugs offered as "+" ticks per day on the patient page, added through Kê Tây y/VTYT.
+const THUOC_FIELDS: { k: keyof AddItem; label: string; hint?: string; wide?: boolean }[] = [
+  { k: 'label', label: 'Tên hiển thị' },
+  { k: 'kho', label: 'Kho', hint: 'Mã hoặc tên kho, ví dụ KCPSX' },
+  { k: 'ten', label: 'Tên thuốc trên OneMES', hint: 'Tool chọn dòng có đúng tên này' },
+  { k: 'tim', label: 'Từ khóa tìm', hint: 'Gõ vào ô Thuốc/VTYT để tìm' },
+  { k: 'sl', label: 'Số lượng' },
+  { k: 'loai', label: 'Loại kê', hint: 'KÊ LĨNH hoặc TỦ TRỰC' },
+  { k: 'cachDung', label: 'Cách dùng', wide: true },
+];
+
+function ThuocSection({ data, setData }: { data: Data; setData: (d: Data) => void }) {
+  const { call, toast } = useApp();
+  const saved = data.settings.themThuoc || [];
+  const [list, setList] = useState<AddItem[]>(saved);
+  useEffect(() => setList(data.settings.themThuoc || []), [data.settings.themThuoc]);
+  const dirty = JSON.stringify(list) !== JSON.stringify(saved);
+  const set = (i: number, k: keyof AddItem, v: string) => setList((l) => l.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+  const ok = list.every((x) => x.label.trim() && x.kho.trim() && x.ten.trim() && Number(x.sl) > 0);
+  const save = async (l: AddItem[]) => {
+    const r = await call<Settings>('settings:set', { themThuoc: l.map((x) => ({ ...x, label: x.label.trim(), kho: x.kho.trim(), ten: x.ten.trim(), tim: x.tim.trim(), sl: x.sl.trim(), cachDung: x.cachDung.trim(), loai: x.loai.trim() })) });
+    setData({ ...data, settings: r });
+    toast('success', 'Đã lưu danh sách thuốc thêm');
+  };
+  return (
+    <SettingsSection icon={<PillIcon />} title="Thêm thuốc khi sao chép" color="emerald">
+      <p className="text-xs text-muted-foreground">Mỗi thuốc ở đây có một hàng ô xanh <b>+</b> trong trang bệnh nhân. Tick ngày nào thì tool mở <b>Kê Tây y/VTYT</b> của ngày đó, chọn kho, tìm thuốc, điền số lượng, cách dùng, bấm Thêm rồi Chấp nhận.</p>
+      <div className="space-y-3" data-thuoc-settings>
+        {list.map((x, i) => (
+          <div key={x.id} className="rounded-xl border border-border/50 bg-card/40 p-3" data-thuoc={x.id}>
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-sm font-bold">{x.label || 'Thuốc mới'}</span>
+              <Button variant="ghost" size="xs" className="ml-auto" onClick={() => setList((l) => l.filter((_, j) => j !== i))} aria-label={`Bỏ ${x.label}`}><Trash2 /> Bỏ</Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {THUOC_FIELDS.map((f) => (
+                <label key={f.k} className={cn('text-[11px] font-semibold text-muted-foreground', f.wide && 'col-span-2')} title={f.hint}>
+                  {f.label}
+                  <Input value={x[f.k]} onChange={(e) => set(i, f.k, e.target.value)} className="mt-0.5 h-8 text-xs" placeholder={f.hint} />
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={() => setList((l) => [...l, { id: `t${Date.now()}`, label: '', kho: 'KCPSX', ten: '', tim: '', sl: '1', cachDung: '', loai: 'KÊ LĨNH' }])}><Plus /> Thêm thuốc khác</Button>
+        <Button variant="ghost" size="sm" onClick={() => setList(DEFAULT_THUOC)} title="Về lại Cồn xoa bóp và Cao thông mạch như ban đầu"><RotateCcw /> Mặc định</Button>
+        <Button size="sm" className="ml-auto" disabled={!dirty || !ok} onClick={() => save(list)} data-action="thuoc-save">Lưu</Button>
+      </div>
+      {!ok && <p className="text-xs text-red-500">Mỗi thuốc cần tên hiển thị, kho, tên thuốc và số lượng lớn hơn 0.</p>}
+    </SettingsSection>
   );
 }
 

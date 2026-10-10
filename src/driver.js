@@ -64,7 +64,7 @@ function createDriver(host) {
 
   async function call(fn, ...args) {
     const a = args.map((x) => JSON.stringify(x)).join(',');
-    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==7){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
+    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==8){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
   }
 
   function checkStop() {
@@ -461,9 +461,156 @@ function createDriver(host) {
     return o;
   }
 
+  // ---------- thêm thuốc qua Kê Tây y/VTYT ----------
+  // it = { id, label, kho, ten, tim, sl, cachDung, loai } from Cài đặt > Thêm thuốc.
+  const hasItem = (o, it) => o.thuoc.some((x) => norm(x.name) === norm(it.ten) || norm(x.name).startsWith(norm(it.ten)));
+
+  // Types each term in turn into a select2 box until a result matching `match` shows up.
+  async function pickS2(id, terms, match, what) {
+    let last = null;
+    for (const term of terms) {
+      const s = await call('s2Search', id, term);
+      if (!s.ok) throw new PageError(`${what}: ${s.reason}`);
+      await sleep(500); // the box searches 350 ms after the last keystroke
+      const end = Date.now() + 10000;
+      while (Date.now() < end) {
+        checkStop();
+        const r = await call('s2Results');
+        if (r.open && !r.loading && r.items.length) {
+          last = await call('s2Pick', match);
+          if (last.ok) return last;
+        }
+        await sleep(250);
+      }
+    }
+    await call('s2Close').catch(() => {});
+    const seen = last && last.seen && last.seen.length ? ` (thấy: ${last.seen.join('; ')})` : '';
+    throw new PageError(`${what}: ${last && last.reason === 'ambiguous' ? 'có nhiều mục trùng tên' : 'không tìm thấy'} "${match}"${seen}`);
+  }
+
+  async function keDonState() {
+    return call('keDonState');
+  }
+
+  async function addThuoc(orderId, label, it) {
+    const o = await readOrder();
+    if (norm(o.id) !== norm(orderId)) throw new PageError('Trang đã chuyển sang y lệnh khác, dừng để an toàn');
+    if (hasItem(o, it)) {
+      log('info', `${label}: đã có "${it.label}", không thêm nữa`);
+      return { added: false, already: true };
+    }
+    if (!isNew(o)) throw new PageError(`${label}: y lệnh không ở trạng thái Mới (${o.status}), không thêm thuốc`);
+    await step(`${label}: thêm "${it.label}" (kho ${it.kho}, SL ${it.sl})`);
+    await settle();
+    const r = await call('openKeDon');
+    if (!r.ok) throw new PageError(`${label}: không mở được Kê Tây y/VTYT (${r.reason})`);
+    let st = await waitFor('popup Kê đơn thuốc', async () => {
+      await failOnAlert();
+      const x = await keDonState();
+      return x.open && x.ready && !x.busy ? x : null;
+    });
+    let picked = null;
+    try {
+      if (st.disabled) throw new PageError(`${label}: ô Thuốc trong Kê đơn đang khóa`);
+      if (it.loai) {
+        const l = await call('keDonSetLoai', it.loai);
+        if (!l.ok) log('warn', `${label}: không chọn được loại kê "${it.loai}", giữ "${st.loai}"`);
+        else if (l.changed) await sleep(500);
+      }
+      st = await keDonState();
+      if (!norm(st.kho.text).includes(norm(it.kho))) {
+        await pickS2('cboKho', ['', it.kho], it.kho, `${label}: chọn kho`);
+        await waitFor('chọn kho', async () => {
+          await failOnAlert();
+          const x = await keDonState();
+          return norm(x.kho.text).includes(norm(it.kho)) && !x.busy ? x : null;
+        }, 10000);
+        await sleep(300);
+      }
+      picked = await pickS2('cboThuoc', [it.tim || it.ten, it.ten], it.ten, `${label}: chọn thuốc`);
+      st = await waitFor('chọn thuốc', async () => {
+        await failOnAlert();
+        const x = await keDonState();
+        return x.thuoc.value && !x.busy ? x : null;
+      }, 10000);
+      await sleep(300);
+      await call('s2Close');
+      const f = await call('keDonFill', { sl: it.sl || '1', cachDung: it.cachDung || '' });
+      if (!f.ok) throw new PageError(`${label}: ${f.reason}`);
+      st = await keDonState();
+      if (String(st.sl).trim() !== String(it.sl || '1').trim()) throw new PageError(`${label}: ô Số lượng không nhận ${it.sl}`);
+      const before = st.rows.length;
+      const since = await call('now');
+      const c = await call('keDonClick', 'Thêm');
+      if (!c.ok) throw new PageError(`${label}: không bấm được Thêm (${c.reason})`);
+      await waitFor('Thêm thuốc', async () => {
+        const t = await call('toasts', since);
+        if (t.some((x) => /thêm mới thành công/i.test(x.msg))) return true;
+        const err = t.find((x) => x.type === 'error' || x.type === 'warning');
+        if (err) throw new PageError(`${label}: OneMES báo "${err.msg}"`);
+        const a = await call('swal');
+        if (a.visible && a.ready && a.cancelText) {
+          // e.g. "Thuốc đã được chỉ định?": never add a second one.
+          await call('swalClick', 'cancel');
+          throw new PageError(`${label}: OneMES hỏi "${a.title} ${a.text}", tool chọn Không`);
+        }
+        if (isError(a) && a.ready) {
+          await call('swalClick', 'confirm');
+          throw new PageError(`${label}: OneMES báo "${a.text || a.title}"`);
+        }
+        const m = await call('extraModal');
+        if (m) throw new PageError(`${label}: OneMES mở thêm hộp thoại "${m.text}", tool không tự trả lời`);
+        return null;
+      }, 30000);
+      // A short "Cảnh báo!" (odd quantity etc.) may follow a successful add; it closes itself.
+      const w = await call('swal');
+      if (w.visible) log('warn', `${label}: OneMES lưu ý "${w.text || w.title}"`);
+      await waitFor('hộp thoại tự đóng', () => call('swalIdle'), 8000);
+      st = await waitFor('dòng thuốc mới', async () => {
+        const x = await keDonState();
+        return x.rows.length > before ? x : null;
+      }, 10000);
+      log('ok', `${label}: đã thêm "${picked.name}"${picked.code ? ` (${picked.code})` : ''}`);
+      await settle();
+      const a2 = await call('keDonClick', 'Chấp nhận');
+      if (!a2.ok) throw new PageError(`${label}: không bấm được Chấp nhận (${a2.reason})`);
+      await waitFor('đóng Kê đơn', async () => {
+        await failOnAlert();
+        const x = await keDonState();
+        return !x.open;
+      }, 30000);
+    } catch (e) {
+      // Close the popup the safe way (Chấp nhận keeps what is there). Its X and "Bỏ qua"
+      // delete the order's whole prescription.
+      const x = await keDonState().catch(() => ({ open: false }));
+      if (x.open && !(e instanceof StopError)) {
+        await call('s2Close').catch(() => {});
+        await call('keDonClick', 'Chấp nhận').catch(() => {});
+        await sleep(800);
+        const y = await keDonState().catch(() => ({ open: false }));
+        if (y.open) e.message += '. Popup Kê đơn còn mở: hãy bấm Chấp nhận, ĐỪNG bấm X hay Bỏ qua (OneMES sẽ xóa cả đơn thuốc)';
+      }
+      throw e;
+    }
+    const after = await readStable(orderId);
+    if (!hasItem(after, it)) throw new PageError(`${label}: đã bấm Thêm và Chấp nhận nhưng y lệnh chưa có "${it.label}"`);
+    return { added: true, name: picked.name };
+  }
+
+  async function addItems(orderId, label, items) {
+    const out = [];
+    for (const it of items) {
+      checkStop();
+      const r = await addThuoc(orderId, label, it);
+      if (r.added) out.push(it.id);
+    }
+    return out;
+  }
+
   /**
    * plan = { patient, sourceId, days: 1..4, deletions: [[keys of day1], [keys of day2], ...],
-   *          hinhThuc: '1', autoComplete: true }
+   *          hinhThuc: '1', autoComplete: true,
+   *          adds: [[item ids of day1], ...], addItems: [{ id, label, kho, ten, tim, sl, cachDung, loai }] }
    * Day 1 is the copy made by Sao chép; days 2..N come from Sao y lệnh (ngày) = N-1.
    */
   async function run(plan) {
@@ -488,10 +635,12 @@ function createDriver(host) {
     const src = await openOrder(plan.sourceId);
     if (!isDone(src)) throw new PageError(`Y lệnh nguồn đang ở trạng thái "${src.status}", cần Hoàn tất để sao chép`);
     const edits = resolveEdits(src, plan.edits, N);
+    const catalog = plan.addItems || [];
+    const add = Array.from({ length: N }, (_, i) => catalog.filter((it) => ((plan.adds && plan.adds[i]) || []).includes(it.id)));
 
     // Never create a second order for a day that already has one.
     const srcDate = parseTime(before.find((r) => r.id === norm(src.id))?.tg) || parseTime(src.thoiGian);
-    result.expect = expectations(src, del, srcDate, autoComplete, edits);
+    result.expect = expectations(src, del, srcDate, autoComplete, edits, add);
     if (srcDate) {
       const taken = [];
       for (let k = 1; k <= N; k++) {
@@ -527,6 +676,7 @@ function createDriver(host) {
 
     if (N === 1) {
       result.days[0].del = await deleteKeys(d1, del[0], 'Ngày 1');
+      result.days[0].added = await addItems(d1, 'Ngày 1', add[0]);
       if (autoComplete) await complete(d1, 'Ngày 1');
       result.ok = true;
       return result;
@@ -535,6 +685,9 @@ function createDriver(host) {
     // 2. Items deleted on every day go before Sao y lệnh, so the copies lack them too.
     const common = del[0].filter((k) => del.every((d) => d.includes(k)));
     if (common.length) result.days[0].del = await deleteKeys(d1, common, 'Ngày 1');
+    // Drugs added on every day also go in before Sao y lệnh, which copies them on.
+    const commonAdd = add[0].filter((it) => add.every((a) => a.includes(it)));
+    if (commonAdd.length) result.days[0].added = await addItems(d1, 'Ngày 1', commonAdd);
 
     // 3. Hoàn tất ngày 1 with Sao y lệnh (ngày) = N-1.
     await complete(d1, 'Ngày 1', N - 1, plan.hinhThuc || '1');
@@ -542,10 +695,12 @@ function createDriver(host) {
     // 4. Day 1 still needs its own deletions: Thu hồi, delete, Hoàn tất.
     let o1 = await readOrder();
     const rest1 = present(o1, del[0]);
-    if (rest1.length) {
+    const add1 = add[0].filter((it) => !hasItem(o1, it));
+    if (rest1.length || add1.length) {
       await recall(d1, 'Ngày 1');
       const r = await deleteKeys(d1, rest1, 'Ngày 1');
       result.days[0].del = mergeRes(result.days[0].del, r);
+      result.days[0].added = [...(result.days[0].added || []), ...(await addItems(d1, 'Ngày 1', add1))];
       if (autoComplete) await complete(d1, 'Ngày 1');
     }
 
@@ -583,13 +738,16 @@ function createDriver(host) {
       const gone = del[k].filter((x) => !keys.includes(x));
       const f = fieldsFor(o, edits[k]);
       const change = Object.keys(f).length > 0;
+      const addK = add[k].filter((it) => !hasItem(o, it));
       let r = { deleted: [], missing: [], failed: [] };
+      let added = [];
       // OneMES creates these copies already Hoàn tất: Thu hồi only when something must change.
-      if (keys.length || change) {
+      if (keys.length || change || addK.length) {
         if (isDone(o)) await recall(row.id, label);
         else if (!isNew(o)) throw new PageError(`${label} có trạng thái "${o.status}", không sửa`);
         r = await deleteKeys(row.id, keys, label);
         if (change) await applyFields(row.id, label, f);
+        added = await addItems(row.id, label, addK);
         if (autoComplete) await complete(row.id, label);
       } else if (isNew(o) && autoComplete) {
         await complete(row.id, label);
@@ -597,7 +755,7 @@ function createDriver(host) {
         log('info', `${label}: không có gì cần sửa, giữ nguyên`);
       }
       r.alreadyGone = gone;
-      result.days.push({ day: k + 1, id: row.id, time: row.tg, del: r });
+      result.days.push({ day: k + 1, id: row.id, time: row.tg, del: r, added });
     }
     await call('back').catch(() => {});
     result.ok = true;
@@ -638,8 +796,13 @@ function createDriver(host) {
         for (const [b, n] of Object.entries(e.want)) {
           if ((have[b] || 0) < n) warnings.push(`Thiếu "${label(b)}" so với y lệnh nguồn`);
         }
+        const adds = e.add || [];
+        const isAdded = (b) => adds.some((a) => hasItem({ thuoc: [{ name: label(b) }] }, a));
         for (const b of Object.keys(have)) {
-          if (!(b in e.want) && !(b in e.gone)) warnings.push(`Có thêm "${label(b)}" không có trong y lệnh nguồn`);
+          if (!(b in e.want) && !(b in e.gone) && !isAdded(b)) warnings.push(`Có thêm "${label(b)}" không có trong y lệnh nguồn`);
+        }
+        for (const a of adds) {
+          if (!hasItem(o, a)) problems.push(`Chưa có "${a.label}" (đã tick thêm)`);
         }
         const d = parseTime(row.tg);
         if (e.date && d && dayStamp(d) !== dayStamp(new Date(e.date))) problems.push(`Sai ngày: ${row.tg}, mong đợi ${ddmmOf(new Date(e.date))}`);
@@ -673,6 +836,7 @@ function createDriver(host) {
         thuoc: o.thuoc.map(slim),
         dvkt: o.dvkt.map(slim),
         removed: e ? Object.keys(e.gone).map(label) : [],
+        added: e && e.add ? e.add.filter((a) => hasItem(o, a)).map((a) => a.label) : [],
         problems,
         warnings,
       });
@@ -796,18 +960,29 @@ function createDriver(host) {
     return { values: r.values, missing: r.missing, at: Date.now() };
   }
 
+  // Only empty boxes on OneMES are filled: whatever is already written there is kept,
+  // so a record someone started by hand is never overwritten.
   async function saveBenhAn(patient, fields, values) {
     const name = patient.hoTen || patient.maBN;
     log('info', `${name}: ghi Thông tin bệnh án`);
     await openBenhAn(patient);
-    const w = await call('writeBenhAn', fields, values);
+    const cur = await call('readBenhAn', fields);
+    const kept = fields.filter((f) => f.id in values && isFilled(cur.values[f.id]) && !sameValue(f.kind, values[f.id], cur.values[f.id])).map((f) => f.id);
+    const todo = fields.filter((f) => f.id in values && !kept.includes(f.id) && !cur.missing.includes(f.id) && !sameValue(f.kind, values[f.id], cur.values[f.id]));
+    if (kept.length) log('info', `${name}: giữ nguyên ${kept.length} mục đã có nội dung trên OneMES`);
+    if (!todo.length) {
+      log('ok', `${name}: không có mục trống nào cần điền`);
+      return { values: cur.values, missing: cur.missing.filter((id) => id in values), kept, filled: [], diff: [], at: Date.now() };
+    }
+    const vals = Object.fromEntries(todo.map((f) => [f.id, values[f.id]]));
+    const w = await call('writeBenhAn', todo, vals);
     if (w.missing.length) log('warn', `${name}: không điền được ${w.missing.length} mục (${w.missing.slice(0, 5).join(', ')})`);
     const parts = [
       [1, /thông tin chung thành công/i, 'Thông tin chung'],
       [2, /chuyên khoa thành công/i, 'Thông tin chuyên khoa'],
     ];
     for (const [part, ok, title] of parts) {
-      if (!fields.some((f) => f.part === part)) continue;
+      if (!todo.some((f) => f.part === part)) continue;
       await step(`${name}: Lưu ${title}`);
       await settle();
       const since = await call('now');
@@ -820,18 +995,19 @@ function createDriver(host) {
         if (err) throw new PageError(`${name}: OneMES báo "${err.msg}"`);
         return t.some((x) => ok.test(x.msg));
       }, 60000);
-      log('ok', `${name}: đã lưu ${title}`);
+      log('ok', `${name}: đã lưu ${title} (điền ${todo.filter((f) => f.part === part).length} mục trống)`);
     }
     // Read the page again from OneMES to be sure what was saved.
     await openBenhAn(patient);
     const back = await call('readBenhAn', fields);
-    const diff = fields.filter((f) => f.id in values && !w.missing.includes(f.id) && !sameValue(f.kind, values[f.id], back.values[f.id])).map((f) => f.id);
+    const diff = todo.filter((f) => !w.missing.includes(f.id) && !sameValue(f.kind, values[f.id], back.values[f.id])).map((f) => f.id);
     if (diff.length) log('warn', `${name}: sau khi lưu, ${diff.length} mục khác với bản đã sửa (${diff.slice(0, 5).join(', ')})`);
     else log('ok', `${name}: Thông tin bệnh án đã lưu đúng`);
-    return { values: back.values, missing: w.missing, diff, at: Date.now() };
+    const missing = [...new Set([...cur.missing.filter((id) => id in values), ...w.missing])];
+    return { values: back.values, missing, kept, filled: todo.map((f) => f.id), diff, at: Date.now() };
   }
 
-  return { call, where, scanPatients, openPatient, listOrders, pickSource, loadPatient, openOrder, readOrder, run, gotoList, verify, deleteOrder, updateDay, loadLists, readBenhAn, saveBenhAn, fieldsFor };
+  return { call, where, addThuoc, scanPatients, openPatient, listOrders, pickSource, loadPatient, openOrder, readOrder, run, gotoList, verify, deleteOrder, updateDay, loadLists, readBenhAn, saveBenhAn, fieldsFor };
 }
 
 function countBy(list) {
@@ -841,7 +1017,7 @@ function countBy(list) {
 }
 
 // What each created day should hold: the source minus that day's deletions.
-function expectations(src, del, srcDate, autoComplete, edits = []) {
+function expectations(src, del, srcDate, autoComplete, edits = [], add = []) {
   const items = [...src.thuoc, ...src.dvkt];
   const names = {};
   for (const it of items) names[baseKey(it)] = it.name;
@@ -854,6 +1030,7 @@ function expectations(src, del, srcDate, autoComplete, edits = []) {
       gone: countBy(items.filter((it) => keys.includes(it.key)).map(baseKey)),
       date: srcDate ? addDays(srcDate, i + 1).getTime() : null,
       edit: edits[i] || null,
+      add: (add[i] || []).map((it) => ({ id: it.id, label: it.label, ten: it.ten })),
     })),
   };
 }
@@ -880,6 +1057,13 @@ function resolveEdits(src, edits, N) {
     }
   }
   return list.map((e) => (Object.keys(e).length ? e : null));
+}
+
+// Something is written in the box: text, a choice, a tick.
+function isFilled(v) {
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === 'boolean') return v;
+  return String(v == null ? '' : v).trim() !== '';
 }
 
 function sameValue(kind, a, b) {

@@ -14,9 +14,14 @@ const DEFAULTS = {
     bacSiFav: [], // [{ id, name }] shown first in the per-day Bác sĩ dropdown
     esBase: 'http://192.168.30.88:9200', // fallback when the page does not name its search service
     gpuOff: process.platform === 'win32', // software rendering: stops the window flicker on some PCs
+    // Drugs the user can tick to add per day (Kê Tây y/VTYT). Defaults as the user enters them by hand.
+    themThuoc: [
+      { id: 'con-xoa-bop', label: 'Cồn xoa bóp', kho: 'KCPSX', ten: 'CỒN XOA BÓP', tim: 'cồn xoa', sl: '1', cachDung: 'Mỗi lần dùng 5ml, xoa bóp các chỗ đau 4 lần/ngày', loai: 'KÊ LĨNH' },
+      { id: 'cao-thong-mach', label: 'Cao thông mạch', kho: 'KCPSX', ten: 'CAO THÔNG MẠCH', tim: 'cao thông', sl: '1', cachDung: 'Uống 20ml/lần * 2 lần/ngày * 3 ngày (sáng, chiều) sau ăn', loai: 'KÊ LĨNH' },
+    ],
   },
   templates: [],
-  choices: {}, // noitruid -> { days, deletions: [[baseKey...]...], hinhThuc, savedAt }
+  choices: {}, // noitruid -> { days, deletions: [[baseKey...]...], edits, adds: [[themThuoc id...]...], savedAt }
   runs: {}, // noitruid -> { at, ok, message }
   lists: null, // { at, bacSi: [{ id, name, login }], capDo: [{ id, ma, ten, text }] } read from OneMES
   benhAn: {}, // noitruid -> { values, savedAt, readAt, sentAt } Thông tin bệnh án being prepared

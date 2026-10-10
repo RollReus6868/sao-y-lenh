@@ -39,6 +39,8 @@ const { chromium } = require('playwright-core');
       await page.click('[data-item="Lirystad 150"] button >> nth=0');
       await page.click('[aria-label="Xóa Điều trị bằng siêu âm ngày 3"]');
       await page.click('[aria-label="Xóa Renaxib 200 ngày 2"]');
+      await page.click('[aria-label="Thêm Cồn xoa bóp ngày 2"]');
+      await page.click('[data-add="cao-thong-mach"] button >> nth=0');
       await shot('detail');
       await page.click('[data-eday="1"]');
       await page.fill('[data-order-fields] [data-field=gio]', '7h30');

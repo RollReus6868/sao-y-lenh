@@ -1,4 +1,11 @@
-# Sao Y Lệnh 0.3.2
+# Sao Y Lệnh 0.3.3
+
+- **Thêm Cồn xoa bóp và Cao thông mạch** khi sao chép: trong trang bệnh nhân có hàng **Thêm thuốc** với ô xanh **+** cho từng ngày. Tick ngày nào thì tool mở **Kê Tây y/VTYT** của ngày đó, chọn kho KCPSX, tìm thuốc, điền SL 1 và cách dùng như anh/chị vẫn nhập (Cồn xoa bóp: "Mỗi lần dùng 5ml, xoa bóp các chỗ đau 4 lần/ngày"; Cao thông mạch: "Uống 20ml/lần * 2 lần/ngày * 3 ngày (sáng, chiều) sau ăn"), bấm **Thêm** rồi **Chấp nhận**. Ngày đã có thuốc đó thì không thêm lần nữa. Đổi kho, số lượng, cách dùng, hoặc thêm thuốc khác ở **Cài đặt → Thêm thuốc khi sao chép**.
+- **Sửa từng ngày**: sửa ở một ngày thì các ngày sau tự theo, không cần bấm "Dùng cho mọi ngày" nữa. Ngày sau nào đã sửa riêng thì giữ phần riêng đó.
+- **Bệnh án**: khi cập nhật lên OneMES, ô nào trên OneMES đã có nội dung thì giữ nguyên, tool chỉ điền vào ô còn trống và báo số mục đã điền, số mục giữ nguyên.
+- Bỏ các gạch đỏ kiểm tra chính tả dưới chữ trong mọi ô nhập.
+
+## 0.3.2
 
 - Thẻ **Bệnh án**, phần Thông tin chung: bỏ các mục từ **Tuần hoàn** trở xuống (Tuần hoàn, Hô hấp, … đến Phương pháp điều trị) vì khoa không dùng. Tool không hiện và không ghi các mục này lên OneMES nữa; các mục khác giữ nguyên.
 

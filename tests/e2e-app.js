@@ -102,6 +102,12 @@ async function waitFor(what, fn, ms = 30000) {
     await ui.press('[data-order-fields] [data-field=gio]', 'Enter');
     await waitFor('doctor list', async () => (await ui.$$('[data-order-fields] [data-field=bacSi] option')).length >= 4, 20000);
     await ui.selectOption('[data-order-fields] [data-field=bacSi]', 'd2');
+    // A change on day 1 carries to the days after it; day 3 then gets its own doctor back.
+    check((await ui.$$('[data-eday] .bg-amber-500')).length === 3, 'edit on day 1 marks days 2 and 3 too');
+    await ui.click('[data-eday="3"]');
+    await ui.selectOption('[data-order-fields] [data-field=bacSi]', 'd1');
+    // Add Cồn xoa bóp on day 2 only.
+    await ui.click('[aria-label="Thêm Cồn xoa bóp ngày 2"]');
     await ui.click('[data-action=run]');
     await ui.click('[data-action=confirm-run]');
     await ui.waitForSelector('[data-runbar]', { timeout: 10000 });
@@ -117,12 +123,16 @@ async function waitFor(what, fn, ms = 30000) {
     check(fresh[2] && !names(fresh[2]).includes('Điều trị bằng siêu âm') && names(fresh[1]).includes('Điều trị bằng siêu âm'), 'siêu âm removed on day 3 only');
     const hm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     check(fresh[0] && hm(fresh[0].dateTH) === '07:40' && hm(fresh[0].date) === '07:39' && fresh[0].bacSi.id === 'd2', 'day 1: time 07:40 (chỉ định 07:39) and doctor changed');
-    check(fresh[1] && fresh[1].bacSi.id === 'd1' && hm(fresh[1].dateTH) !== '07:40', 'day 2 kept the source time and doctor');
+    check(fresh[1] && fresh[1].bacSi.id === 'd2' && hm(fresh[1].dateTH) === '07:40', 'day 2 follows day 1 (time and doctor)');
+    check(fresh[2] && fresh[2].bacSi.id === 'd1' && hm(fresh[2].dateTH) === '07:40', 'day 3: time from day 1, its own doctor');
+    const drugsOf = (o) => o.thuoc.map((x) => x.name);
+    check(fresh[1] && drugsOf(fresh[1]).includes('CỒN XOA BÓP') && !drugsOf(fresh[0]).includes('CỒN XOA BÓP') && !drugsOf(fresh[2]).includes('CỒN XOA BÓP'), 'Cồn xoa bóp added on day 2 only');
 
     // The result tab shows what was read back from OneMES.
     await ui.waitForSelector('[data-result] [data-day="3"]', { timeout: 30000 });
     check(/Đúng như đã chọn/.test(await ui.textContent('[data-summary]')), 'result: all days as chosen');
     check((await ui.textContent('[data-day="3"]')).includes('Lirystad 150') === true, 'result: day 3 lists removed Lirystad');
+    check(/Đã thêm:\s*Cồn xoa bóp/.test(await ui.textContent('[data-day="2"]')), 'result: day 2 shows the added drug');
 
     // Correct day 2 from the result tab.
     await ui.click('[data-day="2"] [data-action=edit-day]');

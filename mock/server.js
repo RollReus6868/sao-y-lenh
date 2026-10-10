@@ -33,6 +33,34 @@ const CARE = [
   ['c3', 'III-C', 'III-C'],
 ].map(([id, ma, ten]) => ({ _id: id, _source: { ma, ten, hieuLuc: 1 } }));
 
+// Kho and items behind the Kê Tây y/VTYT popup's two search boxes.
+const KHO = [
+  ['k1', 'KVTYT - Kho Hóa chất - VTYT'],
+  ['k2', 'KCDTD - Kho Cao đơn - Tân dược'],
+  ['k3', 'KCPSX - Kho Chế phẩm sản xuất tại khoa Dược'],
+].map(([id, text]) => ({ id, text }));
+const HANG = {
+  k1: [['VT1', 'Kim châm cứu tiệt trùng dùng một lần', '', 'Cái', '']],
+  k2: [
+    ['TD1', 'Renaxib 200', '200mg', 'Viên', 'Uống'],
+    ['TD2', 'Cồn 70 độ', '', 'Chai', 'Dùng ngoài'],
+  ],
+  k3: [
+    ['CPBV.2026.7', 'CỒN XOA BÓP', '1000mg+1000mg+1000mg', 'Lọ', 'Dùng ngoài'],
+    ['CPBV.2026.12', 'CAO THÔNG MẠCH', '12000mg+10000mg+8000mg', 'Chai', 'Uống'],
+    ['CPBV.BS.2025.10', 'THUỶ DƯỢC NGÂM CHÂN NHỊ TẤT THIÊN NIÊN KIỆN', '2800mg+2800mg', 'Túi', 'Dùng ngoài'],
+    ['CPBV.2026.3', 'HOẠT HUYẾT KHỨ Ứ ẨM', '6000mg+6000mg+6', 'Túi', 'Uống'],
+  ],
+};
+const hangById = (id) => {
+  for (const k of Object.keys(HANG)) {
+    const h = HANG[k].find((x) => 'h-' + x[0] === id);
+    if (h) return { kho: k, code: h[0], name: h[1], hamLuong: h[2], dvt: h[3], duongDung: h[4] };
+  }
+  return null;
+};
+const fold = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase();
+
 function sampleItems() {
   return {
     thuoc: [
@@ -197,6 +225,37 @@ const api = {
     state.log.push(['luu', id]);
     return { Error: false };
   },
+  // Kê Tây y/VTYT popup (ServerSideAddToaThuocCt and friends).
+  keDon({ id }) {
+    const f = findOrder(id);
+    if (!f) return { Error: true, InfoMessage: 'Không tìm thấy y lệnh' };
+    return { Error: false, RetObject: f.o.thuoc, RetExtraParam3: '1' };
+  },
+  coThuoc({ id, hang }) {
+    const f = findOrder(id);
+    const h = hangById(hang);
+    return { Error: false, RetBoolean: !!(f && h && f.o.thuoc.some((x) => x.name === h.name)) };
+  },
+  themThuoc({ id, kho, hang, sl, cachDung, haoPhi }) {
+    const f = findOrder(id);
+    if (!f) return { Error: true, InfoMessage: 'Không tìm thấy y lệnh' };
+    if (f.o.status !== 'Mới') return { Error: true, InfoMessage: 'Y lệnh đã hoàn tất, không thể kê thêm' };
+    const h = hangById(hang);
+    if (!h || h.kho !== kho) return { Error: true, InfoMessage: 'Thuốc không thuộc kho đã chọn' };
+    if (!(Number(sl) > 0)) return { Error: true, InfoMessage: 'Chưa nhập số lượng' };
+    const khoName = KHO.find((k) => k.id === kho).text.replace(/^\S+ - /, '');
+    f.o.thuoc.push({ id: uid(), group: 'Thuốc Tây Y', loaiKe: 'Dự trù', kho: khoName, name: h.name, hamLuong: h.hamLuong, dvt: h.dvt, duongDung: h.duongDung, sl: String(sl), cachDung, doiTuong: haoPhi ? 'Hao phí' : 'Bảo hiểm', trangThai: 'Mới' });
+    state.log.push(['themThuoc', id, h.name, String(sl), cachDung]);
+    return { Error: false, RetNumber4: f.o.thuoc.length };
+  },
+  // What the popup's X and "Bỏ qua" do on OneMES: drop the whole prescription.
+  xoaHetThuoc({ id }) {
+    const f = findOrder(id);
+    if (!f) return { Error: true, InfoMessage: 'Không tìm thấy y lệnh' };
+    f.o.thuoc = [];
+    state.log.push(['xoaHetThuoc', id]);
+    return { Error: false };
+  },
   benhAn({ id }) {
     const p = state.patients.find((x) => x.benhAnId === id);
     if (!p) return { Error: true, InfoMessage: 'Không tìm thấy bệnh án' };
@@ -257,6 +316,7 @@ function page(wpid, query, host) {
 <link rel="stylesheet" href="/vendor/sweetalert.css"><link rel="stylesheet" href="/vendor/toastr.min.css">
 <link rel="stylesheet" href="/onemes-mock.css">
 <script src="/vendor/jquery.min.js"></script><script src="/vendor/sweetalert.min.js"></script><script src="/vendor/toastr.min.js"></script>
+<script src="/vendor/select2.full.min.js"></script>
 </head><body>`;
   if (wpid === 'danhsachdieutrinoitrudraw') {
     return `${head}<div id="divHeader"><a href="/home.aspx?scope=sys&wpid=danhsachdieutrinoitrudraw">Ds Điều trị nội trú</a></div>
@@ -272,6 +332,9 @@ function page(wpid, query, host) {
  <a href="/home.aspx?scope=sys&wpid=danhsachdieutrinoitrudraw">Về danh sách</a>
  <span class="mock-menu">Tổng kết: <a onclick="onShowTtBenhAn('${(state.patients.find((x) => x.noitruid === nt) || {}).benhAnId || ''}', 'divNoiTruContent');">Lập bìa bệnh án</a></span></div>
 <div id="divWebpart" style="margin-top: 10px;"><div id="divNoiTruContent"><p>Thông tin bệnh nhân</p></div></div>
+<div class="modal fade" id="modalKeDon" style="display:none"><div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header">Kê đơn thuốc <button type="button" class="close" onclick="onClosePopup()">×</button></div>
+  <div id="divContentModalThamKhamKeDon"></div></div></div></div>
 <div id="divWebpartPopup" style="display:none; margin-top: 10px">
   <div><span id="divStatusPopup" style="padding-right:5px;"></span> <span id="txtYLenhInfo"></span></div>
   <div id="divWorkflowStatusPopup">
@@ -290,6 +353,8 @@ function page(wpid, query, host) {
   <label>Diễn biến PHCN<textarea id="txtDienBienPHCNThamKham"></textarea></label>
   <label>Sao y lệnh (ngày) <select id="cboSaoYLenh" class="form-control"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
   <label>Hình thức sao y lệnh <select id="cboHinhThucSao"><option value="" selected>Chọn hình thức sao</option><option value="1">Sao thuốc dự trù và dịch vụ</option><option value="0">Sao thuốc dự trù</option><option value="2">Sao dịch vụ</option><option value="3">Sao đông y</option><option value="4">Sao tây y</option><option value="5">Sao tây y và dịch vụ</option></select></label>
+  <div><button id="btnKeDon" class="btn btn-xs btn-success btn-ylenh" onclick="javascript:showKeDon();">Kê Tây y/VTYT</button>
+  <button id="btnKeDon" class="btn btn-xs btn-success btn-ylenh" onclick="javascript:showKeDonYHCT();">Kê đơn YHCT</button></div>
   <div id="divIboxThuoc"><h4>Cho thuốc/ VTYT</h4><div class="row divThuocVTYT _divThuocVTYTTK"></div></div>
   <div id="divIboxDichVu"><h4>Chỉ định DVKT</h4><div id="divDichVu" class="row"></div></div>
 </div>
@@ -355,6 +420,19 @@ const server = http.createServer(async (req, res) => {
     const from = q.from || 0;
     const hits = all.slice(from, from + (q.size || 25));
     return send(res, 200, JSON.stringify({ hits: { total: { value: all.length }, hits } }), 'application/json');
+  }
+  if (u.pathname.startsWith('/svc/') && req.method === 'POST') {
+    const q = new URLSearchParams(await readBody(req));
+    const term = fold(q.get('q') || '');
+    let items = [];
+    if (u.pathname === '/svc/kho') items = KHO.filter((k) => fold(k.text).includes(term));
+    else if (u.pathname === '/svc/hang') {
+      items = (HANG[u.searchParams.get('kho')] || [])
+        .filter((h) => fold(h[0] + ' ' + h[1]).includes(term))
+        .map((h) => ({ id: 'h-' + h[0], text: h[1], Code: h[0], Name: h[1], DonViTinh: h[3], HamLuong: h[2], HoatChat: '', Ton: 100 }));
+    }
+    await new Promise((r) => setTimeout(r, 200));
+    return send(res, 200, JSON.stringify({ items, total_count: items.length }), 'application/json');
   }
   if (u.pathname === '/benh-an-schema.json') {
     return send(res, 200, fs.readFileSync(path.join(__dirname, '..', 'src', 'benh-an-schema.json')), 'application/json');

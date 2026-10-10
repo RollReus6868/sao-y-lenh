@@ -2,7 +2,7 @@
 // calls OneMES's own functions; it never calls the server directly.
 // Every function returns plain data so it survives structured clone.
 (function () {
-  if (window.__SYL && window.__SYL.version === 7) return;
+  if (window.__SYL && window.__SYL.version === 8) return;
 
   const txt = (el) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
   const norm = (s) =>
@@ -318,7 +318,8 @@
     const val = (id) => (byId(id) ? byId(id).value || '' : '');
 
     const thuoc = [];
-    const tblThuoc = byId('tblThuoc');
+    // The Kê đơn popup has its own #tblThuoc; the order's table is the one in .divThuocVTYT.
+    const tblThuoc = document.querySelector('.divThuocVTYT #tblThuoc') || byId('tblThuoc');
     const thHeads = headerCols(tblThuoc);
     const thCol = (n) => thHeads.findIndex((h) => h && h.startsWith(norm(n)));
     const tc = {
@@ -693,6 +694,172 @@
     return { ok: true };
   }
 
+
+  // ---------- Kê Tây y/VTYT (popup Kê đơn thuốc) ----------
+  // Opened with OneMES's showKeDon(). Never use the popup's X or "Bỏ qua": they call
+  // onClosePopup(), which deletes the order's whole prescription (ServerSideDeleteAllToaThuoc).
+  const keDonModal = () => byId('modalKeDon');
+  const keDonOpen = () => isShown(keDonModal()) && !!byId('cboThuoc');
+
+  function openKeDon() {
+    hookToastr();
+    if (keDonOpen()) return { ok: true, already: true };
+    if (typeof window.showKeDon !== 'function') return { ok: false, reason: 'no-showKeDon' };
+    window.showKeDon();
+    return { ok: true };
+  }
+
+  function keDonButton(label) {
+    const m = keDonModal();
+    if (!m) return null;
+    return [...m.querySelectorAll('button, a.btn, input[type=button], input[type=submit]')].find((b) => isShown(b) && norm(b.value || txt(b)) === norm(label)) || null;
+  }
+
+  function s2Text(id) {
+    const el = byId(id);
+    if (!el) return '';
+    const c = el.nextElementSibling && el.nextElementSibling.classList.contains('select2') ? el.nextElementSibling.querySelector('.select2-selection__rendered') : null;
+    const o = el.options && el.options[el.selectedIndex];
+    return txt(c) || (o ? txt(o) : '');
+  }
+
+  function keDonState() {
+    hookToastr();
+    const open = keDonOpen();
+    if (!open) return { open: false, busy: isBusy() };
+    const box = document.querySelector('.divThuocVTYTPopupTK');
+    const rows = box ? [...box.querySelectorAll('tbody tr')].map((tr) => txt(tr)).filter(Boolean) : [];
+    const loai = [...document.querySelectorAll('input[name=cboLoai]')].find((r) => r.checked);
+    const loaiLabel = loai ? txt(loai.closest('label')) || txt(loai.parentElement && loai.parentElement.parentElement) : '';
+    const s2 = document.querySelector('.select2-container--open');
+    return {
+      open: true,
+      busy: isBusy(),
+      ready: !!(byId('cboKho') && byId('cboThuoc') && byId('txtSl') && byId('txtCachDungThuoc')),
+      disabled: !!(byId('cboThuoc') && byId('cboThuoc').disabled),
+      kho: { value: byId('cboKho') ? byId('cboKho').value : '', text: s2Text('cboKho') },
+      thuoc: { value: byId('cboThuoc') ? byId('cboThuoc').value : '', text: s2Text('cboThuoc') },
+      loai: loaiLabel,
+      haoPhi: !!(byId('cbTrongGoiKD') && byId('cbTrongGoiKD').checked),
+      sl: byId('txtSl') ? byId('txtSl').value : '',
+      cachDung: byId('txtCachDungThuoc') ? byId('txtCachDungThuoc').value : '',
+      rows,
+      dropdown: !!s2,
+      loading: !!document.querySelector('.select2-container--open .loading-results'),
+    };
+  }
+
+  // KÊ LĨNH / TỦ TRỰC. Changing it reloads the Kho list, so it goes before the Kho.
+  function keDonSetLoai(label) {
+    const want = norm(label);
+    const rs = [...document.querySelectorAll('input[name=cboLoai]')];
+    const lab = (r) => norm(txt(r.closest('label')) || txt(r.parentElement && r.parentElement.parentElement) || r.value);
+    const r = rs.find((x) => lab(x).includes(want));
+    if (!r) return { ok: false, reason: 'no-loai:' + label, options: rs.map(lab) };
+    if (r.checked) return { ok: true, changed: false };
+    const $ = window.jQuery;
+    if ($ && $.fn.iCheck && $(r).parent('.iradio_square-green').length) $(r).iCheck('check');
+    else r.checked = true;
+    if ($) $(r).trigger('change');
+    else r.dispatchEvent(new Event('change', { bubbles: true }));
+    return { ok: true, changed: true };
+  }
+
+  // Types into a select2 box's search field like a person does; the results arrive
+  // from OneMES's search service a moment later (s2Results).
+  function s2Search(id, term) {
+    const $ = window.jQuery;
+    const el = byId(id);
+    if (!$ || !el || !$.fn.select2) return { ok: false, reason: 'no-select2:' + id };
+    if (el.disabled) return { ok: false, reason: 'disabled:' + id };
+    try {
+      $(el).select2('open');
+    } catch (e) {
+      return { ok: false, reason: 'select2-open:' + e.message };
+    }
+    const f = document.querySelector('.select2-container--open .select2-search__field');
+    if (!f) return { ok: false, reason: 'no-search-field' };
+    $(f).val(term).trigger('input');
+    return { ok: true };
+  }
+
+  function s2Options() {
+    const $ = window.jQuery;
+    return [...document.querySelectorAll('.select2-container--open .select2-results__option[aria-selected]')].map((li) => {
+      const d = ($ && $(li).data('data')) || {};
+      return { li, id: String(d.id == null ? '' : d.id), name: String(d.Name || d.text || txt(li)), code: String(d.Code || ''), text: txt(li) };
+    });
+  }
+
+  function s2Results() {
+    const loading = !!document.querySelector('.select2-container--open .loading-results');
+    return { open: !!document.querySelector('.select2-container--open'), loading, items: s2Options().map(({ li, ...x }) => x) };
+  }
+
+  // Picks the result whose name matches: exact name first, then a name that contains it,
+  // then any row text (code, name) that contains it. Several equal matches -> refuse.
+  function s2Pick(match) {
+    const want = norm(match);
+    const all = s2Options();
+    let hits = all.filter((o) => norm(o.name) === want);
+    if (!hits.length) hits = all.filter((o) => norm(o.name).includes(want));
+    if (!hits.length) hits = all.filter((o) => norm(o.text).includes(want));
+    if (!hits.length) return { ok: false, reason: 'not-found', seen: all.slice(0, 8).map((o) => o.name) };
+    if (hits.length > 1 && new Set(hits.map((h) => norm(h.name))).size > 1) return { ok: false, reason: 'ambiguous', seen: hits.slice(0, 8).map((o) => o.name) };
+    const $ = window.jQuery;
+    $(hits[0].li).trigger('mouseup');
+    return { ok: true, id: hits[0].id, name: hits[0].name, code: hits[0].code };
+  }
+
+  function s2Close() {
+    const $ = window.jQuery;
+    const open = document.querySelector('.select2-container--open');
+    if (!open || !$) return { ok: true };
+    for (const id of ['cboThuoc', 'cboKho']) {
+      try {
+        if (byId(id)) $(byId(id)).select2('close');
+      } catch (e) {}
+    }
+    return { ok: true };
+  }
+
+  // Số lượng, cách dùng; Hao phí unticked. The rest of the row is left as OneMES fills it.
+  function keDonFill(v) {
+    const $ = window.jQuery;
+    const set = (id, val) => {
+      const el = byId(id);
+      if (!el) return false;
+      el.value = val;
+      if ($) $(el).trigger('input').trigger('keyup').trigger('change');
+      else el.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    };
+    const hp = byId('cbTrongGoiKD');
+    if (hp && hp.checked && !v.haoPhi) {
+      if ($ && $.fn.iCheck) $(hp).iCheck('uncheck');
+      else hp.checked = false;
+    }
+    if (!set('txtSl', String(v.sl))) return { ok: false, reason: 'no-txtSl' };
+    if (v.cachDung && !set('txtCachDungThuoc', v.cachDung)) return { ok: false, reason: 'no-txtCachDungThuoc' };
+    return { ok: true };
+  }
+
+  function keDonClick(label) {
+    hookToastr();
+    if (!['thêm', 'chấp nhận'].includes(norm(label))) return { ok: false, reason: 'refused:' + label };
+    const b = keDonButton(label);
+    if (!b) return { ok: false, reason: 'no-button:' + label };
+    if (b.disabled) return { ok: false, reason: 'disabled:' + label };
+    b.click();
+    return { ok: true };
+  }
+
+  // Other bootstrap modals OneMES may raise over the popup (e.g. tỷ lệ thanh toán).
+  function extraModal() {
+    const m = [...document.querySelectorAll('.modal')].find((x) => x.id !== 'modalKeDon' && isShown(x) && /\bin\b|show/.test(x.className));
+    return m ? { id: m.id, text: txt(m).slice(0, 200) } : null;
+  }
+
   // ---------- Hộp thoại SweetAlert ----------
   function swal() {
     const el = document.querySelector('.sweet-alert');
@@ -742,7 +909,7 @@
   }
 
   window.__SYL = {
-    version: 7,
+    version: 8,
     where,
     readPatients,
     listLink,
@@ -766,6 +933,16 @@
     saveBenhAn,
     deleteThuoc,
     deleteDichVu,
+    openKeDon,
+    keDonState,
+    keDonSetLoai,
+    s2Search,
+    s2Results,
+    s2Pick,
+    s2Close,
+    keDonFill,
+    keDonClick,
+    extraModal,
     swal,
     swalIdle,
     swalClick,

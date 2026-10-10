@@ -234,6 +234,12 @@ function DayCard({ d, busy, deleting, updating, editing, onEdit, onSubmit, onDel
                   {d.removed.map((n) => <span key={n} className="rounded-md bg-red-500/10 px-1.5 py-0.5 text-red-600 line-through dark:text-red-400">{n}</span>)}
                 </div>
               )}
+              {!!d.added?.length && (
+                <div className="flex flex-wrap items-center gap-1 text-xs" data-added>
+                  <span className="font-semibold text-muted-foreground">Đã thêm:</span>
+                  {d.added.map((n) => <span key={n} className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-400">{n}</span>)}
+                </div>
+              )}
               <Items title="Cho thuốc / VTYT" icon={<PillIcon />} list={d.thuoc} />
               <Items title="Chỉ định DVKT" icon={<Stethoscope />} list={d.dvkt || []} />
             </>
