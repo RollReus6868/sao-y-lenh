@@ -13,7 +13,7 @@ interface Ctx {
   patients: Patient[];
   setPatients: (p: Patient[]) => void;
   refresh: () => Promise<void>;
-  setData: (d: Data) => void;
+  setData: React.Dispatch<React.SetStateAction<Data | null>>;
   toasts: Toast[];
   toast: (tone: Toast['tone'], text: string) => void;
   call: <T>(cmd: string, payload?: unknown) => Promise<T>;

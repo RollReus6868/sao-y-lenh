@@ -35,7 +35,7 @@ export function BenhAnView({ patient }: { patient: Patient }) {
   useEffect(() => {
     if (!dirty || !data) return;
     const t = setTimeout(() => {
-      call<BenhAnDraft>('benhAn:set', { id, values }).then((d) => setData({ ...data, benhAn: { ...data.benhAn, [id]: d } })).catch(() => {});
+      call<BenhAnDraft>('benhAn:set', { id, values }).then((d) => setData((x) => x && { ...x, benhAn: { ...x.benhAn, [id]: d } })).catch(() => {});
     }, 600);
     return () => clearTimeout(t);
   }, [values]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -47,7 +47,7 @@ export function BenhAnView({ patient }: { patient: Patient }) {
   const n = filledCount(values);
   const putDraft = (d: BenhAnDraft | null) => {
     if (!d || !data) return;
-    setData({ ...data, benhAn: { ...data.benhAn, [id]: d } });
+    setData((x) => x && { ...x, benhAn: { ...x.benhAn, [id]: d } });
     if (d.values) setValues(d.values);
     setDirty(false);
   };
@@ -76,7 +76,7 @@ export function BenhAnView({ patient }: { patient: Patient }) {
     toast('info', `Đã điền từ mẫu "${mau.name}"`);
   };
   const putMaus = (r: MauList) => {
-    if (data) setData({ ...data, benhAnMaus: r.benhAnMaus, benhAnMauId: r.benhAnMauId });
+    setData((x) => x && { ...x, benhAnMaus: r.benhAnMaus, benhAnMauId: r.benhAnMauId });
     if (r.id) setPickId(r.id);
   };
   const openSaveMau = () => {

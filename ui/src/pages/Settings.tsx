@@ -221,13 +221,13 @@ function DoctorSection({ data, setData }: { data: Data; setData: (d: Data) => vo
 }
 
 // The filled-in Thông tin bệnh án examples. The starred one is where new patients start.
-function MauSection({ data, setData }: { data: Data; setData: (d: Data) => void }) {
+function MauSection({ data, setData }: { data: Data; setData: React.Dispatch<React.SetStateAction<Data | null>> }) {
   const { call, toast } = useApp();
   const file = useRef<HTMLInputElement>(null);
   const [edit, setEdit] = useState<{ id: string; name: string } | null>(null);
   const [del, setDel] = useState<string | null>(null);
   const list = data.benhAnMaus || [];
-  const put = (r: MauList) => setData({ ...data, benhAnMaus: r.benhAnMaus, benhAnMauId: r.benhAnMauId });
+  const put = (r: MauList) => setData((x) => x && { ...x, benhAnMaus: r.benhAnMaus, benhAnMauId: r.benhAnMauId });
   const load = async (f?: File) => {
     if (!f) return;
     try {
