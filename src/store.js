@@ -25,7 +25,8 @@ const DEFAULTS = {
   runs: {}, // noitruid -> { at, ok, message }
   lists: null, // { at, bacSi: [{ id, name, login }], capDo: [{ id, ma, ten, text }] } read from OneMES
   benhAn: {}, // noitruid -> { values, savedAt, readAt, sentAt } Thông tin bệnh án being prepared
-  benhAnMau: null, // { values, name, at } the filled-in example new patients start from
+  benhAnMaus: [], // [{ id, name, values, at }] filled-in Thông tin bệnh án examples
+  benhAnMauId: null, // the example new patients start from
 };
 
 function createStore(dir) {
@@ -45,6 +46,14 @@ function createStore(dir) {
     ...data,
     settings: { ...fresh.settings, ...(data.settings || {}) },
   };
+  // Before 0.3.4 there was one example (benhAnMau); it becomes the first in the list.
+  if (data.benhAnMau) {
+    if (!data.benhAnMaus.length && data.benhAnMau.values) {
+      data.benhAnMaus = [{ id: 'mau-1', name: data.benhAnMau.name || 'Mẫu 1', values: data.benhAnMau.values, at: data.benhAnMau.at || Date.now() }];
+      data.benhAnMauId = 'mau-1';
+    }
+    delete data.benhAnMau;
+  }
 
   function save() {
     const tmp = file + '.tmp';
@@ -91,7 +100,41 @@ function createStore(dir) {
       save();
       return data.runs[id];
     },
-    // Plain top-level entries (lists, benhAnMau).
+    // Bệnh án examples. `m.id` overwrites that one, otherwise a new one is added.
+    // Returns { benhAnMaus, benhAnMauId }.
+    saveMau(m) {
+      const list = data.benhAnMaus;
+      const old = m.id && list.find((x) => x.id === m.id);
+      const name = String(m.name || '').trim();
+      if (old) Object.assign(old, { name: name || old.name, values: m.values || old.values, at: Date.now() });
+      else {
+        const id = 'mau-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        list.push({ id, name: name || `Mẫu ${list.length + 1}`, values: m.values || {}, at: Date.now() });
+        if (!data.benhAnMauId || m.makeDefault) data.benhAnMauId = id;
+        m = { ...m, id };
+      }
+      if (m.makeDefault) data.benhAnMauId = m.id;
+      save();
+      return { benhAnMaus: data.benhAnMaus, benhAnMauId: data.benhAnMauId, id: m.id };
+    },
+    renameMau(id, name) {
+      const m = data.benhAnMaus.find((x) => x.id === id);
+      if (m && String(name || '').trim()) m.name = String(name).trim();
+      save();
+      return { benhAnMaus: data.benhAnMaus, benhAnMauId: data.benhAnMauId };
+    },
+    deleteMau(id) {
+      data.benhAnMaus = data.benhAnMaus.filter((x) => x.id !== id);
+      if (data.benhAnMauId === id) data.benhAnMauId = data.benhAnMaus[0] ? data.benhAnMaus[0].id : null;
+      save();
+      return { benhAnMaus: data.benhAnMaus, benhAnMauId: data.benhAnMauId };
+    },
+    defaultMau(id) {
+      if (data.benhAnMaus.some((x) => x.id === id)) data.benhAnMauId = id;
+      save();
+      return { benhAnMaus: data.benhAnMaus, benhAnMauId: data.benhAnMauId };
+    },
+    // Plain top-level entries (lists).
     set(key, value) {
       data[key] = value;
       save();

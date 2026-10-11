@@ -46,8 +46,10 @@ export interface BaGroup { title: string; level: number; part: number; fields: B
 export interface BaSchema { source: string; groups: BaGroup[] }
 export interface Data {
   settings: Settings; templates: Template[]; choices: Record<string, Choice>; runs: Record<string, RunInfo>;
-  lists: Lists | null; benhAn: Record<string, BenhAnDraft>; benhAnMau: { values: BaValues; name: string; at: number } | null;
+  lists: Lists | null; benhAn: Record<string, BenhAnDraft>; benhAnMaus: BenhAnMau[]; benhAnMauId: string | null;
 }
+export interface BenhAnMau { id: string; name: string; values: BaValues; at: number }
+export interface MauList { benhAnMaus: BenhAnMau[]; benhAnMauId: string | null; id?: string }
 export interface UpdateInfo { version: string; kind: string; url: string; downloading?: boolean; progress?: number; error?: string }
 export interface AppState {
   busy: boolean; task: string; stepWaiting: string | null;

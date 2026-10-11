@@ -173,6 +173,19 @@ async function waitFor(what, fn, ms = 30000) {
     await ui.waitForSelector('[data-benhan] [data-ba-group]');
     await ui.setInputFiles('[data-input=mau-file]', mauFile);
     await waitFor('template filled', async () => (await ui.inputValue('[data-ba=txtLyDoVaoVien] textarea')) === 'Đau lưng (mẫu e2e)', 10000);
+    // Several templates: save the edited form as a second one, then fill from the first again.
+    await ui.fill('[data-ba=txtLyDoVaoVien] textarea', 'Lý do mẫu tay');
+    await ui.click('[data-action=ba-save-mau]');
+    await ui.fill('[data-input=mau-name]', 'Mẫu tay e2e');
+    await ui.click('[data-action=ba-confirm-save-mau]');
+    await waitFor('second template', async () => (await ui.$$('[data-select=mau] option')).length === 2, 5000);
+    check((await ui.inputValue('[data-select=mau]')) !== '' && /Mẫu tay e2e/.test(await ui.textContent('[data-select=mau] option:checked')), 'mẫu: new template saved and picked');
+    await ui.selectOption('[data-select=mau]', { index: 0 });
+    await ui.click('[data-action=ba-fill]');
+    await ui.click('[data-action=ba-confirm-fill]');
+    await waitFor('filled from first template', async () => (await ui.inputValue('[data-ba=txtLyDoVaoVien] textarea')) === 'Đau lưng (mẫu e2e)', 5000);
+    const maus = JSON.parse(fs.readFileSync(path.join(dataDir, 'data.json'), 'utf8')).benhAnMaus;
+    check(maus.length === 2 && maus[1].name === 'Mẫu tay e2e' && maus[1].values.txtLyDoVaoVien === 'Lý do mẫu tay', 'mẫu: two templates kept in data.json');
     await ui.fill('[data-ba=TomTatBa] textarea', 'Tóm tắt đã sửa');
     await ui.click('[data-action=ba-save]');
     await ui.click('[data-action=ba-confirm-save]');

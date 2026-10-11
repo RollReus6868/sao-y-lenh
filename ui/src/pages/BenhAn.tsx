@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, BookmarkPlus, Check, CheckCircle2, Download, FileInput, FileText, Loader2, RotateCcw, Upload } from 'lucide-react';
 import { cn } from '@/kit/cn';
-import { Button, EmptyState, Input, Select, Textarea } from '@/kit/ui';
+import { Button, EmptyState, Input, Select, Switch, Textarea } from '@/kit/ui';
 import { useApp } from '@/lib/useApp';
 import { allFields, filledCount, isFilled, schema, templateFromFile } from '@/lib/benhAn';
-import type { BaField, BaValue, BaValues, BenhAnDraft, Patient } from '@/lib/types';
+import type { BaField, BaValue, BaValues, BenhAnDraft, MauList, Patient } from '@/lib/types';
 import { ActionBar, Sheet } from '@/components/common';
 
 const when = (t?: number) => (t ? new Date(t).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '');
@@ -16,11 +16,16 @@ export function BenhAnView({ patient }: { patient: Patient }) {
   const { data, setData, call, state, toast } = useApp();
   const id = patient.noitruid;
   const draft: BenhAnDraft | undefined = data?.benhAn?.[id];
-  const mau = data?.benhAnMau || null;
-  const [values, setValues] = useState<BaValues>(() => draft?.values || mau?.values || {});
+  const maus = data?.benhAnMaus || [];
+  const defMau = maus.find((m) => m.id === data?.benhAnMauId) || maus[0] || null;
+  const [pickId, setPickId] = useState(() => defMau?.id || '');
+  const mau = maus.find((m) => m.id === pickId) || defMau;
+  const [values, setValues] = useState<BaValues>(() => draft?.values || defMau?.values || {});
   const [dirty, setDirty] = useState(false);
   const [ask, setAsk] = useState<'save' | 'read' | 'mau' | 'saveMau' | null>(null);
   const [mauName, setMauName] = useState('');
+  const [saveTo, setSaveTo] = useState(''); // '' = new template, otherwise the id to overwrite
+  const [makeDefault, setMakeDefault] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const top = useRef<HTMLDivElement>(null);
   const saving = state.busy && state.task === 'Ghi bệnh án';
@@ -39,6 +44,7 @@ export function BenhAnView({ patient }: { patient: Patient }) {
     setValues((x) => ({ ...x, [k]: v }));
     setDirty(true);
   };
+  const n = filledCount(values);
   const putDraft = (d: BenhAnDraft | null) => {
     if (!d || !data) return;
     setData({ ...data, benhAn: { ...data.benhAn, [id]: d } });
@@ -67,31 +73,40 @@ export function BenhAnView({ patient }: { patient: Patient }) {
     if (!mau) return;
     setValues(mau.values);
     setDirty(true);
-    toast('info', 'Đã điền từ mẫu');
+    toast('info', `Đã điền từ mẫu "${mau.name}"`);
+  };
+  const putMaus = (r: MauList) => {
+    if (data) setData({ ...data, benhAnMaus: r.benhAnMaus, benhAnMauId: r.benhAnMauId });
+    if (r.id) setPickId(r.id);
+  };
+  const openSaveMau = () => {
+    setSaveTo('');
+    setMauName('');
+    setMakeDefault(!maus.length);
+    setAsk('saveMau');
   };
   const saveMau = async () => {
     setAsk(null);
-    if (!data) return;
-    const m = await call<Data['benhAnMau']>('benhAnMau:set', { values, name: mauName.trim() || patient.hoTen });
-    setData({ ...data, benhAnMau: m });
-    toast('success', 'Đã lưu làm mẫu cho bệnh nhân mới');
+    const old = maus.find((m) => m.id === saveTo);
+    const r = await call<MauList>('mau:save', { id: old?.id, values, name: mauName.trim() || old?.name || '', makeDefault });
+    putMaus(r);
+    const name = r.benhAnMaus.find((m) => m.id === r.id)?.name || '';
+    toast('success', old ? `Đã ghi đè mẫu "${name}"` : `Đã lưu mẫu mới "${name}"`);
   };
   const importFile = async (f?: File) => {
     if (!f || !data) return;
     try {
       const r = await templateFromFile(f);
-      const m = await call<Data['benhAnMau']>('benhAnMau:set', { values: r.values, name: r.name });
-      setData({ ...data, benhAnMau: m });
-      if (!draft?.values && !dirty) setValues(r.values);
-      toast('success', `Đã nhập mẫu "${r.name}": ${r.filled} mục có nội dung`);
+      putMaus(await call<MauList>('mau:save', { values: r.values, name: r.name }));
+      if (!draft?.values && !dirty && !n) setValues(r.values);
+      toast('success', `Đã thêm mẫu "${r.name}" (${r.filled} mục có nội dung). Bấm Điền từ mẫu để dùng.`);
     } catch (e) {
       toast('error', (e as Error).message);
     }
     if (file.current) file.current.value = '';
   };
 
-  const source = draft?.sentAt ? `Đã ghi lên OneMES lúc ${when(draft.sentAt)}` : draft?.readAt ? `Đọc từ OneMES lúc ${when(draft.readAt)}` : draft?.values ? `Bản đang sửa (lưu lúc ${when(draft.savedAt)})` : mau ? `Đang dùng mẫu "${mau.name}"` : 'Chưa có nội dung';
-  const n = filledCount(values);
+  const source = draft?.sentAt ? `Đã ghi lên OneMES lúc ${when(draft.sentAt)}` : draft?.readAt ? `Đọc từ OneMES lúc ${when(draft.readAt)}` : draft?.values ? `Bản đang sửa (lưu lúc ${when(draft.savedAt)})` : n && defMau ? `Bắt đầu từ mẫu "${defMau.name}"` : 'Chưa có nội dung';
   const groups = schema.groups.filter((g) => g.fields.length);
 
   return (
@@ -102,10 +117,18 @@ export function BenhAnView({ patient }: { patient: Patient }) {
           <Button variant="outline" size="xs" onClick={() => (dirty || draft?.values ? setAsk('read') : readOnemes())} disabled={state.busy} data-action="ba-read">
             {reading ? <Loader2 className="animate-spin" /> : <Download />} Đọc từ OneMES
           </Button>
-          <Button variant="outline" size="xs" onClick={() => setAsk('mau')} disabled={!mau || state.busy} data-action="ba-fill" title={mau ? `Mẫu: ${mau.name}` : 'Chưa có mẫu'}><RotateCcw /> Điền từ mẫu</Button>
-          <Button variant="ghost" size="xs" onClick={() => { setMauName(patient.hoTen); setAsk('saveMau'); }} disabled={!n} data-action="ba-save-mau"><BookmarkPlus /> Lưu làm mẫu</Button>
+          <Button variant="ghost" size="xs" onClick={openSaveMau} disabled={!n} data-action="ba-save-mau"><BookmarkPlus /> Lưu làm mẫu</Button>
           <Button variant="ghost" size="xs" onClick={() => file.current?.click()} data-action="ba-import"><FileInput /> Nhập mẫu từ file HTML</Button>
         </div>
+        {maus.length > 0 && (
+          <div className="flex items-center gap-1.5" data-mau-pick>
+            <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">Mẫu</span>
+            <Select className="h-8 min-w-0 flex-1 text-[13px]" value={mau?.id || ''} onChange={(e) => setPickId(e.target.value)} disabled={state.busy} data-select="mau">
+              {maus.map((m) => <option key={m.id} value={m.id}>{m.name}{m.id === data?.benhAnMauId ? ' ★' : ''}</option>)}
+            </Select>
+            <Button variant="outline" size="xs" className="h-8 shrink-0" onClick={() => (n ? setAsk('mau') : fillMau())} disabled={!mau || state.busy} data-action="ba-fill"><RotateCcw /> Điền từ mẫu</Button>
+          </div>
+        )}
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
           <span className="truncate">{source}</span>
           <span className="ml-auto shrink-0">{n}/{allFields.length} mục có nội dung</span>
@@ -133,9 +156,9 @@ export function BenhAnView({ patient }: { patient: Patient }) {
       </div>
 
       <div ref={top} className="scroll-thin min-h-0 flex-1 overflow-auto px-3 pb-4 sm:px-4" data-benhan>
-        {!n && !mau && !draft ? (
+        {!n && !maus.length && !draft ? (
           <div className="mb-3">
-            <EmptyState icon={<FileText />} title="Chưa có mẫu bệnh án" text="Bấm Nhập mẫu từ file HTML và chọn file trang Thông tin bệnh án đã hoàn tất (ví dụ 6-thong-tin-benh-an-mau) để điền sẵn, hoặc Đọc từ OneMES để lấy bệnh án hiện có." />
+            <EmptyState icon={<FileText />} title="Chưa có mẫu bệnh án" text="Bấm Nhập mẫu từ file HTML và chọn file trang Thông tin bệnh án đã hoàn tất (ví dụ 6-thong-tin-benh-an-mau), hoặc tự điền các mục bên dưới rồi bấm Lưu làm mẫu. Cũng có thể Đọc từ OneMES để lấy bệnh án hiện có." />
           </div>
         ) : null}
         <div className="space-y-3">
@@ -180,7 +203,7 @@ export function BenhAnView({ patient }: { patient: Patient }) {
       <Sheet
         open={ask === 'mau'}
         onClose={() => setAsk(null)}
-        title="Điền lại từ mẫu?"
+        title={`Điền từ mẫu "${mau?.name || ''}"?`}
         footer={<><Button variant="outline" size="lg" onClick={() => setAsk(null)}>Không</Button><Button size="lg" className="flex-1" onClick={fillMau} data-action="ba-confirm-fill"><RotateCcw /> Điền từ mẫu</Button></>}
       >
         <p className="text-sm">Toàn bộ nội dung đang sửa sẽ được thay bằng mẫu "{mau?.name}".</p>
@@ -188,17 +211,30 @@ export function BenhAnView({ patient }: { patient: Patient }) {
       <Sheet
         open={ask === 'saveMau'}
         onClose={() => setAsk(null)}
-        title="Lưu làm mẫu cho bệnh nhân mới"
-        footer={<><Button variant="outline" size="lg" onClick={() => setAsk(null)}>Hủy</Button><Button size="lg" className="flex-1" onClick={saveMau}><Check /> Lưu mẫu</Button></>}
+        title="Lưu nội dung đang có làm mẫu"
+        footer={<><Button variant="outline" size="lg" onClick={() => setAsk(null)}>Hủy</Button><Button size="lg" className="flex-1" onClick={saveMau} disabled={!saveTo && !mauName.trim()} data-action="ba-confirm-save-mau"><Check /> {saveTo ? 'Ghi đè mẫu' : 'Lưu mẫu mới'}</Button></>}
       >
-        <Input autoFocus value={mauName} onChange={(e) => setMauName(e.target.value)} placeholder="Tên mẫu" />
-        <p className="mt-2 text-xs text-muted-foreground">Bệnh nhân chưa có bản sửa sẽ bắt đầu từ mẫu này. Mẫu chỉ lưu trên máy này.</p>
+        {maus.length > 0 && (
+          <div className="mb-3 flex gap-1" data-mau-target>
+            <button type="button" onClick={() => setSaveTo('')} aria-pressed={!saveTo} className={cn('h-8 flex-1 rounded-lg border text-xs font-semibold', !saveTo ? 'border-primary bg-primary/15 text-primary' : 'border-border/60 text-muted-foreground')}>Thêm mẫu mới</button>
+            <button type="button" onClick={() => { const m = maus.find((x) => x.id === pickId) || maus[0]; setSaveTo(m.id); setMauName(m.name); }} aria-pressed={!!saveTo} className={cn('h-8 flex-1 rounded-lg border text-xs font-semibold', saveTo ? 'border-primary bg-primary/15 text-primary' : 'border-border/60 text-muted-foreground')}>Ghi đè mẫu có sẵn</button>
+          </div>
+        )}
+        {saveTo && (
+          <Select className="mb-2 h-9 w-full text-sm" value={saveTo} onChange={(e) => { setSaveTo(e.target.value); setMauName(maus.find((x) => x.id === e.target.value)?.name || ''); }}>
+            {maus.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </Select>
+        )}
+        <Input autoFocus value={mauName} onChange={(e) => setMauName(e.target.value)} placeholder="Tên mẫu, ví dụ: Tọa cốt phong" data-input="mau-name" />
+        <div className="mt-3 flex items-center justify-between gap-3 text-sm">
+          <span>Dùng mẫu này cho bệnh nhân mới</span>
+          <Switch checked={makeDefault} onChange={setMakeDefault} label="Dùng mẫu này cho bệnh nhân mới" />
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">Lưu {n} mục đang có nội dung. Mẫu chỉ lưu trên máy này; đổi tên, xóa mẫu ở Cài đặt.</p>
       </Sheet>
     </>
   );
 }
-
-type Data = NonNullable<ReturnType<typeof useApp>['data']>;
 
 function BaControl({ f, v, onChange, disabled }: { f: BaField; v: BaValue | undefined; onChange: (v: BaValue) => void; disabled?: boolean }) {
   const label = f.label || '';

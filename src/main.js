@@ -301,7 +301,10 @@ const commands = {
     }),
   'benhAn:set': ({ id, values }) => store.setBenhAn(id, { values, savedAt: Date.now() }),
   'benhAn:clear': ({ id }) => store.setBenhAn(id, null),
-  'benhAnMau:set': (m) => store.set('benhAnMau', m && m.values ? { values: m.values, name: m.name || '', at: Date.now() } : null),
+  'mau:save': (m) => store.saveMau(m || {}),
+  'mau:rename': ({ id, name }) => store.renameMau(id, name),
+  'mau:delete': ({ id }) => store.deleteMau(id),
+  'mau:default': ({ id }) => store.defaultMau(id),
   'benhAn:read': ({ patient }) =>
     task('Đọc bệnh án', async (d) => {
       const r = await d.readBenhAn(patient, BA_FIELDS);

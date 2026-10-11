@@ -19,7 +19,7 @@ Tool desktop sao chép và sửa y lệnh nội trú trên OneMES 3.0: quét dan
    Muốn thêm **Cồn xoa bóp** hay **Cao thông mạch** ngày nào thì tick ô xanh **+** ở hàng **Thêm thuốc**. Kho, số lượng, cách dùng đổi ở **Cài đặt → Thêm thuốc khi sao chép**.
 7. **Sao chép & xóa cho N ngày** → xem lại → **Bắt đầu**.
 8. Xong, tool tự kiểm tra lại và mở thẻ **Kết quả**: xem từng ngày vừa tạo. Ngày nào sai thì bấm **Sửa** rồi **Cập nhật lên OneMES**, hoặc **Xóa** (tool Thu hồi rồi Xóa trên OneMES).
-9. Thẻ **Bệnh án**: lần đầu bấm **Nhập mẫu từ file HTML** và chọn trang Thông tin bệnh án đã hoàn tất (lưu bằng Ctrl+S trong Chrome). Bệnh nhân mới bắt đầu từ mẫu đó; sửa rồi **Cập nhật bệnh án lên OneMES**. Tool chỉ điền ô còn trống trên OneMES, ô đã có nội dung giữ nguyên.
+9. Thẻ **Bệnh án**: lần đầu bấm **Nhập mẫu từ file HTML** và chọn trang Thông tin bệnh án đã hoàn tất (lưu bằng Ctrl+S trong Chrome). Có thể lưu nhiều mẫu (tự điền rồi **Lưu làm mẫu**, hoặc nhập thêm file) và chọn mẫu ở ô **Mẫu** rồi **Điền từ mẫu**; đổi tên, xóa mẫu ở Cài đặt. Bệnh nhân mới bắt đầu từ mẫu có ngôi sao; sửa rồi **Cập nhật bệnh án lên OneMES**. Tool chỉ điền ô còn trống trên OneMES, ô đã có nội dung giữ nguyên.
 
 Lần đầu nên bật **Từng bước** và thử với 1 bệnh nhân.
 

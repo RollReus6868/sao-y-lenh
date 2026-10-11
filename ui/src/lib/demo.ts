@@ -96,7 +96,11 @@ export function demoApi() {
     settings: { baseUrl: 'http://192.168.30.19:2026/', autoComplete: true, stepMode: false, hinhThuc: '1', defaultDays: 3, bacSiFav: DOCTORS.slice(0, 3).map(({ id, name }) => ({ id, name })), esBase: '', gpuOff: true, themThuoc: DEFAULT_THUOC },
     lists: { at: Date.now(), bacSi: DOCTORS, capDo: CARE },
     benhAn: {},
-    benhAnMau: q0.get('nomau') ? null : { name: 'Mẫu Tọa cốt phong', at: Date.now(), values: demoMau() },
+    benhAnMaus: q0.get('nomau') ? [] : [
+      { id: 'm1', name: 'Mẫu Tọa cốt phong', at: Date.now(), values: demoMau() },
+      { id: 'm2', name: 'Mẫu Yêu thống', at: Date.now() - 86400000, values: { ...demoMau(), txtLyDoVaoVien: 'Đau vùng thắt lưng' } },
+    ],
+    benhAnMauId: q0.get('nomau') ? null : 'm1',
     templates: [
       { id: 'a', name: 'Bỏ điện xung', keys: ['d|điều trị bằng các dòng điện xung|vùng mông đùi t, ngày 01 lần x 20 phút'] },
       { id: 'b', name: 'Chỉ giữ thuốc', keys: source.dvkt.map((x) => x.key.replace(/#\d+$/, '')) },
@@ -125,7 +129,20 @@ export function demoApi() {
         case 'init': return { version: '0.3.0', platform: 'win32', data, state, log, logDir: '', gpuOff: true } as T;
         case 'lists:load': return data.lists as T;
         case 'benhAn:set': data.benhAn[payload.id] = { ...(data.benhAn[payload.id] || {}), values: payload.values, savedAt: Date.now() }; return data.benhAn[payload.id] as T;
-        case 'benhAnMau:set': data.benhAnMau = payload?.values ? { ...payload, at: Date.now() } : null; return data.benhAnMau as T;
+        case 'mau:save': case 'mau:rename': case 'mau:delete': case 'mau:default': {
+          let list = data.benhAnMaus.slice();
+          let id: string | undefined = payload.id;
+          const old = list.find((x) => x.id === id);
+          if (cmd === 'mau:save') {
+            if (old) list = list.map((x) => (x.id === id ? { ...x, name: payload.name?.trim() || x.name, values: payload.values || x.values, at: Date.now() } : x));
+            else { id = 'm' + Date.now(); list.push({ id, name: payload.name?.trim() || `Mẫu ${list.length + 1}`, values: payload.values || {}, at: Date.now() }); if (!data.benhAnMauId) data.benhAnMauId = id; }
+            if (payload.makeDefault) data.benhAnMauId = id!;
+          } else if (cmd === 'mau:rename') list = list.map((x) => (x.id === id && payload.name?.trim() ? { ...x, name: payload.name.trim() } : x));
+          else if (cmd === 'mau:delete') { list = list.filter((x) => x.id !== id); if (data.benhAnMauId === id) data.benhAnMauId = list[0]?.id || null; }
+          else if (old) data.benhAnMauId = id!;
+          data.benhAnMaus = list;
+          return { benhAnMaus: list, benhAnMauId: data.benhAnMauId, id } as T;
+        }
         case 'benhAn:read':
         case 'benhAn:save': {
           const task = cmd === 'benhAn:read' ? 'Đọc bệnh án' : 'Ghi bệnh án';

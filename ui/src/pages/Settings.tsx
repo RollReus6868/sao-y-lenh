@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, FileText, Globe, Monitor, Palette, Pill as PillIcon, Play, Plus, RefreshCw, RotateCcw, Settings as Cog, Star, Stethoscope, Trash2, Upload, X } from 'lucide-react';
+import { Download, FileText, Globe, Pencil, Monitor, Palette, Pill as PillIcon, Play, Plus, RefreshCw, RotateCcw, Settings as Cog, Star, Stethoscope, Trash2, Upload, X } from 'lucide-react';
 import { cn } from '@/kit/cn';
 import { Button, Input, PageHeader, Segmented, Select, SettingsRow, SettingsSection, Switch } from '@/kit/ui';
 import { themes, useTheme } from '@/kit/theme';
 import { useApp } from '@/lib/useApp';
-import type { AddItem, Data, Settings } from '@/lib/types';
+import type { AddItem, Data, MauList, Settings } from '@/lib/types';
 import { DEFAULT_THUOC } from '@/lib/thuoc';
-import { templateFromFile } from '@/lib/benhAn';
+import { filledCount, templateFromFile } from '@/lib/benhAn';
 
 const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 
@@ -220,36 +220,71 @@ function DoctorSection({ data, setData }: { data: Data; setData: (d: Data) => vo
   );
 }
 
-// The filled-in Thông tin bệnh án that new patients start from.
+// The filled-in Thông tin bệnh án examples. The starred one is where new patients start.
 function MauSection({ data, setData }: { data: Data; setData: (d: Data) => void }) {
   const { call, toast } = useApp();
   const file = useRef<HTMLInputElement>(null);
-  const m = data.benhAnMau;
+  const [edit, setEdit] = useState<{ id: string; name: string } | null>(null);
+  const [del, setDel] = useState<string | null>(null);
+  const list = data.benhAnMaus || [];
+  const put = (r: MauList) => setData({ ...data, benhAnMaus: r.benhAnMaus, benhAnMauId: r.benhAnMauId });
   const load = async (f?: File) => {
     if (!f) return;
     try {
       const r = await templateFromFile(f);
-      const saved = await call<Data['benhAnMau']>('benhAnMau:set', { values: r.values, name: r.name });
-      setData({ ...data, benhAnMau: saved });
-      toast('success', `Đã nhập mẫu "${r.name}": ${r.filled} mục có nội dung`);
+      put(await call<MauList>('mau:save', { values: r.values, name: r.name }));
+      toast('success', `Đã thêm mẫu "${r.name}": ${r.filled} mục có nội dung`);
     } catch (e) {
       toast('error', (e as Error).message);
     }
     if (file.current) file.current.value = '';
   };
-  const clear = async () => {
-    await call('benhAnMau:set', null);
-    setData({ ...data, benhAnMau: null });
+  const rename = async () => {
+    if (edit && edit.name.trim()) put(await call<MauList>('mau:rename', edit));
+    setEdit(null);
   };
   return (
     <SettingsSection icon={<FileText />} title="Mẫu Thông tin bệnh án" color="sky">
-      <input ref={file} type="file" accept=".html,.htm,text/html" className="hidden" onChange={(e) => load(e.target.files?.[0])} />
-      <SettingsRow title={m ? `Mẫu: ${m.name}` : 'Chưa có mẫu'} text={m ? `Nhập lúc ${new Date(m.at).toLocaleString('vi-VN')}. Bệnh nhân mới bắt đầu từ mẫu này.` : 'Chọn file HTML trang Thông tin bệnh án đã hoàn tất (lưu bằng Ctrl+S trong Chrome).'}>
-        <div className="flex gap-2">
-          {m && <Button variant="ghost" size="sm" onClick={clear} aria-label="Bỏ mẫu"><Trash2 /></Button>}
-          <Button variant="outline" size="sm" onClick={() => file.current?.click()}><Upload /> Nhập từ file</Button>
+      <input ref={file} type="file" accept=".html,.htm,text/html" className="hidden" onChange={(e) => load(e.target.files?.[0])} data-input="mau-file-settings" />
+      <p className="text-xs text-muted-foreground">
+        {list.length ? 'Mẫu có ngôi sao là mẫu bệnh nhân mới bắt đầu. Trong thẻ Bệnh án của từng bệnh nhân có thể chọn mẫu khác để điền.' : 'Chưa có mẫu. Nhập từ file HTML trang Thông tin bệnh án đã hoàn tất (lưu bằng Ctrl+S trong Chrome), hoặc điền tay trong thẻ Bệnh án rồi bấm Lưu làm mẫu.'}
+      </p>
+      {list.length > 0 && (
+        <div className="divide-y divide-border/40 rounded-lg border border-border/40" data-mau-list>
+          {list.map((m) => {
+            const on = m.id === data.benhAnMauId;
+            return (
+              <div key={m.id} className="flex items-center gap-2 px-2 py-1.5" data-mau={m.name}>
+                <button type="button" onClick={async () => put(await call<MauList>('mau:default', { id: m.id }))} title={on ? 'Mẫu cho bệnh nhân mới' : 'Dùng làm mẫu cho bệnh nhân mới'} aria-label="Mẫu mặc định" className="rounded p-1 hover:bg-muted/50">
+                  <Star className={cn('h-4 w-4', on ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/40')} />
+                </button>
+                {edit?.id === m.id ? (
+                  <Input autoFocus value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') rename(); if (e.key === 'Escape') setEdit(null); }} onBlur={rename} className="h-8 flex-1 text-sm" />
+                ) : (
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold">{m.name}</div>
+                    <div className="text-[11px] text-muted-foreground">{filledCount(m.values)} mục có nội dung · lưu lúc {new Date(m.at).toLocaleString('vi-VN')}</div>
+                  </div>
+                )}
+                {del === m.id ? (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={() => setDel(null)}>Không</Button>
+                    <Button variant="destructive" size="sm" onClick={async () => { put(await call<MauList>('mau:delete', { id: m.id })); setDel(null); }} data-action="mau-confirm-delete">Xóa mẫu</Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={() => setEdit({ id: m.id, name: m.name })} aria-label={`Đổi tên ${m.name}`} title="Đổi tên"><Pencil /></Button>
+                    <Button variant="ghost" size="sm" onClick={() => setDel(m.id)} aria-label={`Xóa ${m.name}`} title="Xóa mẫu"><Trash2 /></Button>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
-      </SettingsRow>
+      )}
+      <div>
+        <Button variant="outline" size="sm" onClick={() => file.current?.click()}><Upload /> Thêm mẫu từ file HTML</Button>
+      </div>
     </SettingsSection>
   );
 }

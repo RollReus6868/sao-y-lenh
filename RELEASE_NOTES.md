@@ -1,4 +1,11 @@
-# Sao Y Lệnh 0.3.3
+# Sao Y Lệnh 0.3.4
+
+- **Nhiều mẫu bệnh án**: lưu được bao nhiêu mẫu cũng được. Trong thẻ **Bệnh án** của mỗi bệnh nhân có ô **Mẫu** để chọn mẫu, rồi bấm **Điền từ mẫu**.
+- Tạo mẫu bằng hai cách: tự điền các mục rồi bấm **Lưu làm mẫu** (chọn **Thêm mẫu mới** hoặc **Ghi đè mẫu có sẵn**), hoặc **Nhập mẫu từ file HTML** (mỗi file thêm một mẫu mới).
+- **Cài đặt → Mẫu Thông tin bệnh án**: xem danh sách mẫu, đổi tên, xóa, thêm mẫu từ file. Mẫu có ngôi sao là mẫu bệnh nhân mới bắt đầu; bấm ngôi sao để đổi.
+- Mẫu đã lưu ở bản trước vẫn còn, thành mẫu đầu tiên trong danh sách.
+
+## 0.3.3
 
 - **Thêm Cồn xoa bóp và Cao thông mạch** khi sao chép: trong trang bệnh nhân có hàng **Thêm thuốc** với ô xanh **+** cho từng ngày. Tick ngày nào thì tool mở **Kê Tây y/VTYT** của ngày đó, chọn kho KCPSX, tìm thuốc, điền SL 1 và cách dùng như anh/chị vẫn nhập (Cồn xoa bóp: "Mỗi lần dùng 5ml, xoa bóp các chỗ đau 4 lần/ngày"; Cao thông mạch: "Uống 20ml/lần * 2 lần/ngày * 3 ngày (sáng, chiều) sau ăn"), bấm **Thêm** rồi **Chấp nhận**. Ngày đã có thuốc đó thì không thêm lần nữa. Đổi kho, số lượng, cách dùng, hoặc thêm thuốc khác ở **Cài đặt → Thêm thuốc khi sao chép**.
 - **Sửa từng ngày**: sửa ở một ngày thì các ngày sau tự theo, không cần bấm "Dùng cho mọi ngày" nữa. Ngày sau nào đã sửa riêng thì giữ phần riêng đó.
