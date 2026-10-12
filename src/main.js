@@ -37,6 +37,7 @@ const state = {
   stepWaiting: null,
   progress: null, // { patient, index, total }
   viewUrl: '',
+  viewZoom: 0.7,
   update: null, // { version, kind, downloading, progress, error }
 };
 const logBuf = [];
@@ -93,6 +94,19 @@ function setupView() {
   wc.on('did-navigate', upd);
   wc.on('did-navigate-in-page', upd);
   wc.on('did-finish-load', upd);
+  // Zoom: kept in the settings and applied again on every page, since Chromium keeps it per site.
+  wc.on('did-navigate', () => applyZoom());
+  wc.on('dom-ready', () => applyZoom());
+  wc.on('zoom-changed', (_e, dir) => setZoom(currentZoom() + (dir === 'in' ? 0.1 : -0.1)));
+  wc.on('before-input-event', (e, i) => {
+    if (i.type !== 'keyDown' || !(i.control || i.meta)) return;
+    if (i.key === '=' || i.key === '+') setZoom(currentZoom() + 0.1);
+    else if (i.key === '-') setZoom(currentZoom() - 0.1);
+    else if (i.key === '0') setZoom(DEFAULT_ZOOM);
+    else return;
+    e.preventDefault();
+  });
+  push({ viewZoom: currentZoom() });
   wc.on('did-fail-load', (_e, code, desc, url, isMain) => {
     if (isMain && code !== -3) log('error', `Không mở được OneMES (${desc}): ${url}`);
   });
@@ -102,6 +116,20 @@ function setupView() {
     overrideBrowserWindowOptions: { width: 1100, height: 800, autoHideMenuBar: true, webPreferences: { session: ses } },
   }));
   goHome();
+}
+
+const DEFAULT_ZOOM = 0.7;
+const clampZoom = (z) => Math.min(2, Math.max(0.3, Math.round((Number(z) || DEFAULT_ZOOM) * 20) / 20));
+const currentZoom = () => clampZoom(store.get().settings.viewZoom);
+function applyZoom() {
+  if (view && !view.webContents.isDestroyed()) view.webContents.setZoomFactor(currentZoom());
+}
+function setZoom(z) {
+  const v = clampZoom(z);
+  if (v !== store.get().settings.viewZoom) store.setSettings({ viewZoom: v });
+  applyZoom();
+  push({ viewZoom: v });
+  return v;
 }
 
 function goHome() {
@@ -201,6 +229,7 @@ const commands = {
     viewShown = !!v;
     placeView();
   },
+  'view:zoom': ({ zoom }) => setZoom(zoom),
   'view:state': () => ({ shown: viewShown, visible: view.getVisible(), attached: win.contentView.children.includes(view), bounds: view.getBounds() }),
   'view:nav': async ({ action }) => {
     const wc = view.webContents;

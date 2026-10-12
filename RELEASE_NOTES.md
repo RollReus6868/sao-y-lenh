@@ -1,4 +1,9 @@
-# Sao Y Lệnh 0.4.2
+# Sao Y Lệnh 0.4.3
+
+- **Thu phóng trang OneMES** trong **Trình duyệt**: mặc định thu nhỏ còn 70% để thấy được nhiều hơn. Trên thanh trên cùng có nút **−** / **+** để chỉnh từng 10%; bấm vào số % để về 70%. Cũng dùng được Ctrl + lăn chuột, Ctrl + và Ctrl −. Tool nhớ mức đã chọn cho lần sau.
+- **Nhớ bệnh nhân đang làm**: chuyển sang Trình duyệt, Nhật ký, Cài đặt… rồi quay lại **Bệnh nhân** thì vẫn đang mở đúng bệnh nhân đó, đúng thẻ đang làm (Sao chép, Kết quả, Bệnh án, Dọn thủ thuật, Kết quả CLS) và những gì đã đọc, không phải bấm chọn lại.
+
+## 0.4.2
 
 - **Kết quả CLS**: tool bấm vào ô ngày ở cột **TG chỉ định** của từng dòng (như anh/chị bấm tay), lần lượt từng dòng, rồi chờ bảng chỉ số hiện ra bên phải mới đọc. Bản 0.4.1 bấm vào ô của bảng chứ không bấm vào nút ngày nên không mở được kết quả.
 - **Sắc thuốc thang**: bác sĩ điền sẵn giờ lấy theo y lệnh thường ở **thời gian chỉ định** (ngày hôm trước), không phải ngày thực hiện.

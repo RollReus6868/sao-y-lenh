@@ -59,7 +59,7 @@ export interface UpdateInfo { version: string; kind: string; url: string; downlo
 export interface AppState {
   busy: boolean; task: string; stepWaiting: string | null;
   progress: { patient: string; index: number; total: number } | null;
-  viewUrl: string; canGoBack?: boolean; update: UpdateInfo | null;
+  viewUrl: string; canGoBack?: boolean; viewZoom?: number; update: UpdateInfo | null;
 }
 export interface LogEntry { at: number; level: 'info' | 'ok' | 'warn' | 'error'; msg: string }
 export interface Plan { patient: Patient; kind?: Kind; sourceId?: string; days: number; deletions?: string[][]; baseDeletions?: string[][]; edits?: (DayEdit | null)[]; adds?: string[][] }

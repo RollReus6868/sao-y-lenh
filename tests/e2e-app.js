@@ -61,7 +61,9 @@ async function waitFor(what, fn, ms = 30000) {
       const r = document.querySelector('[data-pane=onemes] > div:last-child').getBoundingClientRect();
       return { x: r.left, y: r.top, w: r.width, h: r.height };
     });
-    const vsize = await view.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+    // The page is zoomed out to 70% by default: CSS pixels times the zoom fill the box.
+    const vsize = await view.evaluate(() => ({ w: innerWidth * devicePixelRatio, h: innerHeight * devicePixelRatio, z: devicePixelRatio }));
+    check(Math.abs(vsize.z - 0.7) < 0.01, 'OneMES page zoomed to 70% by default (' + vsize.z + ')');
     check(geo.w > 300 && Math.abs(vsize.w - geo.w) <= 2 && Math.abs(vsize.h - geo.h) <= 2, `view fills the browser page (${vsize.w}x${vsize.h} vs ${Math.round(geo.w)}x${Math.round(geo.h)})`);
 
     // One button takes the view straight to Ds Điều trị nội trú, even from a page
@@ -70,6 +72,17 @@ async function waitFor(what, fn, ms = 30000) {
     await ui.click('[data-action=goto-list]');
     await waitFor('list page', async () => /danhsachdieutrinoitrudraw/.test(view.url()) && !(await ui.$('[data-action=goto-list][disabled]')), 30000);
     check(/danhsachdieutrinoitrudraw/.test(view.url()), 'Ds Điều trị nội trú button opens the list');
+
+    // Zoom buttons change the page and are remembered.
+    await ui.click('[data-action=zoom-in]');
+    await waitFor('zoom 80%', async () => Math.abs((await view.evaluate(() => devicePixelRatio)) - 0.8) < 0.01, 5000);
+    const zl = await waitFor('zoom label', async () => ((await ui.textContent('[data-zoom-value]')) === '80%' ? '80%' : null), 5000).catch(() => ui.textContent('[data-zoom-value]'));
+    check(zl === '80%', 'zoom in shows 80% (' + zl + ')');
+    await view.reload();
+    await waitFor('zoom kept after reload', async () => Math.abs((await view.evaluate(() => devicePixelRatio).catch(() => 0)) - 0.8) < 0.01, 10000);
+    check(true, 'zoom kept on the next page');
+    await ui.click('[data-zoom-value]');
+    await waitFor('zoom back to 70%', async () => Math.abs((await view.evaluate(() => devicePixelRatio)) - 0.7) < 0.01, 5000);
 
     const vs = () => ui.evaluate(() => window.app.call('view:state'));
     let st0 = await vs();
@@ -93,6 +106,14 @@ async function waitFor(what, fn, ms = 30000) {
 
     await ui.click('[data-patient="2600000002"] >> button >> nth=1');
     await ui.waitForSelector('[data-grid]', { timeout: 30000 });
+    // The open patient is still open after a look at the browser.
+    await ui.click('[data-tab=dv]');
+    await ui.click('[data-nav=browser]');
+    await ui.waitForSelector('[data-action=goto-list]');
+    await ui.click('[data-nav=patients]');
+    check(!!(await ui.$('[data-tab=dv][aria-selected=true]')), 'patient and tab kept after visiting the browser');
+    await ui.click('[data-tab=pick]');
+    await ui.waitForSelector('[data-grid]');
     await ui.click('[data-item="Lirystad 150"] button >> nth=0'); // whole row: every day
     await ui.click('[aria-label="Xóa Điều trị bằng siêu âm ngày 3"]');
     check(/\(Hao phí\)/.test(await ui.textContent('[data-item="Kim châm cứu tiệt trùng dùng một lần"]')), 'VTYT shows (Hao phí)');

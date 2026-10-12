@@ -51,6 +51,13 @@ export default function App() {
         update={state.update?.version}
         onUpdate={() => go('settings')}
       />
+      {/* The patients page stays mounted, hidden, so the open patient, its tab and what
+          was read are still there after a look at the browser or another page. */}
+      {ready && (
+        <div className={page === 'patients' ? 'contents' : 'hidden'} data-page-patients>
+          <Patients onBrowser={toBrowser} />
+        </div>
+      )}
       {!ready ? null : page === 'browser' ? (
         <BrowserPage />
       ) : page === 'templates' ? (
@@ -59,9 +66,7 @@ export default function App() {
         <Panel><LogPage /></Panel>
       ) : page === 'settings' ? (
         <Panel><SettingsPage /></Panel>
-      ) : (
-        <Patients onBrowser={toBrowser} />
-      )}
+      ) : null}
       <Toasts />
     </div>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Globe, Home, ListOrdered, Loader2, RotateCw, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Globe, Home, ListOrdered, Loader2, RotateCw, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { api, isDemo } from '@/lib/api';
 import { useApp } from '@/lib/useApp';
 import { Button } from '@/kit/ui';
@@ -49,6 +49,8 @@ export function BrowserPage() {
       setGoing(false);
     }
   };
+  const zoom = state.viewZoom || 0.7;
+  const setZoom = (z: number) => api.call('view:zoom', { zoom: Math.round(z * 100) / 100 }).catch(() => {});
   return (
     <section className="glass-panel flex min-w-0 flex-1 flex-col overflow-hidden" data-pane="onemes">
       <div className="flex h-12 shrink-0 items-center gap-1 border-b border-border/50 px-2">
@@ -62,6 +64,11 @@ export function BrowserPage() {
         {state.busy && !going && (
           <span className="flex items-center gap-1.5 px-2 text-xs font-semibold text-primary"><Loader2 className="h-3.5 w-3.5 animate-spin" />Tool đang thao tác</span>
         )}
+        <div className="mr-1 flex items-center rounded-md border border-border/60" data-zoom>
+          <Button variant="ghost" size="icon-sm" aria-label="Thu nhỏ" title="Thu nhỏ trang (Ctrl −)" disabled={zoom <= 0.3} onClick={() => setZoom(zoom - 0.1)} data-action="zoom-out"><ZoomOut /></Button>
+          <button type="button" className="h-8 min-w-[3.25rem] px-1 text-xs font-semibold tabular-nums hover:text-primary" title="Cỡ chữ trang OneMES. Bấm để về 70% (Ctrl 0)" onClick={() => setZoom(0.7)} data-zoom-value>{Math.round(zoom * 100)}%</button>
+          <Button variant="ghost" size="icon-sm" aria-label="Phóng to" title="Phóng to trang (Ctrl +)" disabled={zoom >= 2} onClick={() => setZoom(zoom + 0.1)} data-action="zoom-in"><ZoomIn /></Button>
+        </div>
         <Button variant="gradient" size="sm" onClick={() => nav('list')} disabled={state.busy || going} data-action="goto-list">
           {going ? <Loader2 className="animate-spin" /> : <ListOrdered />} Ds Điều trị nội trú
         </Button>

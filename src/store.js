@@ -14,6 +14,7 @@ const DEFAULTS = {
     bacSiFav: [], // [{ id, name }] shown first in the per-day Bác sĩ dropdown
     esBase: 'http://192.168.30.88:9200', // fallback when the page does not name its search service
     gpuOff: process.platform === 'win32', // software rendering: stops the window flicker on some PCs
+    viewZoom: 0.7, // zoom of the OneMES page in Trình duyệt (the user found 100% too close)
     // Drugs the user can tick to add per day (Kê Tây y/VTYT). Defaults as the user enters them by hand.
     themThuoc: [
       { id: 'con-xoa-bop', label: 'Cồn xoa bóp', kho: 'KCPSX', ten: 'CỒN XOA BÓP', tim: 'cồn xoa', sl: '1', cachDung: 'Mỗi lần dùng 5ml, xoa bóp các chỗ đau 4 lần/ngày', loai: 'KÊ LĨNH' },

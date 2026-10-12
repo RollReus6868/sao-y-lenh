@@ -108,7 +108,7 @@ export function demoApi() {
     choices: { [patients[1].noitruid]: { days: 3, deletions: [[], [], []] } },
     runs: { [patients[2].noitruid]: { at: Date.now(), ok: true, message: '3 ngày' }, [patients[4].noitruid]: { at: Date.now(), ok: false, message: 'OneMES báo: Chưa chọn loại phiếu lĩnh' } },
   };
-  let state: AppState = { busy: false, task: '', stepWaiting: null, progress: null, viewUrl: 'http://192.168.30.19:2026/home.aspx', update: null };
+  let state: AppState = { busy: false, task: '', stepWaiting: null, progress: null, viewUrl: 'http://192.168.30.19:2026/home.aspx', viewZoom: 0.7, update: null };
   const stateCbs: ((s: AppState) => void)[] = [];
   const logCbs: ((e: LogEntry) => void)[] = [];
   const log: LogEntry[] = [
@@ -240,6 +240,11 @@ export function demoApi() {
         }
         case 'cls:create': pushState({ busy: true, task: 'Tạo y lệnh kết quả CLS' }); await sleep(900); pushState({ busy: false, task: '' });
           return { id: 'new', thoiGian: payload.thoiGian } as T;
+        case 'view:zoom': {
+          const z = Math.min(2, Math.max(0.3, Math.round((Number(payload?.zoom) || 0.7) * 20) / 20));
+          pushState({ viewZoom: z });
+          return z as T;
+        }
         case 'view:nav':
           if (payload?.action === 'list' && q.get('navfail')) throw new Error('Hãy đăng nhập OneMES trước');
           return undefined as T;
