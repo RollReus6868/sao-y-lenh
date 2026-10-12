@@ -2,7 +2,7 @@
 // calls OneMES's own functions; it never calls the server directly.
 // Every function returns plain data so it survives structured clone.
 (function () {
-  if (window.__SYL && window.__SYL.version === 10) return;
+  if (window.__SYL && window.__SYL.version === 11) return;
 
   const txt = (el) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
   const norm = (s) =>
@@ -1020,19 +1020,33 @@
       if (tr && !out.some((x) => x.tr === tr)) out.push({ tr, el });
     };
     for (const el of root.querySelectorAll('[onclick], [ondblclick], a[href]')) if (fnRe.test(openAttr(el))) add(el.closest('tr') || el, el);
-    if (!out.length) for (const el of root.querySelectorAll('[onclick], [ondblclick]')) if (/chitiet|ketqua|fnload/i.test(openAttr(el))) add(el.closest('tr'), el);
+    // Otherwise the row opens from the date box in its TG chỉ định column (what the user
+    // clicks), so every row with a date is taken and its date box is clicked.
     if (!out.length) {
       for (const tr of root.querySelectorAll('tr')) {
         if (tr.querySelector('th')) continue;
         const tds = [...tr.children].filter((x) => x.tagName === 'TD');
-        if (tds.length >= 3 && TIME_RE.test(rowText(tr))) add(tr, tds[1] || tds[0]);
+        if (tds.length >= 3 && TIME_RE.test(rowText(tr))) add(tr, dateBox(tr) || tds[1] || tds[0]);
       }
     }
     return out;
   }
+  // The innermost element of a row that shows its date (a button, an input, a label).
+  function dateBox(tr) {
+    const shows = (e) => TIME_RE.test(e.tagName === 'INPUT' ? e.value || '' : txt(e));
+    const all = [...tr.querySelectorAll('*')].filter((e) => e.tagName !== 'TD' && shows(e));
+    const inner = all.filter((e) => !all.some((x) => x !== e && e.contains(x)));
+    return inner.find((e) => e.getAttribute('onclick') || /^(BUTTON|INPUT|A)$/.test(e.tagName)) || inner[0] || null;
+  }
+  // Clicks like a person: pointer down/up, then click, so handlers bound to any of them run.
   function kqClick(el) {
-    if (!el.getAttribute('onclick') && el.getAttribute('ondblclick')) el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-    else el.click();
+    if (!el.getAttribute('onclick') && el.getAttribute('ondblclick')) {
+      el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      return;
+    }
+    if (el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+    for (const t of ['mousedown', 'mouseup']) el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window }));
+    el.click();
   }
   const XN_RE = /fnLoadChiTiet\s*\(/;
   const CDHA_RE = /fnLoadChiTietKetQuaCDHA\s*\(/;
@@ -1209,7 +1223,7 @@
   }
 
   window.__SYL = {
-    version: 10,
+    version: 11,
     where,
     readPatients,
     listLink,

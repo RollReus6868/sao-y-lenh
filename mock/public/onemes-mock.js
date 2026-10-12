@@ -229,17 +229,14 @@
     window.jQuery('#divFormModalChung').modal('show');
     // The two lists arrive a moment later.
     setTimeout(function () {
-      // As on the real page: a department group row, the date inside a box, and rows
-      // that open on click without an onclick attribute the tool could search for.
+      // As on the real page: a department group row, and each test opened only from the
+      // date box in its TG chỉ định column (a jQuery handler, no onclick attribute).
       var x = '<table class="table" id="tbDichVu"><thead><tr><th>STT</th><th>TG chỉ định</th><th>Người chỉ định</th><th>Loại xét nghiệm</th><th>Trạng thái</th></tr></thead><tbody>' +
         '<tr class="group"><td colspan="5"><b>− Khoa Nội B</b></td></tr>';
       kq.xn.forEach(function (r, i) {
-        x += '<tr data-xn="' + r.id + '" data-loai="' + esc(r.loai) + '"><td>' + (i + 1) + '</td><td><input class="form-control input-sm" readonly value="' + r.tg + '"></td><td>BS. Nguyễn Văn Mẫu</td><td>' + esc(r.loai) + '</td><td><span class="badge badge-danger">Hoàn tất</span></td></tr>';
+        x += '<tr><td>' + (i + 1) + '</td><td><button type="button" class="btn btn-xs btn-time ' + r.id + '" data-xn="' + r.id + '" data-loai="' + esc(r.loai) + '">' + r.tg + '</button></td><td>BS. Nguyễn Văn Mẫu</td><td>' + esc(r.loai) + '</td><td><span class="badge badge-danger">Hoàn tất</span></td></tr>';
       });
       document.getElementById('divLichSuXNContent').innerHTML = x + '</tbody></table>';
-      [].forEach.call(document.querySelectorAll('#divLichSuXNContent tr[data-xn]'), function (tr) {
-        tr.addEventListener('click', function () { window.fnLoadChiTiet(tr.getAttribute('data-xn'), tr, tr.getAttribute('data-loai')); });
-      });
       var c = '<table class="table" id="tbDichVu"><tr><th>STT</th><th>Thời gian chỉ định</th><th>Tên dịch vụ</th></tr>';
       kq.cdha.forEach(function (r, i) {
         c += '<tr onclick="fnLoadChiTietKetQuaCDHA(\'' + r.id + '\', \'' + r.id + '\', this)"><td>' + (i + 1) + '</td><td><span class="badge">' + r.tg + '</span></td><td>' + esc(r.ten) + '</td></tr>';
@@ -247,17 +244,25 @@
       document.getElementById('divLichSuCDHAContent').innerHTML = c + '</table>';
     }, 300);
   };
+  window.jQuery(document).on('click', '#divLichSuXNContent .btn-time', function () {
+    window.fnLoadChiTiet(this.getAttribute('data-xn'), this, this.getAttribute('data-loai'));
+  });
+  // Like OneMES: the frame is drawn at once, the list of values arrives later in
+  // #divDsChiSoContent (ServerSideLoad -> CallBackReadingLoad).
   window.fnLoadChiTiet = function (value) {
     var r = kq.xn.filter(function (x) { return x.id === value; })[0];
+    document.getElementById('divDrawCt').innerHTML = '<div class="form-group"><label>Loại dịch vụ</label><input class="form-control" value="' + esc(r.loai) + '"></div>' +
+      '<div>Danh sách chỉ số: <button type="button">Copy vào y lệnh</button></div><div id="divDsChiSoContent"></div>' +
+      '<div class="form-group"><label>Kết quả</label><textarea class="form-control" id="kq_txtKetLuan"></textarea></div>';
     setTimeout(function () {
-      var h = '<div class="form-group"><label>Loại dịch vụ</label><input class="form-control" value="' + esc(r.loai) + '"></div>' +
-        '<table class="table"><tr><th></th><th>STT</th><th>Chỉ số</th><th>Kết quả</th><th>Khoảng tham chiếu</th><th>Đơn vị</th><th>KQ tiền sử</th><th>Ngày tiền sử</th></tr>' +
+      var h = '<table class="table"><tr><th></th><th>STT</th><th>Chỉ số</th><th>Kết quả</th><th>Khoảng tham chiếu</th><th>Đơn vị</th><th>KQ tiền sử</th><th>Ngày tiền sử</th></tr>' +
         '<tr><td colspan="7"><b>' + esc(r.dv) + '</b></td><td></td></tr>';
       r.items.forEach(function (it, i) {
         var st = it[4] === 'red' ? ' style="color: red; font-weight: bold;"' : it[4] === 'blue' ? ' style="color: blue; font-weight: bold;"' : '';
         h += '<tr><td></td><td>' + (i + 1) + '</td><td>' + esc(it[0]) + '</td><td' + st + '>' + esc(it[1]) + '</td><td>' + esc(it[2]) + '</td><td>' + esc(it[3]) + '</td><td></td><td></td></tr>';
       });
-      document.getElementById('divDrawCt').innerHTML = h + '</table><div class="form-group"><label>Kết quả</label><textarea class="form-control"></textarea></div>';
+      var box = document.getElementById('divDsChiSoContent');
+      if (box) box.innerHTML = h + '</table>';
     }, 250);
   };
   window.fnLoadChiTietKetQuaCDHA = function (value) {

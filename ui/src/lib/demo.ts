@@ -176,7 +176,7 @@ export function demoApi() {
             const sac = { ...source, id: 'sac', thoiGian: '15:00 12/10/2026', thoiGianThucHien: '07:30 13/10/2026', dienBien: 'Chỉ định sắc thuốc thang', dienBienPHCN: '', thuoc: [T('Thang thuốc mẫu', '', 'Thang', '1', 'Thuốc Đông Y', 'Sắc uống ngày 1 thang')], dvkt: [D('Sắc thuốc thang', '1 thang/ngày', 'Y học dân tộc')] };
             // Usual orders already copied for 14/10, none yet for 15/10.
             const usual = (tg: string, tgth: string, bacSi: string) => ({ id: 'u' + tgth, tg, tgth, bacSi, dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' });
-            return { rows: [usual('07:09 14/10/2026', '07:10 14/10/2026', 'BS. Trần Thị Hai'), { id: 'sac', tg: sac.thoiGian, tgth: sac.thoiGianThucHien, bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: sac.dienBien, dienBienPHCN: '', khac: 'Chỉ định Sắc thuốc thang' }, usual('07:04 13/10/2026', '07:05 13/10/2026', 'BS. Nguyễn Văn Mẫu')], source: sac, skipped: [] } as T;
+            return { rows: [usual('07:09 14/10/2026', '07:10 14/10/2026', 'BS. Trần Thị Hai'), { id: 'sac', tg: sac.thoiGian, tgth: sac.thoiGianThucHien, bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: sac.dienBien, dienBienPHCN: '', khac: 'Chỉ định Sắc thuốc thang' }, usual('07:04 13/10/2026', '07:05 13/10/2026', 'BS. Lê Văn Ba')], source: sac, skipped: [] } as T;
           }
           return { rows: [{ id: 'src', tg: '07:04 13/10/2026', tgth: '07:05 13/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }, { id: 'old', tg: '07:04 12/10/2026', tgth: '07:05 12/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }], source, skipped: [] } as T;
         case 'run': {

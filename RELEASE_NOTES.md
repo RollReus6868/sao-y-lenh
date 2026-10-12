@@ -1,4 +1,9 @@
-# Sao Y Lệnh 0.4.1
+# Sao Y Lệnh 0.4.2
+
+- **Kết quả CLS**: tool bấm vào ô ngày ở cột **TG chỉ định** của từng dòng (như anh/chị bấm tay), lần lượt từng dòng, rồi chờ bảng chỉ số hiện ra bên phải mới đọc. Bản 0.4.1 bấm vào ô của bảng chứ không bấm vào nút ngày nên không mở được kết quả.
+- **Sắc thuốc thang**: bác sĩ điền sẵn giờ lấy theo y lệnh thường ở **thời gian chỉ định** (ngày hôm trước), không phải ngày thực hiện.
+
+## 0.4.1
 
 - **Kết quả CLS đọc được Lịch sử XN**: bản trước không thấy dòng xét nghiệm nào (giờ chỉ định nằm trong ô, dòng mở theo cách khác). Giờ tool đọc từng dòng có ngày giờ, bấm mở và lấy các chỉ số chữ đỏ hoặc xanh dương kèm tên chỉ số (ví dụ "Cholesterol toàn phần: 6.67 mmol/L", "PCT: 0.13%"). Lịch sử CĐHA chỉ lấy phần **Kết luận**. Nếu vẫn không đọc được, Nhật ký ghi lại hình dạng bảng (không có thông tin bệnh nhân) để sửa tiếp.
 - **Sắc thuốc thang**:

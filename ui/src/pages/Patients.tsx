@@ -272,14 +272,14 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const srcBase: OrderBase | null = src
     ? { gio: hhmmOf(src.thoiGianThucHien || src.thoiGian), dienBien: src.dienBien, dienBienPHCN: src.dienBienPHCN, bacSi: src.bacSi, capDo: src.capDo }
     : null;
-  // Sắc thuốc thang: thực hiện and bác sĩ as on the usual order of the same day,
-  // chỉ định as on the usual order of the day before.
+  // Sắc thuốc thang: thực hiện as on the usual order of the same day; chỉ định and
+  // bác sĩ as on the usual order of the day before (the one at the chỉ định time).
   const sacDef = (k: number) => {
     const d = dayOf(k);
     if (!sac || !d) return null;
     const today = usualOn(res?.rows || [], d);
     const prev = usualOn(res?.rows || [], addDays(d, -1));
-    return { same: today, prev, thucHien: today?.tgth || '', chiDinh: prev?.tg || '', bacSi: today ? findDoctor(today.bacSi) : null };
+    return { same: today, prev, thucHien: today?.tgth || '', chiDinh: prev?.tg || '', bacSi: prev ? findDoctor(prev.bacSi) : null };
   };
   const findDoctor = (name: string): Picked | null => {
     const n = fold(name || '').trim();
@@ -477,9 +477,9 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     const miss = [!d.same && `ngày ${ddmm(day)}`, !d.prev && `ngày ${ddmm(addDays(day, -1))}`].filter(Boolean);
     return (
       <div className={cn('mb-2 rounded-lg px-2.5 py-1.5 text-[11px]', miss.length ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400' : 'bg-muted/50 text-muted-foreground')} data-sac-note>
-        Điền sẵn theo y lệnh thường: giờ thực hiện và bác sĩ như ngày {ddmm(day)}, giờ chỉ định như ngày {ddmm(addDays(day, -1))}.
+        Điền sẵn theo y lệnh thường: giờ thực hiện như ngày {ddmm(day)}; giờ chỉ định và bác sĩ như ngày {ddmm(addDays(day, -1))}{d.prev?.bacSi ? ` (${d.prev.bacSi})` : ''}.
         {miss.length > 0 && <> Chưa thấy y lệnh thường {miss.join(' và ')}, ô đó giữ như bản sao (hãy sao chép y lệnh thường trước, hoặc tự nhập).</>}
-        {d.same && !d.bacSi && d.same.bacSi && <> Không tìm thấy bác sĩ "{d.same.bacSi}" trong danh sách, hãy chọn tay.</>}
+        {d.prev && !d.bacSi && d.prev.bacSi && <> Không tìm thấy bác sĩ "{d.prev.bacSi}" trong danh sách, hãy chọn tay.</>}
       </div>
     );
   };

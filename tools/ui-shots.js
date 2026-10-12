@@ -109,7 +109,7 @@ const { chromium } = require('playwright-core');
       if (await page.locator('[data-item="Thang thuốc mẫu"], [data-add-section]').count()) fail('sắc: drugs or Thêm thuốc still shown');
       await page.click('[data-eday="1"]');
       const sacVals = await page.evaluate(() => ['chiDinh', 'thucHien', 'bacSi'].map((f) => { const el = document.querySelector(`[data-day-edits] [data-field=${f}]`); return el ? (el.tagName === 'SELECT' ? el.selectedOptions[0]?.textContent : el.value) : null; }));
-      if (sacVals.join('|') !== '07:04 13/10/2026|07:10 14/10/2026|BS. Trần Thị Hai') fail('sắc: prefilled ' + sacVals.join('|'));
+      if (sacVals.join('|') !== '07:04 13/10/2026|07:10 14/10/2026|BS. Lê Văn Ba') fail('sắc: prefilled ' + sacVals.join('|'));
       await shot('sac');
       await page.click('[data-eday="2"]');
       if (!/Chưa thấy y lệnh thường ngày 15\/10/.test(await page.locator('[data-sac-note]').innerText())) fail('sắc: missing usual order not reported');
