@@ -25,7 +25,11 @@ export interface Settings {
 export interface AddItem { id: string; label: string; kho: string; ten: string; tim: string; sl: string; cachDung: string; loai: string }
 export interface Template { id: string; name: string; keys: string[] }
 /** Corrections for one created day; a field left out keeps what the copy got. */
-export interface DayEdit { gio?: string; dienBien?: string; dienBienPHCN?: string; bacSi?: Picked; capDo?: Picked }
+export interface DayEdit {
+  gio?: string; dienBien?: string; dienBienPHCN?: string; bacSi?: Picked; capDo?: Picked;
+  /** Sắc thuốc thang: full "HH:mm dd/MM/yyyy" times, each with its own date. */
+  chiDinh?: string; thucHien?: string;
+}
 export interface Choice { days: number; deletions: string[][]; edits?: (DayEdit | null)[]; adds?: string[][]; savedAt?: number }
 export interface CheckItem {
   kind: 'thuoc' | 'dvkt'; id: string; base: string; group: string; name: string; hamLuong?: string; dvt?: string; duongDung?: string;

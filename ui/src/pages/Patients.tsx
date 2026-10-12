@@ -3,10 +3,10 @@ import { BedDouble, ClipboardCheck, FileText, Globe, MousePointerClick, Check, C
 import { cn } from '@/kit/cn';
 import { Button, Chip, EmptyState, Input, PageHeader, Pill, Segmented, Select, Switch } from '@/kit/ui';
 import { useApp } from '@/lib/useApp';
-import { baseKey, isSac, itemName, runKey, type AddItem, type Choice, type DayEdit, type Item, type Kind, type LoadResult, type Patient, type Plan, type RunResult, type Template } from '@/lib/types';
+import { baseKey, isSac, itemName, runKey, type AddItem, type Choice, type DayEdit, type Item, type Kind, type LoadResult, type OrderRow, type Patient, type Picked, type Plan, type RunResult, type Template } from '@/lib/types';
 import { RunBar, Sheet } from '@/components/common';
 import { OrderFields, editSummary, type OrderBase } from '@/components/OrderFields';
-import { addDays, dayLabel, ddmm, hhmmOf, parseDay, weekdayShort } from '@/lib/dates';
+import { addDays, dayLabel, ddmm, hhmmOf, parseDay, parseTime, weekdayShort } from '@/lib/dates';
 import { ResultView } from '@/pages/Result';
 import { BenhAnView } from '@/pages/BenhAn';
 import { ClsView, DvCleanView } from '@/pages/DvCls';
@@ -261,19 +261,54 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   }, [sel, days, edits, adds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const src = res?.source;
-  const items = useMemo(() => (src ? [...src.thuoc, ...src.dvkt] : []), [src]);
-  const base = src ? parseDay(src.thoiGian) : null;
+  const sac = kind === 'sac';
+  // Sắc thuốc thang copies touch neither drugs nor the Thêm thuốc list.
+  const items = useMemo(() => (src ? (sac ? src.dvkt : [...src.thuoc, ...src.dvkt]) : []), [src, sac]);
+  // A sắc thuốc thang order belongs to the day of its Thời gian thực hiện.
+  const srcRow = res?.rows.find((r) => r.id === src?.id);
+  const base = src ? parseDay(sac ? srcRow?.tgth || src.thoiGianThucHien || src.thoiGian : src.thoiGian) : null;
   const dayOf = (k: number) => (base ? addDays(base, k + 1) : null);
   const dayDate = (k: number) => dayLabel(dayOf(k));
   const srcBase: OrderBase | null = src
     ? { gio: hhmmOf(src.thoiGianThucHien || src.thoiGian), dienBien: src.dienBien, dienBienPHCN: src.dienBienPHCN, bacSi: src.bacSi, capDo: src.capDo }
     : null;
+  // Sắc thuốc thang: thực hiện and bác sĩ as on the usual order of the same day,
+  // chỉ định as on the usual order of the day before.
+  const sacDef = (k: number) => {
+    const d = dayOf(k);
+    if (!sac || !d) return null;
+    const today = usualOn(res?.rows || [], d);
+    const prev = usualOn(res?.rows || [], addDays(d, -1));
+    return { same: today, prev, thucHien: today?.tgth || '', chiDinh: prev?.tg || '', bacSi: today ? findDoctor(today.bacSi) : null };
+  };
+  const findDoctor = (name: string): Picked | null => {
+    const n = fold(name || '').trim();
+    if (!n) return null;
+    const all = [...(data?.settings.bacSiFav || []), ...(data?.lists?.bacSi || [])];
+    const hit = all.find((x) => fold(x.name).trim() === n) || all.find((x) => fold(x.name).replace(/^bs\.?\s*/, '').trim() === n.replace(/^bs\.?\s*/, ''));
+    return hit ? { id: hit.id, text: hit.name } : null;
+  };
+  const dayBase = (k: number): OrderBase | null => {
+    if (!srcBase || !sac) return srcBase;
+    const d = sacDef(k);
+    return { ...srcBase, chiDinh: d?.chiDinh || '', thucHien: d?.thucHien || '', bacSi: d?.bacSi || srcBase.bacSi };
+  };
+  // What each day is run with: the sắc defaults, then the user's own changes on top.
+  const runEdits = () =>
+    edits.slice(0, days).map((e, k) => {
+      const d = sacDef(k);
+      if (!d) return e;
+      const x: DayEdit = { ...(d.thucHien ? { thucHien: d.thucHien } : {}), ...(d.chiDinh ? { chiDinh: d.chiDinh } : {}), ...(d.bacSi ? { bacSi: d.bacSi } : {}), ...(e || {}) };
+      delete x.gio;
+      return Object.keys(x).length ? x : null;
+    });
   // A change on one day carries to the days after it, unless a later day was set apart.
+  // Full times carry a date of their own, so they stay on their day.
   const setEdit = (k: number, e: DayEdit | null) =>
     setEdits((x) => {
       const old = (x[k] || {}) as Record<string, unknown>;
       const nw = (e || {}) as Record<string, unknown>;
-      const keys = [...new Set([...Object.keys(old), ...Object.keys(nw)])].filter((f) => !same(old[f], nw[f]));
+      const keys = [...new Set([...Object.keys(old), ...Object.keys(nw)])].filter((f) => !same(old[f], nw[f]) && f !== 'chiDinh' && f !== 'thucHien');
       return x.map((y, i) => {
         if (i === k) return e;
         if (i < k || i >= days) return y;
@@ -286,7 +321,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
         return Object.keys(cur).length ? (cur as DayEdit) : null;
       });
     });
-  const catalog: AddItem[] = data?.settings.themThuoc || [];
+  const catalog: AddItem[] = sac ? [] : data?.settings.themThuoc || [];
   const toggleAdd = (k: number, id: string) => setAdds((s) => s.map((d, i) => (i !== k ? d : d.includes(id) ? d.filter((x) => x !== id) : [...d, id])));
   const toggleAddRow = (id: string) => {
     const all = adds.slice(0, days).every((d) => d.includes(id));
@@ -317,7 +352,8 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const run = async () => {
     setConfirm(false);
     if (!src) return;
-    const plan: Plan = { patient, kind, sourceId: src.id, days, deletions: sel.slice(0, days), edits: edits.slice(0, days), adds: adds.slice(0, days) };
+    const keep = new Set(items.map((i) => i.key));
+    const plan: Plan = { patient, kind, sourceId: src.id, days, deletions: sel.slice(0, days).map((d) => d.filter((x) => keep.has(x))), edits: runEdits(), adds: sac ? [] : adds.slice(0, days) };
     const r = await call<RunResult[]>('run', { plans: [plan] }).catch(() => null);
     await refresh();
     if (r && r[0] && (r[0].check || r[0].ok)) setTab('result');
@@ -349,7 +385,8 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     load(undefined, k);
   };
   const setSetting = (p: Record<string, unknown>) => call('settings:set', p).then((st) => setData((x) => x && { ...x, settings: st as NonNullable<typeof data>['settings'] }));
-  const total = sel.slice(0, days).reduce((a, d) => a + d.length, 0);
+  const shown = (k: number) => sel[k].filter((x) => items.some((i) => i.key === x));
+  const total = Array.from({ length: days }, (_, k) => shown(k).length).reduce((a, b) => a + b, 0);
   const cols = `minmax(0,1fr) repeat(${days}, 56px)`;
 
   const section = (title: string, icon: React.ReactNode, list: Item[]) => (
@@ -432,6 +469,21 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     </>
   );
 
+  const confirmEdits = confirm ? runEdits() : [];
+  const sacNote = (k: number) => {
+    const d = sacDef(k);
+    if (!d) return null;
+    const day = dayOf(k)!;
+    const miss = [!d.same && `ngày ${ddmm(day)}`, !d.prev && `ngày ${ddmm(addDays(day, -1))}`].filter(Boolean);
+    return (
+      <div className={cn('mb-2 rounded-lg px-2.5 py-1.5 text-[11px]', miss.length ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400' : 'bg-muted/50 text-muted-foreground')} data-sac-note>
+        Điền sẵn theo y lệnh thường: giờ thực hiện và bác sĩ như ngày {ddmm(day)}, giờ chỉ định như ngày {ddmm(addDays(day, -1))}.
+        {miss.length > 0 && <> Chưa thấy y lệnh thường {miss.join(' và ')}, ô đó giữ như bản sao (hãy sao chép y lệnh thường trước, hoặc tự nhập).</>}
+        {d.same && !d.bacSi && d.same.bacSi && <> Không tìm thấy bác sĩ "{d.same.bacSi}" trong danh sách, hãy chọn tay.</>}
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="flex flex-shrink-0 items-center gap-2 px-3 pb-2 pt-3 sm:px-4">
@@ -489,7 +541,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
                 <span className="text-sm font-bold">Y lệnh nguồn{kind === 'sac' ? ' (sắc thuốc thang)' : ''}</span>
                 <Pill tone={/hoàn tất/i.test(src.status) ? 'success' : 'warning'}>{src.status}</Pill>
                 <Select className="ml-auto h-8 max-w-[160px] text-xs" value={src.id} disabled={state.busy} onChange={(e) => load(e.target.value)} aria-label="Đổi y lệnh nguồn">
-                  {candidates.map((r) => <option key={r.id} value={r.id}>{r.tg}</option>)}
+                  {candidates.map((r) => <option key={r.id} value={r.id}>{sac ? r.tgth || r.tg : r.tg}</option>)}
                   {!candidates.some((r) => r.id === src.id) && <option value={src.id}>{src.thoiGian}</option>}
                 </Select>
               </div>
@@ -514,18 +566,19 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
                     {edits[k] && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
                   </button>
                 ))}
-                <span className="ml-auto text-[11px] text-muted-foreground">{editCount ? `${editCount} ngày có sửa` : 'Giờ, bác sĩ, cấp độ CS, diễn biến'}</span>
+                <span className="ml-auto text-[11px] text-muted-foreground">{editCount ? `${editCount} ngày có sửa` : sac ? 'Giờ chỉ định, thực hiện, bác sĩ' : 'Giờ, bác sĩ, cấp độ CS, diễn biến'}</span>
               </div>
               {eday !== null && eday < days && srcBase && (
                 <div className="border-t border-border/40 p-3">
                   <div className="mb-2 flex items-center gap-2 text-xs">
                     <span className="font-bold">Ngày {eday + 1} · {dayDate(eday)}</span>
-                    <span className="text-muted-foreground">{eday < days - 1 ? `Sửa ở đây áp dụng luôn cho ngày ${eday + 2}–${days}` : 'Ô không sửa giữ như y lệnh nguồn'}</span>
+                    <span className="text-muted-foreground">{eday < days - 1 ? (sac ? `Giờ chỉ đổi ngày này, mục khác áp dụng luôn cho ngày ${eday + 2}–${days}` : `Sửa ở đây áp dụng luôn cho ngày ${eday + 2}–${days}`) : 'Ô không sửa giữ như y lệnh nguồn'}</span>
                     <span className="ml-auto flex gap-1">
                       <Button variant="ghost" size="xs" disabled={!edits[eday]} onClick={() => setEdit(eday, null)} data-action="edit-reset"><RotateCcw /> Bỏ sửa</Button>
                     </span>
                   </div>
-                  <OrderFields edit={edits[eday]} base={srcBase} onChange={(e) => setEdit(eday, e)} disabled={state.busy} />
+                  {sac && sacNote(eday)}
+                  <OrderFields edit={edits[eday]} base={dayBase(eday)!} onChange={(e) => setEdit(eday, e)} disabled={state.busy} sac={sac} />
                 </div>
               )}
             </div>
@@ -536,11 +589,11 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
                 <button key={k} type="button" onClick={() => setMenu(k)} className="sticky top-0 z-10 flex flex-col items-center rounded-lg bg-card py-1 hover:bg-muted/60" data-col={k + 1} title={`${dayDate(k)}: chọn nhanh cho ngày này`}>
                   <span className="flex items-center text-xs font-bold">N{k + 1}<ChevronDown className="h-3 w-3" /></span>
                   <span className="text-[10px] font-semibold text-muted-foreground">{dayOf(k) ? `${weekdayShort(dayOf(k)!)} ${ddmm(dayOf(k)!)}` : ''}</span>
-                  <span className={cn('text-[10px] font-bold', sel[k].length ? 'text-red-500' : 'text-muted-foreground/60')}>−{sel[k].length}</span>
+                  <span className={cn('text-[10px] font-bold', shown(k).length ? 'text-red-500' : 'text-muted-foreground/60')}>−{shown(k).length}</span>
                 </button>
               ))}
               {catalog.length > 0 && addSection()}
-              {section('Cho thuốc / VTYT', <PillIcon />, src.thuoc)}
+              {!sac && section('Cho thuốc / VTYT', <PillIcon />, src.thuoc)}
               {section('Chỉ định DVKT', <Stethoscope />, src.dvkt)}
             </div>
           </>
@@ -553,7 +606,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
         {menu !== null && (
           <div className="space-y-1.5">
             {menu > 0 && <QuickBtn onClick={() => { setCol(menu, [...sel[menu - 1]]); setMenu(null); }} icon={<ListChecks />} text="Giống ngày trước" />}
-            <QuickBtn onClick={() => { setCol(menu, items.filter((i) => i.kind === 'thuoc').map((i) => i.key)); setMenu(null); }} icon={<PillIcon />} text="Xóa hết thuốc/VTYT" />
+            {!sac && <QuickBtn onClick={() => { setCol(menu, items.filter((i) => i.kind === 'thuoc').map((i) => i.key)); setMenu(null); }} icon={<PillIcon />} text="Xóa hết thuốc/VTYT" />}
             <QuickBtn onClick={() => { setCol(menu, items.filter((i) => i.kind === 'dvkt').map((i) => i.key)); setMenu(null); }} icon={<Stethoscope />} text="Xóa hết DVKT" />
             <QuickBtn onClick={() => { setCol(menu, []); setMenu(null); }} icon={<X />} text="Không xóa gì" />
             {templates.length > 0 && <div className="px-1 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Áp mẫu</div>}
@@ -577,10 +630,10 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
           {days > 1 && <li><b>Hoàn tất</b> ngày 1 với Sao y lệnh (ngày) = {days - 1} → ngày 2–{days}.</li>}
           {Array.from({ length: days }, (_, k) => (
             <li key={k} className="rounded-lg bg-muted/40 px-3 py-2">
-              <div className="font-semibold">Ngày {k + 1} ({dayDate(k)}): {sel[k].length ? `xóa ${sel[k].length} mục` : edits[k] || addNames(k).length ? 'không xóa mục nào' : 'giữ nguyên'}</div>
-              {!!sel[k].length && <div className="mt-0.5 text-xs text-muted-foreground">{items.filter((i) => sel[k].includes(i.key)).map(itemName).join(', ')}</div>}
+              <div className="font-semibold">Ngày {k + 1} ({dayDate(k)}): {shown(k).length ? `xóa ${shown(k).length} mục` : confirmEdits[k] || addNames(k).length ? 'không xóa mục nào' : 'giữ nguyên'}</div>
+              {!!shown(k).length && <div className="mt-0.5 text-xs text-muted-foreground">{items.filter((i) => sel[k].includes(i.key)).map(itemName).join(', ')}</div>}
               {addNames(k).length > 0 && <div className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-400">Thêm: {addNames(k).join(', ')}</div>}
-              {edits[k] && <div className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">Sửa: {editSummary(edits[k])}</div>}
+              {confirmEdits[k] && <div className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">Sửa: {editSummary(confirmEdits[k])}</div>}
             </li>
           ))}
           <li className="text-xs text-muted-foreground">{data?.settings.autoComplete ? 'Mỗi ngày sửa xong sẽ được Hoàn tất.' : 'Các ngày 2+ để ở trạng thái Mới cho anh/chị tự xem và Hoàn tất.'}{data?.settings.stepMode ? ' Chạy từng bước: tool dừng trước mỗi thao tác.' : ''}</li>
@@ -588,6 +641,14 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
       </Sheet>
     </>
   );
+}
+
+// The usual order (not sắc thuốc thang, not a Kết quả CLS order) of day d, earliest first.
+function usualOn(rows: OrderRow[], d: Date) {
+  const key = d.toDateString();
+  return rows
+    .filter((r) => !isSac(r) && !/^kết quả cls:/i.test((r.dienBien || '').trim()) && parseDay(r.tgth || r.tg)?.toDateString() === key)
+    .sort((a, b) => (parseTime(a.tgth || a.tg)?.getTime() || 0) - (parseTime(b.tgth || b.tg)?.getTime() || 0))[0];
 }
 
 function TabBtn({ on, children, ...p }: { on: boolean; children: React.ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) {

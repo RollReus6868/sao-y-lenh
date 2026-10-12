@@ -101,6 +101,7 @@ export function ResultView({ patient, kind = 'thuong' }: { patient: Patient; kin
             <DayCard
               key={d.id}
               d={d}
+              sac={kind === 'sac'}
               busy={state.busy}
               deleting={deleting && pending === d.id}
               updating={updating && pending === d.id}
@@ -141,16 +142,16 @@ export function ResultView({ patient, kind = 'thuong' }: { patient: Patient; kin
   );
 }
 
-function DayCard({ d, busy, deleting, updating, editing, onEdit, onSubmit, onDelete }: {
-  d: CheckDay; busy: boolean; deleting: boolean; updating: boolean; editing: boolean;
+function DayCard({ d, sac, busy, deleting, updating, editing, onEdit, onSubmit, onDelete }: {
+  d: CheckDay; sac?: boolean; busy: boolean; deleting: boolean; updating: boolean; editing: boolean;
   onEdit: (on: boolean) => void; onSubmit: (edit: DayEdit | null, remove: CheckItem[]) => void; onDelete: () => void;
 }) {
   const [edit, setEdit] = useState<DayEdit | null>(null);
   const [remove, setRemove] = useState<string[]>([]);
   const gone = d.deleted || d.gone;
   const tone = gone ? 'muted' : d.problems.length ? 'error' : /hoàn tất/i.test(d.status || '') ? 'success' : 'warning';
-  const date = parseDay(d.tg || d.thoiGian);
-  const base: OrderBase = { gio: hhmmOf(d.thoiGianThucHien), dienBien: d.dienBien || '', dienBienPHCN: d.dienBienPHCN || '', bacSi: d.bacSi, capDo: d.capDo };
+  const date = parseDay(sac ? d.thoiGianThucHien || d.tg : d.tg || d.thoiGian);
+  const base: OrderBase = { gio: hhmmOf(d.thoiGianThucHien), dienBien: d.dienBien || '', dienBienPHCN: d.dienBienPHCN || '', bacSi: d.bacSi, capDo: d.capDo, chiDinh: d.thoiGian || '', thucHien: d.thoiGianThucHien || '' };
   const items = [...(d.thuoc || []), ...(d.dvkt || [])];
   const start = () => {
     setEdit(null);
@@ -180,7 +181,7 @@ function DayCard({ d, busy, deleting, updating, editing, onEdit, onSubmit, onDel
 
       {!gone && editing && (
         <div className="space-y-3 p-3" data-editing>
-          <OrderFields edit={edit} base={base} onChange={setEdit} disabled={busy} />
+          <OrderFields edit={edit} base={base} onChange={setEdit} disabled={busy} sac={sac} />
           <div>
             <div className="pb-1 text-[11px] font-bold uppercase tracking-wide text-primary">Tick mục cần xóa</div>
             <div className="divide-y divide-border/40 rounded-lg border border-border/40">

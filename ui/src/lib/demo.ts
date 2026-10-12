@@ -173,8 +173,10 @@ export function demoApi() {
         case 'patient:load': pushState({ busy: true, task: 'Đọc y lệnh' }); await sleep(400); pushState({ busy: false, task: '' });
           if (q.get('edits') && !data.choices[payload.patient.noitruid]) data.choices[payload.patient.noitruid] = { days: 3, deletions: [[], [], []], edits: [{ gio: '07:30', bacSi: { id: 'd2', text: 'BS. Trần Thị Hai' } }, null, { dienBien: 'Đỡ đau nhiều, ngủ được.' }] };
           if (payload.kind === 'sac') {
-            const sac = { ...source, id: 'sac', thoiGian: '15:00 13/10/2026', thoiGianThucHien: '15:01 13/10/2026', dienBien: 'Chỉ định sắc thuốc thang', dienBienPHCN: '', thuoc: [T('Thang thuốc mẫu', '', 'Thang', '1', 'Thuốc Đông Y', 'Sắc uống ngày 1 thang')], dvkt: [D('Sắc thuốc thang', '1 thang/ngày', 'Y học dân tộc')] };
-            return { rows: [{ id: 'sac', tg: sac.thoiGian, tgth: sac.thoiGianThucHien, bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: sac.dienBien, dienBienPHCN: '', khac: 'Chỉ định Sắc thuốc thang' }], source: sac, skipped: [] } as T;
+            const sac = { ...source, id: 'sac', thoiGian: '15:00 12/10/2026', thoiGianThucHien: '07:30 13/10/2026', dienBien: 'Chỉ định sắc thuốc thang', dienBienPHCN: '', thuoc: [T('Thang thuốc mẫu', '', 'Thang', '1', 'Thuốc Đông Y', 'Sắc uống ngày 1 thang')], dvkt: [D('Sắc thuốc thang', '1 thang/ngày', 'Y học dân tộc')] };
+            // Usual orders already copied for 14/10, none yet for 15/10.
+            const usual = (tg: string, tgth: string, bacSi: string) => ({ id: 'u' + tgth, tg, tgth, bacSi, dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' });
+            return { rows: [usual('07:09 14/10/2026', '07:10 14/10/2026', 'BS. Trần Thị Hai'), { id: 'sac', tg: sac.thoiGian, tgth: sac.thoiGianThucHien, bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: sac.dienBien, dienBienPHCN: '', khac: 'Chỉ định Sắc thuốc thang' }, usual('07:04 13/10/2026', '07:05 13/10/2026', 'BS. Nguyễn Văn Mẫu')], source: sac, skipped: [] } as T;
           }
           return { rows: [{ id: 'src', tg: '07:04 13/10/2026', tgth: '07:05 13/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }, { id: 'old', tg: '07:04 12/10/2026', tgth: '07:05 12/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }], source, skipped: [] } as T;
         case 'run': {

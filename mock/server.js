@@ -116,9 +116,12 @@ function freshState() {
     ];
     // A sắc thuốc thang order next to the usual one (its pending service is not cleaned).
     if (i === 0) {
-      const d = addDays(base, -1);
+      // Prescribed the afternoon before, carried out the next morning.
+      const d = addDays(base, -2);
       d.setHours(15, 0);
       const s = mkOrder(d, { dienBien: 'Chỉ định sắc thuốc thang', dienBienPHCN: '', khac: 'Chỉ định Sắc thuốc thang', dvkt: [{ top: 'Thủ thuật', group: 'Y học dân tộc', name: 'Sắc thuốc thang', moTa: '1 thang/ngày' }], dvStatus: ['Chờ thực hiện'] });
+      s.dateTH = addDays(base, -1);
+      s.dateTH.setHours(7, 30);
       s.thuoc = [{ id: uid(), group: 'Thuốc Đông Y', loaiKe: 'Dự trù', kho: 'Kho Đông y', name: 'Thang thuốc mẫu', hamLuong: '', dvt: 'Thang', duongDung: 'Uống', sl: '1', cachDung: 'Sắc uống ngày 1 thang', doiTuong: 'Bảo hiểm', trangThai: 'Mới' }];
       orders.push(s);
     }

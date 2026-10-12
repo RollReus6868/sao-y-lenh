@@ -3,11 +3,11 @@ import { RotateCcw } from 'lucide-react';
 import { cn } from '@/kit/cn';
 import { Input, Select, Textarea } from '@/kit/ui';
 import { useApp } from '@/lib/useApp';
-import { minuteBefore } from '@/lib/dates';
+import { minuteBefore, parseTime } from '@/lib/dates';
 import type { DayEdit, Picked } from '@/lib/types';
 
 /** What a day holds when nothing is changed (the source order, or the day as created). */
-export interface OrderBase { gio: string; dienBien: string; dienBienPHCN: string; bacSi?: Picked | null; capDo?: Picked | null }
+export interface OrderBase { gio: string; dienBien: string; dienBienPHCN: string; bacSi?: Picked | null; capDo?: Picked | null; chiDinh?: string; thucHien?: string }
 
 type Key = keyof DayEdit;
 const sameText = (a?: string, b?: string) => (a || '').replace(/\r\n/g, '\n').trim() === (b || '').replace(/\r\n/g, '\n').trim();
@@ -26,7 +26,9 @@ export function withField(edit: DayEdit | null | undefined, base: OrderBase, k: 
 export function editSummary(e?: DayEdit | null) {
   if (!e) return '';
   return [
-    e.gio && `giờ ${e.gio}`,
+    e.chiDinh && `chỉ định ${e.chiDinh}`,
+    e.thucHien && `thực hiện ${e.thucHien}`,
+    e.gio && !e.thucHien && `giờ ${e.gio}`,
     e.bacSi && e.bacSi.text,
     e.capDo && `CĐCS ${e.capDo.text}`,
     e.dienBien !== undefined && 'diễn biến bệnh',
@@ -35,7 +37,8 @@ export function editSummary(e?: DayEdit | null) {
 }
 
 // Thời gian thực hiện, Bác sĩ, Cấp độ chăm sóc and the two progress notes of one day.
-export function OrderFields({ edit, base, onChange, disabled }: { edit: DayEdit | null | undefined; base: OrderBase; onChange: (e: DayEdit | null) => void; disabled?: boolean }) {
+// A sắc thuốc thang order (sac) shows both times in full: chỉ định falls on the day before.
+export function OrderFields({ edit, base, onChange, disabled, sac }: { edit: DayEdit | null | undefined; base: OrderBase; onChange: (e: DayEdit | null) => void; disabled?: boolean; sac?: boolean }) {
   const { data } = useApp();
   const lists = data?.lists;
   const favs = data?.settings.bacSiFav || [];
@@ -56,9 +59,25 @@ export function OrderFields({ edit, base, onChange, disabled }: { edit: DayEdit 
 
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-2.5" data-order-fields>
-      <F label="Giờ thực hiện" changed={changed('gio')} onReset={() => set('gio', undefined)} hint={gio ? `Chỉ định: ${minuteBefore(gio)}` : ''}>
-        <TimeInput value={gio} disabled={disabled} onChange={(x) => set('gio', x)} />
-      </F>
+      {sac ? (
+        <>
+          <F label="Thời gian chỉ định" changed={changed('chiDinh')} onReset={() => set('chiDinh', undefined)}>
+            <DateTimeInput value={(v('chiDinh') as string) || ''} disabled={disabled} onChange={(x) => set('chiDinh', x)} field="chiDinh" />
+          </F>
+          <F label="Thời gian thực hiện" changed={changed('thucHien')} onReset={() => set('thucHien', undefined)}
+            hint={(() => {
+              const a = parseTime(v('chiDinh') as string);
+              const b = parseTime(v('thucHien') as string);
+              return a && b && a > b ? 'trước giờ chỉ định!' : '';
+            })()}>
+            <DateTimeInput value={(v('thucHien') as string) || ''} disabled={disabled} onChange={(x) => set('thucHien', x)} field="thucHien" />
+          </F>
+        </>
+      ) : (
+        <F label="Giờ thực hiện" changed={changed('gio')} onReset={() => set('gio', undefined)} hint={gio ? `Chỉ định: ${minuteBefore(gio)}` : ''}>
+          <TimeInput value={gio} disabled={disabled} onChange={(x) => set('gio', x)} />
+        </F>
+      )}
       <F label="Cấp độ chăm sóc" changed={changed('capDo')} onReset={() => set('capDo', undefined)}>
         <Select className="h-8 w-full text-[13px]" value={cd?.id || ''} disabled={disabled} data-field="capDo"
           onChange={(e) => set('capDo', care.find((x) => x.id === e.target.value))}>
@@ -66,7 +85,7 @@ export function OrderFields({ edit, base, onChange, disabled }: { edit: DayEdit 
           {care.map((x) => <option key={x.id} value={x.id}>{x.text}</option>)}
         </Select>
       </F>
-      <F label="Bác sĩ" changed={changed('bacSi')} onReset={() => set('bacSi', undefined)} className="col-span-2">
+      <F label="Bác sĩ" changed={changed('bacSi')} onReset={() => set('bacSi', undefined)} className={sac ? '' : 'col-span-2'}>
         <Select className="h-8 w-full text-[13px]" value={bs?.id || ''} disabled={disabled} data-field="bacSi"
           onChange={(e) => {
             const id = e.target.value;
@@ -129,5 +148,32 @@ export function TimeInput({ value, onChange, disabled }: { value: string; onChan
     <Input value={text} disabled={disabled} inputMode="numeric" placeholder="giờ:phút" maxLength={6}
       onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
       className={cn('h-8 tabular-nums', bad && 'border-red-500 focus:ring-red-500/40')} title={bad ? 'Nhập giờ dạng 07:30' : ''} data-field="gio" />
+  );
+}
+
+// "HH:mm dd/MM/yyyy" typed as text; "7:30 12/10" takes the year already shown.
+export function DateTimeInput({ value, onChange, disabled, field }: { value: string; onChange: (v: string) => void; disabled?: boolean; field?: string }) {
+  const [text, setText] = useState(value);
+  const [bad, setBad] = useState(false);
+  useEffect(() => { setText(value); setBad(false); }, [value]);
+  const commit = () => {
+    const m = /^\s*(\d{1,2})\s*[:hH.]\s*(\d{2})\s*(?:,|\s)\s*(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?\s*$/.exec(text);
+    const year = m && (m[5] ? (m[5].length === 2 ? 2000 + +m[5] : +m[5]) : (parseTime(value) || new Date()).getFullYear());
+    const d = m ? new Date(year!, +m[4] - 1, +m[3], +m[1], +m[2]) : null;
+    if (!m || !d || d.getDate() !== +m[3] || d.getMonth() !== +m[4] - 1 || +m[1] > 23 || +m[2] > 59) {
+      setBad(!!text.trim());
+      if (!text.trim()) setText(value);
+      return;
+    }
+    const p2 = (n: number) => String(n).padStart(2, '0');
+    const v = `${p2(d.getHours())}:${p2(d.getMinutes())} ${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()}`;
+    setText(v);
+    setBad(false);
+    if (v !== value) onChange(v);
+  };
+  return (
+    <Input value={text} disabled={disabled} placeholder="giờ:phút ngày/tháng/năm" maxLength={20}
+      onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+      className={cn('h-8 tabular-nums', bad && 'border-red-500 focus:ring-red-500/40')} title={bad ? 'Nhập dạng 07:30 12/10/2026' : ''} data-field={field} />
   );
 }

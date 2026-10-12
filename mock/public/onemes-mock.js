@@ -229,11 +229,17 @@
     window.jQuery('#divFormModalChung').modal('show');
     // The two lists arrive a moment later.
     setTimeout(function () {
-      var x = '<table class="table" id="tbDichVu"><tr><th>STT</th><th>TG chỉ định</th><th>Người chỉ định</th><th>Loại xét nghiệm</th><th>Trạng thái</th></tr>';
+      // As on the real page: a department group row, the date inside a box, and rows
+      // that open on click without an onclick attribute the tool could search for.
+      var x = '<table class="table" id="tbDichVu"><thead><tr><th>STT</th><th>TG chỉ định</th><th>Người chỉ định</th><th>Loại xét nghiệm</th><th>Trạng thái</th></tr></thead><tbody>' +
+        '<tr class="group"><td colspan="5"><b>− Khoa Nội B</b></td></tr>';
       kq.xn.forEach(function (r, i) {
-        x += '<tr onclick="fnLoadChiTiet(\'' + r.id + '\', this, \'' + esc(r.loai) + '\')"><td>' + (i + 1) + '</td><td><span class="badge">' + r.tg + '</span></td><td>BS. Nguyễn Văn Mẫu</td><td>' + esc(r.loai) + '</td><td><span class="badge badge-danger">Hoàn tất</span></td></tr>';
+        x += '<tr data-xn="' + r.id + '" data-loai="' + esc(r.loai) + '"><td>' + (i + 1) + '</td><td><input class="form-control input-sm" readonly value="' + r.tg + '"></td><td>BS. Nguyễn Văn Mẫu</td><td>' + esc(r.loai) + '</td><td><span class="badge badge-danger">Hoàn tất</span></td></tr>';
       });
-      document.getElementById('divLichSuXNContent').innerHTML = x + '</table>';
+      document.getElementById('divLichSuXNContent').innerHTML = x + '</tbody></table>';
+      [].forEach.call(document.querySelectorAll('#divLichSuXNContent tr[data-xn]'), function (tr) {
+        tr.addEventListener('click', function () { window.fnLoadChiTiet(tr.getAttribute('data-xn'), tr, tr.getAttribute('data-loai')); });
+      });
       var c = '<table class="table" id="tbDichVu"><tr><th>STT</th><th>Thời gian chỉ định</th><th>Tên dịch vụ</th></tr>';
       kq.cdha.forEach(function (r, i) {
         c += '<tr onclick="fnLoadChiTietKetQuaCDHA(\'' + r.id + '\', \'' + r.id + '\', this)"><td>' + (i + 1) + '</td><td><span class="badge">' + r.tg + '</span></td><td>' + esc(r.ten) + '</td></tr>';
@@ -245,11 +251,11 @@
     var r = kq.xn.filter(function (x) { return x.id === value; })[0];
     setTimeout(function () {
       var h = '<div class="form-group"><label>Loại dịch vụ</label><input class="form-control" value="' + esc(r.loai) + '"></div>' +
-        '<table class="table"><tr><th>STT</th><th>Chỉ số</th><th>Kết quả</th><th>Khoảng tham chiếu</th><th>Đơn vị</th><th>KQ tiền sử</th><th>Ngày tiền sử</th></tr>' +
-        '<tr><td colspan="7"><b>' + esc(r.dv) + '</b></td></tr>';
+        '<table class="table"><tr><th></th><th>STT</th><th>Chỉ số</th><th>Kết quả</th><th>Khoảng tham chiếu</th><th>Đơn vị</th><th>KQ tiền sử</th><th>Ngày tiền sử</th></tr>' +
+        '<tr><td colspan="7"><b>' + esc(r.dv) + '</b></td><td></td></tr>';
       r.items.forEach(function (it, i) {
         var st = it[4] === 'red' ? ' style="color: red; font-weight: bold;"' : it[4] === 'blue' ? ' style="color: blue; font-weight: bold;"' : '';
-        h += '<tr><td>' + (i + 1) + '</td><td>' + esc(it[0]) + '</td><td' + st + '>' + esc(it[1]) + '</td><td>' + esc(it[2]) + '</td><td>' + esc(it[3]) + '</td><td></td><td></td></tr>';
+        h += '<tr><td></td><td>' + (i + 1) + '</td><td>' + esc(it[0]) + '</td><td' + st + '>' + esc(it[1]) + '</td><td>' + esc(it[2]) + '</td><td>' + esc(it[3]) + '</td><td></td><td></td></tr>';
       });
       document.getElementById('divDrawCt').innerHTML = h + '</table><div class="form-group"><label>Kết quả</label><textarea class="form-control"></textarea></div>';
     }, 250);

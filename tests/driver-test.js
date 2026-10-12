@@ -1,7 +1,7 @@
 // Full runs against the mock: copy, Sao y lệnh, per-day deletions, Hoàn tất.
 'use strict';
 const { startMock, launch, loggedInPage, hostFor, check, done } = require('./helpers');
-const { createDriver } = require('../src/driver');
+const { createDriver, fmtTime: fmt } = require('../src/driver');
 
 const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
 
@@ -296,11 +296,21 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     const khacOf = (lp) => lp.rows.find((x) => x.id === lp.source.id).khac;
     check(lpS.source && /sắc thuốc thang/i.test(khacOf(lpS)) && !/sắc/i.test(khacOf(lpT)), 'sắc: each kind picks its own source');
     check(!(await d.loadPatient(pts[1], null, 'sac')).source, 'sắc: none for a patient without one');
+    const srcS = lpS.rows.find((x) => x.id === lpS.source.id);
+    check(srcS.tg.endsWith('10/10/2026') && srcS.tgth.endsWith('11/10/2026'), 'sắc: source prescribed the day before it is carried out: ' + srcS.tg + ' / ' + srcS.tgth);
+    // What the UI fills in: thực hiện and bác sĩ from the usual order of the day, chỉ định from the day before.
+    const usual = (dd) => lpS.rows.find((x) => !/sắc/i.test(x.khac) && x.tgth.endsWith(dd));
+    const e1 = { thucHien: usual('12/10/2026').tgth, chiDinh: usual('11/10/2026').tg, bacSi: { id: 'd2', text: 'BS. Trần Thị Hai' } };
     before = ids(0);
-    r = await d.run({ patient: pts[0], sourceId: lpS.source.id, kind: 'sac', days: 2, deletions: [[], []] });
+    r = await d.run({ patient: pts[0], sourceId: lpS.source.id, kind: 'sac', days: 2, deletions: [[], []], edits: [e1, null], addItems: [{ id: 'x', label: 'X', ten: 'Cồn xoa bóp' }], adds: [['x'], ['x']] });
     fresh = newOrders(0, before);
     check(r.ok && fresh.length === 2 && fresh.every((o) => /sắc/i.test(o.khac) && o.status === 'Hoàn tất'), 'sắc: two sắc days copied and completed');
-    check(fresh[0].date.getDate() === 12 && hm(fresh[0].date) === '15:00', 'sắc: copied onto today, next to the usual order');
+    check(fmt(fresh[0].dateTH) === e1.thucHien && fmt(fresh[0].date) === e1.chiDinh, 'sắc: day 1 times set with their own dates: ' + fmt(fresh[0].date) + ' / ' + fmt(fresh[0].dateTH));
+    check(fresh[0].bacSi.id === 'd2', 'sắc: day 1 doctor as on the usual order');
+    check(fresh[1].dateTH.getDate() === 13 && fresh[1].date.getDate() === 12, 'sắc: day 2 found by its Thời gian thực hiện: ' + fmt(fresh[1].date) + ' / ' + fmt(fresh[1].dateTH));
+    check(fresh.every((o) => !o.thuoc.some((t) => /cồn/i.test(t.name))), 'sắc: never adds drugs');
+    const vS = await d.verify(pts[0], r.expect, r.days);
+    check(vS.days.every((x) => !x.problems.length), 'sắc: re-check finds no problem: ' + JSON.stringify(vS.days.map((x) => x.problems)));
     const dupS = await d.run({ patient: pts[0], sourceId: lpS.source.id, kind: 'sac', days: 1, deletions: [[]] }).catch((x) => x);
     check(dupS instanceof Error && /sắc thuốc thang ngày 12\/10/.test(dupS.message), 'sắc: a second sắc order for a day is refused: ' + dupS.message);
     before = ids(0);

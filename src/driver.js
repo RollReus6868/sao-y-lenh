@@ -64,7 +64,7 @@ function createDriver(host) {
 
   async function call(fn, ...args) {
     const a = args.map((x) => JSON.stringify(x)).join(',');
-    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==9){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
+    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==10){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
   }
 
   function checkStop() {
@@ -402,7 +402,13 @@ function createDriver(host) {
   function fieldsFor(o, edit) {
     const f = {};
     if (!edit) return f;
-    if (edit.gio && /^\d{1,2}:\d{2}$/.test(edit.gio)) {
+    // Sắc thuốc thang: both times given in full, each with its own date.
+    const th = parseTime(edit.thucHien);
+    const cd = parseTime(edit.chiDinh);
+    if (th || cd) {
+      if (th && o.thoiGianThucHien !== fmtTime(th)) f.thoiGianThucHien = fmtTime(th);
+      if (cd && o.thoiGian !== fmtTime(cd)) f.thoiGian = fmtTime(cd);
+    } else if (edit.gio && /^\d{1,2}:\d{2}$/.test(edit.gio)) {
       const d = parseTime(o.thoiGianThucHien) || parseTime(o.thoiGian);
       if (d) {
         const [h, m] = edit.gio.split(':').map(Number);
@@ -422,7 +428,9 @@ function createDriver(host) {
 
   function describeFields(f) {
     const out = [];
-    if (f.thoiGianThucHien) out.push(`giờ thực hiện ${f.thoiGianThucHien.slice(0, 5)}`);
+    const twoDays = f.thoiGian && f.thoiGianThucHien && f.thoiGian.slice(6) !== f.thoiGianThucHien.slice(6);
+    if (f.thoiGian && (twoDays || !f.thoiGianThucHien)) out.push(`thời gian chỉ định ${f.thoiGian}`);
+    if (f.thoiGianThucHien) out.push(twoDays ? `thời gian thực hiện ${f.thoiGianThucHien}` : `giờ thực hiện ${f.thoiGianThucHien.slice(0, 5)}`);
     if (f.dienBien !== undefined) out.push('diễn biến bệnh');
     if (f.dienBienPHCN !== undefined) out.push('diễn biến PHCN');
     if (f.bacSi) out.push(`bác sĩ ${f.bacSi.text}`);
@@ -455,7 +463,8 @@ function createDriver(host) {
     }, 60000);
     const o = await readStable(orderId);
     const left = fieldsFor(o, {
-      gio: f.thoiGianThucHien ? f.thoiGianThucHien.slice(0, 5) : undefined,
+      thucHien: f.thoiGianThucHien,
+      chiDinh: f.thoiGian,
       dienBien: f.dienBien,
       dienBienPHCN: f.dienBienPHCN,
       bacSi: f.bacSi,
@@ -642,18 +651,21 @@ function createDriver(host) {
     if (!isDone(src)) throw new PageError(`Y lệnh nguồn đang ở trạng thái "${src.status}", cần Hoàn tất để sao chép`);
     const edits = resolveEdits(src, plan.edits, N);
     const catalog = plan.addItems || [];
-    const add = Array.from({ length: N }, (_, i) => catalog.filter((it) => ((plan.adds && plan.adds[i]) || []).includes(it.id)));
+    // Sắc thuốc thang copies never add drugs.
+    const add = Array.from({ length: N }, (_, i) => (kind === 'sac' ? [] : catalog.filter((it) => ((plan.adds && plan.adds[i]) || []).includes(it.id))));
 
     // Never create a second order of the same kind for a day that already has one.
     // Sắc thuốc thang orders sit next to the usual order of the day, so each kind only
     // counts its own (orders made by Cập nhật kết quả CLS count for neither).
-    const srcDate = parseTime(before.find((r) => r.id === norm(src.id))?.tg) || parseTime(src.thoiGian);
+    const srcRow = before.find((r) => r.id === norm(src.id));
+    const srcDate = (srcRow && rowDate(srcRow, kind)) || parseTime(kind === 'sac' ? src.thoiGianThucHien || src.thoiGian : src.thoiGian);
     result.expect = expectations(src, del, srcDate, autoComplete, edits, add);
+    result.expect.kind = kind;
     if (srcDate) {
       const taken = [];
       for (let k = 1; k <= N; k++) {
         const d = addDays(srcDate, k);
-        if (before.some((r) => sameKind(r, kind) && dayStamp(parseTime(r.tg)) === dayStamp(d))) taken.push(ddmmOf(d));
+        if (before.some((r) => sameKind(r, kind) && dayStamp(rowDate(r, kind)) === dayStamp(d))) taken.push(ddmmOf(d));
       }
       if (taken.length) {
         throw new PageError(`Đã có y lệnh${kind === 'sac' ? ' sắc thuốc thang' : ''} ngày ${taken.join(', ')}. Hãy chọn y lệnh nguồn mới nhất, hoặc xóa y lệnh trùng trên OneMES trước`);
@@ -716,12 +728,13 @@ function createDriver(host) {
     const after = await listOrders();
     const fresh = after.filter((r) => !beforeIds.has(r.id) && r.id !== d1 && !isClsRow(r));
     // The history list is the reference for dates; the form field is a fallback.
-    const base = parseTime(after.find((r) => r.id === d1)?.tg) || parseTime(day1.thoiGian);
+    const row1 = after.find((r) => r.id === d1);
+    const base = (row1 && rowDate(row1, kind)) || parseTime(kind === 'sac' ? day1.thoiGianThucHien || day1.thoiGian : day1.thoiGian);
     const byDay = [];
-    if (base && fresh.every((r) => parseTime(r.tg))) {
+    if (base && fresh.every((r) => rowDate(r, kind))) {
       for (let k = 1; k < N; k++) {
         const want = dayStamp(addDays(base, k));
-        const m = fresh.filter((r) => dayStamp(parseTime(r.tg)) === want);
+        const m = fresh.filter((r) => dayStamp(rowDate(r, kind)) === want);
         if (m.length !== 1) {
           throw new PageError(`Không xác định được y lệnh ngày ${k + 1} (tìm thấy ${m.length} y lệnh ngày ${ddmmOf(addDays(base, k))}), dừng để an toàn`);
         }
@@ -812,12 +825,13 @@ function createDriver(host) {
         for (const a of adds) {
           if (!hasItem(o, a)) problems.push(`Chưa có "${a.label}" (đã tick thêm)`);
         }
-        const d = parseTime(row.tg);
-        if (e.date && d && dayStamp(d) !== dayStamp(new Date(e.date))) problems.push(`Sai ngày: ${row.tg}, mong đợi ${ddmmOf(new Date(e.date))}`);
+        const d = rowDate(row, expect.kind);
+        if (e.date && d && dayStamp(d) !== dayStamp(new Date(e.date))) problems.push(`Sai ngày: ${expect.kind === 'sac' ? row.tgth || row.tg : row.tg}, mong đợi ${ddmmOf(new Date(e.date))}`);
       }
       if (e && e.edit) {
         const left = fieldsFor(o, e.edit);
-        if (left.thoiGianThucHien) problems.push(`Giờ thực hiện là ${(o.thoiGianThucHien || '').slice(0, 5)}, đã chọn ${e.edit.gio}`);
+        if (left.thoiGianThucHien) problems.push(e.edit.thucHien ? `Thời gian thực hiện là ${o.thoiGianThucHien || 'trống'}, đã chọn ${left.thoiGianThucHien}` : `Giờ thực hiện là ${(o.thoiGianThucHien || '').slice(0, 5)}, đã chọn ${e.edit.gio}`);
+        if (left.thoiGian && e.edit.chiDinh) problems.push(`Thời gian chỉ định là ${o.thoiGian || 'trống'}, đã chọn ${left.thoiGian}`);
         if (left.dienBien !== undefined) problems.push('Diễn biến bệnh khác với nội dung đã sửa');
         if (left.dienBienPHCN !== undefined) problems.push('Diễn biến PHCN khác với nội dung đã sửa');
         if (left.bacSi) problems.push(`Bác sĩ là ${(o.bacSi && o.bacSi.text) || 'trống'}, đã chọn ${left.bacSi.text}`);
@@ -1113,6 +1127,11 @@ function createDriver(host) {
     const dates = [...new Set(rows.map((r) => (r.date.split(' ')[1] || '')).filter(Boolean))];
     dates.sort((a, b) => parseTime('00:00 ' + b) - parseTime('00:00 ' + a));
     log('info', `${name}: có kết quả ${dates.length} ngày (${l.xn.length} xét nghiệm, ${l.cdha.length} CĐHA)`);
+    // Not a single row read: write what the lists look like, so the page can be fixed.
+    if (!l.xn.length) log('warn', `${name}: Lịch sử XN không đọc được dòng nào (${l.xnShape || '?'})`);
+    if (!l.cdha.length) log('info', `${name}: Lịch sử CĐHA trống (${l.cdhaShape || '?'})`);
+    const noDate = rows.filter((r) => !r.date).length;
+    if (noDate) log('warn', `${name}: ${noDate} dòng kết quả không đọc được ngày`);
     return { dates, rows, at: Date.now() };
   }
 
@@ -1286,6 +1305,11 @@ const isSac = (r) => SAC_RE.test(String((r && r.khac) || ''));
 // Orders written by Cập nhật kết quả CLS start with this line.
 const CLS_HEAD = 'Kết quả CLS:';
 const isClsRow = (r) => String((r && r.dienBien) || '').trim().startsWith(CLS_HEAD);
+// The day an order belongs to. A sắc thuốc thang order is prescribed the day before it
+// is carried out, so its day is the one of Thời gian thực hiện.
+function rowDate(r, kind) {
+  return kind === 'sac' ? parseTime(r.tgth) || parseTime(r.tg) : parseTime(r.tg);
+}
 const sameKind = (r, kind) => (kind === 'sac' ? isSac(r) : !isSac(r) && !isClsRow(r));
 
 // "Xét nghiệm huyết học" -> "Công thức máu", other groups lose "Xét nghiệm".
@@ -1299,10 +1323,19 @@ function clsGroup(s) {
 // "(S34) Định lượng Procalcitonin (PCT) (máu)" -> "PCT"; otherwise the plain name.
 function clsName(s) {
   let t = String(s || '').replace(/\s+/g, ' ').trim();
-  t = t.replace(/^\([A-Z]?\d+[A-Z0-9.]*\)\s*/i, '').replace(/\s*[([](máu|huyết thanh|nước tiểu)[)\]]\s*$/i, '').trim();
-  const ab = /\(([A-Za-z0-9#%.\-+/ ]{1,12})\)\s*$/.exec(t);
+  // A leading code: "(S34)" is dropped; "(MPV)" is the short name itself.
+  const code = /^\(([A-Z0-9.\-]{1,10})\)\s*/i.exec(t);
+  if (code) t = t.slice(code[0].length);
+  // "(máu) [Máu]" and the like may come twice.
+  for (let i = 0; i < 3; i++) t = t.replace(/\s*[([](máu|huyết thanh|nước tiểu|huyết tương)[)\]]\s*$/i, '').trim();
+  t = t.replace(/^định lượng\s+/i, '').replace(/^đo\s+/i, '').trim();
+  const ab = /\(([A-Za-z0-9#%.\-+/ ]{3,12})\)\s*$/.exec(t);
   if (ab && /[A-Za-z]/.test(ab[1])) return ab[1].trim();
-  return t.replace(/^định lượng\s+/i, '').replace(/^đo\s+/i, '').trim();
+  // "HDL-C (High density lipoprotein Cholesterol)" -> "HDL-C"
+  const lead = /^([A-Za-z0-9\-# ]{2,10}?)\s*\(.{12,}\)$/.exec(t);
+  if (lead) return lead[1].trim();
+  if (code && /^[A-Z]{2,}$/i.test(code[1]) && t.length > 12) return code[1];
+  return t;
 }
 // The text of the new order: one line per test group, then one per CĐHA.
 function clsText(results) {

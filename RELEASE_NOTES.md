@@ -1,4 +1,13 @@
-# Sao Y Lệnh 0.4.0
+# Sao Y Lệnh 0.4.1
+
+- **Kết quả CLS đọc được Lịch sử XN**: bản trước không thấy dòng xét nghiệm nào (giờ chỉ định nằm trong ô, dòng mở theo cách khác). Giờ tool đọc từng dòng có ngày giờ, bấm mở và lấy các chỉ số chữ đỏ hoặc xanh dương kèm tên chỉ số (ví dụ "Cholesterol toàn phần: 6.67 mmol/L", "PCT: 0.13%"). Lịch sử CĐHA chỉ lấy phần **Kết luận**. Nếu vẫn không đọc được, Nhật ký ghi lại hình dạng bảng (không có thông tin bệnh nhân) để sửa tiếp.
+- **Sắc thuốc thang**:
+  - Bỏ hàng **Thêm thuốc** và mục **Cho thuốc / VTYT**; chỉ còn Chỉ định DVKT để xóa nếu cần.
+  - **Sửa từng ngày** có hai ô đầy đủ cả giờ và ngày: **Thời gian chỉ định** và **Thời gian thực hiện**.
+  - Điền sẵn: thời gian thực hiện và bác sĩ giống y lệnh thường cùng ngày; thời gian chỉ định giống thời gian chỉ định của y lệnh thường ngày hôm trước. Ngày nào chưa có y lệnh thường thì tool báo và giữ như bản sao (nên sao chép y lệnh thường trước).
+  - Ngày của y lệnh sắc tính theo thời gian thực hiện (khi kiểm tra trùng ngày và khi kiểm tra lại).
+
+## 0.4.0
 
 - **Dọn thủ thuật các ngày cũ** (thẻ mới **Dọn thủ thuật** của mỗi bệnh nhân): bấm **Quét các ngày cũ**, tool mở từng ngày trước hôm nay có cột DV màu vàng (bỏ qua ngày có y lệnh sắc thuốc thang) và liệt kê các thủ thuật **Hoàn trả** hoặc **Chờ thực hiện**. Bỏ tick mục không muốn dọn rồi bấm **Dọn**: thủ thuật Hoàn trả thì xóa; Chờ thực hiện thì vào **Sửa DVKT**, **Thu hồi**, rồi xóa, như trong video.
 - **Sao chép y lệnh sắc thuốc thang**: ở thẻ **Sao chép** chọn **Sắc thuốc thang** thay cho **Y lệnh thường**. Tool lấy y lệnh có Y lệnh khác "Chỉ định sắc thuốc thang" làm nguồn và sao chép như bình thường, đủ các tính năng cũ (số ngày, xóa mục, sửa từng ngày, thêm thuốc, Kết quả). Ngày đã có y lệnh thường vẫn sao chép y lệnh sắc vào được, chỉ không cho hai y lệnh sắc trùng ngày.

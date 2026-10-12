@@ -2,7 +2,7 @@
 // calls OneMES's own functions; it never calls the server directly.
 // Every function returns plain data so it survives structured clone.
 (function () {
-  if (window.__SYL && window.__SYL.version === 9) return;
+  if (window.__SYL && window.__SYL.version === 10) return;
 
   const txt = (el) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
   const norm = (s) =>
@@ -1007,17 +1007,38 @@
     return { ok: true, n };
   }
   const TIME_RE = /(\d{1,2}:\d{2})\s+(\d{1,2}\/\d{1,2}\/\d{4})/;
-  // The rows of one history table: what opens each row, its date and its name.
-  function kqRows(root, fn, nameHeads) {
+  // A row's text plus what its boxes hold (OneMES shows some dates inside an input).
+  const rowText = (tr) => [txt(tr), ...[...tr.querySelectorAll('input, textarea')].map((i) => i.value || '')].join(' ');
+  const openAttr = (el) => ['onclick', 'href', 'ondblclick'].map((a) => el.getAttribute(a) || '').join(' ');
+  // The rows of one history list, each with the element that opens it. OneMES puts
+  // fn(...) on the row or on a link inside it; when the call cannot be found, any row
+  // that carries a date is taken and clicked.
+  function kqItems(root, fnRe) {
     const out = [];
     if (!root) return out;
-    const opens = [...root.querySelectorAll(`[onclick*="${fn}("]`)];
-    const trs = [];
-    for (const el of opens) {
-      const tr = el.closest('tr');
-      if (tr && !trs.includes(tr)) trs.push(tr);
+    const add = (tr, el) => {
+      if (tr && !out.some((x) => x.tr === tr)) out.push({ tr, el });
+    };
+    for (const el of root.querySelectorAll('[onclick], [ondblclick], a[href]')) if (fnRe.test(openAttr(el))) add(el.closest('tr') || el, el);
+    if (!out.length) for (const el of root.querySelectorAll('[onclick], [ondblclick]')) if (/chitiet|ketqua|fnload/i.test(openAttr(el))) add(el.closest('tr'), el);
+    if (!out.length) {
+      for (const tr of root.querySelectorAll('tr')) {
+        if (tr.querySelector('th')) continue;
+        const tds = [...tr.children].filter((x) => x.tagName === 'TD');
+        if (tds.length >= 3 && TIME_RE.test(rowText(tr))) add(tr, tds[1] || tds[0]);
+      }
     }
-    trs.forEach((tr, i) => {
+    return out;
+  }
+  function kqClick(el) {
+    if (!el.getAttribute('onclick') && el.getAttribute('ondblclick')) el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    else el.click();
+  }
+  const XN_RE = /fnLoadChiTiet\s*\(/;
+  const CDHA_RE = /fnLoadChiTietKetQuaCDHA\s*\(/;
+  // The rows of one history table: its date, name and status.
+  function kqRows(root, fnRe, nameHeads) {
+    return kqItems(root, fnRe).map(({ tr }, i) => {
       const tbl = tr.closest('table');
       const heads = headerCols(tbl);
       const tds = [...tr.children].filter((x) => x.tagName === 'TD');
@@ -1030,39 +1051,46 @@
         }
       }
       const st = heads.indexOf(norm('Trạng thái'));
-      const m = TIME_RE.exec(txt(tr));
-      out.push({ idx: i, date: m ? `${m[1]} ${m[2]}` : '', name, status: st >= 0 && tds[st] ? txt(tds[st]) : '' });
+      const m = TIME_RE.exec(rowText(tr));
+      return { idx: i, date: m ? `${m[1]} ${m[2]}` : '', name, status: st >= 0 && tds[st] ? txt(tds[st]) : '' };
     });
-    return out;
+  }
+  // What a list holds when no row could be read: its headers, row count and the
+  // functions its links call (no patient data), for the log.
+  function kqShape(root) {
+    if (!root) return 'không có khung';
+    const tables = [...root.querySelectorAll('table')];
+    const fns = [...new Set([...root.querySelectorAll('[onclick], [ondblclick], a[href]')].map((e) => (/([A-Za-z_$][\w$]*)\s*\(/.exec(openAttr(e)) || [])[1]).filter(Boolean))];
+    return `${tables.length} bảng [${tables.map((t) => headerCols(t).filter(Boolean).join('|')).join('; ')}], ${root.querySelectorAll('tr').length} dòng, hàm: ${fns.join(', ') || 'không'}, chữ: ${txt(root).length}`;
   }
   function kqList() {
     const m = kqModal();
     const xn = byId('divLichSuXNContent');
     const cd = byId('divLichSuCDHAContent');
-    return {
+    const out = {
       ok: !!(xn && cd),
       open: !!m && (isShown(m) || m.classList.contains('in')),
-      xn: kqRows(xn, 'fnLoadChiTiet', ['Loại xét nghiệm', 'Tên dịch vụ']).filter((r) => r),
-      cdha: kqRows(cd, 'fnLoadChiTietKetQuaCDHA', ['Tên dịch vụ', 'Loại dịch vụ']),
+      xn: kqRows(xn, XN_RE, ['Loại xét nghiệm', 'Tên dịch vụ', 'Loại dịch vụ']),
+      cdha: kqRows(cd, CDHA_RE, ['Tên dịch vụ', 'Loại dịch vụ']),
       busy: isBusy(),
     };
+    if (!out.xn.length) out.xnShape = kqShape(xn);
+    if (!out.cdha.length) out.cdhaShape = kqShape(cd);
+    return out;
   }
   // Opens row idx of the XN or CĐHA history and empties the result area first, so the
   // driver can tell the new result from the previous one.
   function kqOpenRow(kind, idx) {
     const root = byId(kind === 'cdha' ? 'divLichSuCDHAContent' : 'divLichSuXNContent');
-    const fn = kind === 'cdha' ? 'fnLoadChiTietKetQuaCDHA' : 'fnLoadChiTiet';
     if (!root) return { ok: false, reason: 'Chưa mở Xem kết quả' };
-    const trs = [];
-    for (const el of root.querySelectorAll(`[onclick*="${fn}("]`)) {
-      const tr = el.closest('tr');
-      if (tr && !trs.some((x) => x.tr === tr)) trs.push({ tr, el });
-    }
-    const t = trs[idx];
+    const t = kqItems(root, kind === 'cdha' ? CDHA_RE : XN_RE)[idx];
     if (!t) return { ok: false, reason: 'Không thấy dòng ' + (idx + 1) };
     const target = kind === 'cdha' ? byId('divLichSuCDHAContentChiTiet') : byId('divDrawCt');
     if (target) target.innerHTML = '';
-    t.el.click();
+    // A result drawn somewhere else must not be mistaken for the new one.
+    const m = kqModal();
+    if (m) for (const x of m.querySelectorAll('table, textarea, .note-editable')) x.setAttribute('data-syl-old', '1');
+    kqClick(t.el);
     return { ok: true };
   }
   const isRed = (c) => {
@@ -1083,20 +1111,38 @@
     }
     return null;
   }
+  const isResultTable = (t) => {
+    const h = headerCols(t);
+    return h.includes(norm('Chỉ số')) && h.some((x) => x && x.startsWith(norm('Kết quả')));
+  };
   function kqDetailXN() {
-    const root = byId('divDrawCt') || byId('divLichSuXNContent');
-    if (!root) return { ok: false, reason: 'no-detail' };
-    const tbl = [...root.querySelectorAll('table')].find((t) => {
-      const h = headerCols(t);
-      return h.includes(norm('Chỉ số')) && h.some((x) => x && x.startsWith(norm('Kết quả')));
-    });
+    const m = kqModal();
+    const roots = [byId('divDrawCt'), m].filter(Boolean);
+    if (!roots.length) return { ok: false, reason: 'no-detail' };
+    let tbl = null;
+    let root = roots[0];
+    for (const r of roots) {
+      tbl = [...r.querySelectorAll('table')].find((t) => !t.hasAttribute('data-syl-old') && isResultTable(t));
+      if (tbl) {
+        root = r;
+        break;
+      }
+    }
     if (!tbl) return { ok: true, ready: false, items: [] };
     const h = headerCols(tbl);
     const c = { name: h.indexOf(norm('Chỉ số')), value: h.findIndex((x) => x && x.startsWith(norm('Kết quả'))), ref: h.findIndex((x) => x && x.startsWith(norm('Khoảng tham chiếu'))), unit: h.indexOf(norm('Đơn vị')) };
+    // Some grids keep the header in a table of its own above the body.
+    let trs = [...tbl.querySelectorAll('tr')].filter((tr) => !tr.querySelector('th'));
+    if (!trs.length) {
+      let n = tbl.parentElement;
+      for (let i = 0; i < 4 && n && !trs.length; i++, n = n.parentElement) {
+        const next = [...n.querySelectorAll('table')].find((t) => t !== tbl && !t.contains(tbl) && !tbl.contains(t) && !t.hasAttribute('data-syl-old') && (tbl.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING));
+        if (next) trs = [...next.querySelectorAll('tr')].filter((tr) => !tr.querySelector('th'));
+      }
+    }
     const items = [];
     let group = '';
-    for (const tr of tbl.querySelectorAll('tr')) {
-      if (tr.querySelector('th')) continue;
+    for (const tr of trs) {
       const tds = [...tr.children].filter((x) => x.tagName === 'TD');
       if (tds.length <= 2 || c.value >= tds.length) {
         const t = txt(tr);
@@ -1117,15 +1163,22 @@
   function kqDetailCDHA() {
     const root = byId('divLichSuCDHAContentChiTiet');
     if (!root) return { ok: false, reason: 'no-detail' };
-    const label = [...root.querySelectorAll('label, span, div, td, b, strong')].find((e) => e.children.length === 0 && /^kết luận:?$/i.test(txt(e)));
+    const label = [...root.querySelectorAll('label, span, div, td, b, strong, th, p')].find((e) => e.children.length === 0 && /^kết luận\s*:?$/i.test(txt(e)));
     let ketLuan = '';
     let found = false;
+    // A box whose id names it (kq_txtKetLuan and the like) wins over the label.
+    const byName = [...root.querySelectorAll('textarea, input[type=text], .note-editable, [id]')].find((e) => /ket_?luan/i.test(e.id || '') && /^(TEXTAREA|INPUT|DIV)$/.test(e.tagName));
+    const ed = !byName ? null : /^(TEXTAREA|INPUT)$/.test(byName.tagName) ? byName : byName.querySelector('.note-editable, textarea, input[type=text]') || (byName.children.length === 0 ? byName : null);
+    if (ed) {
+      ketLuan = ed.tagName === 'TEXTAREA' || ed.tagName === 'INPUT' ? ed.value : ed.innerText || txt(ed);
+      found = true;
+    }
     if (label) {
       let n = label;
       for (let i = 0; i < 4 && n && !found; i++) {
         const box = n.parentElement && n.parentElement.querySelector('textarea, .note-editable, input[type=text]');
         if (box) {
-          ketLuan = box.tagName === 'TEXTAREA' || box.tagName === 'INPUT' ? box.value : txt(box);
+          ketLuan = box.tagName === 'TEXTAREA' || box.tagName === 'INPUT' ? box.value : box.innerText || txt(box);
           found = true;
         }
         n = n.parentElement;
@@ -1133,6 +1186,11 @@
     }
     const tbl = [...root.querySelectorAll('table')].find((t) => headerCols(t).includes(norm('Tên dịch vụ')));
     const dv = tbl ? [...tbl.querySelectorAll('tr')].filter((tr) => !tr.querySelector('th')).map((tr) => txt([...tr.children].pop())).filter(Boolean) : [];
+    if (/<[a-z][\s\S]*>/i.test(ketLuan || '')) {
+      const d = document.createElement('div');
+      d.innerHTML = String(ketLuan).replace(/<br\s*\/?>|<\/p>|<\/div>/gi, '\n');
+      ketLuan = d.textContent;
+    }
     return { ok: true, ready: found, ketLuan: (ketLuan || '').trim(), dichVu: dv, busy: isBusy() };
   }
   function kqClose() {
@@ -1151,7 +1209,7 @@
   }
 
   window.__SYL = {
-    version: 9,
+    version: 10,
     where,
     readPatients,
     listLink,
