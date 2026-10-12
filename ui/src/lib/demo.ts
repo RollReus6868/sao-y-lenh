@@ -1,5 +1,5 @@
 // Demo backend for previewing the UI in a browser. Fake names only.
-import type { AppState, BenhAnDraft, Check, CheckDay, Data, Item, LogEntry, Patient, RunInfo } from './types';
+import { runKey, type AppState, type BenhAnDraft, type Check, type CheckDay, type ClsRead, type Data, type DvScan, type Item, type LogEntry, type Patient, type RunInfo } from './types';
 import { allFields } from './benhAn';
 import { DEFAULT_THUOC } from './thuoc';
 
@@ -155,7 +155,7 @@ export function demoApi() {
         }
         case 'order:update': {
           pushState({ busy: true, task: 'Sửa y lệnh' }); await sleep(900); pushState({ busy: false, task: '' });
-          const r: RunInfo = data.runs[payload.patient.noitruid];
+          const r: RunInfo = data.runs[runKey(payload.patient, payload.kind)];
           const e = payload.edit || {};
           const gone: string[] = (payload.remove || []).map((x: { id: string }) => x.id);
           r.check = { ...r.check!, days: r.check!.days.map((d) => d.id !== payload.id ? d : {
@@ -172,6 +172,10 @@ export function demoApi() {
         case 'scan': pushState({ busy: true, task: 'Quét danh sách' }); await sleep(500); pushState({ busy: false, task: '' }); addLog('info', `Quét được ${patients.length} bệnh nhân`); return patients as T;
         case 'patient:load': pushState({ busy: true, task: 'Đọc y lệnh' }); await sleep(400); pushState({ busy: false, task: '' });
           if (q.get('edits') && !data.choices[payload.patient.noitruid]) data.choices[payload.patient.noitruid] = { days: 3, deletions: [[], [], []], edits: [{ gio: '07:30', bacSi: { id: 'd2', text: 'BS. Trần Thị Hai' } }, null, { dienBien: 'Đỡ đau nhiều, ngủ được.' }] };
+          if (payload.kind === 'sac') {
+            const sac = { ...source, id: 'sac', thoiGian: '15:00 13/10/2026', thoiGianThucHien: '15:01 13/10/2026', dienBien: 'Chỉ định sắc thuốc thang', dienBienPHCN: '', thuoc: [T('Thang thuốc mẫu', '', 'Thang', '1', 'Thuốc Đông Y', 'Sắc uống ngày 1 thang')], dvkt: [D('Sắc thuốc thang', '1 thang/ngày', 'Y học dân tộc')] };
+            return { rows: [{ id: 'sac', tg: sac.thoiGian, tgth: sac.thoiGianThucHien, bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: sac.dienBien, dienBienPHCN: '', khac: 'Chỉ định Sắc thuốc thang' }], source: sac, skipped: [] } as T;
+          }
           return { rows: [{ id: 'src', tg: '07:04 13/10/2026', tgth: '07:05 13/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }, { id: 'old', tg: '07:04 12/10/2026', tgth: '07:05 12/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }], source, skipped: [] } as T;
         case 'run': {
           pushState({ busy: true, task: 'Sao chép y lệnh', progress: { patient: payload.plans[0].patient.hoTen, index: 0, total: payload.plans.length } });
@@ -180,24 +184,60 @@ export function demoApi() {
           return payload.plans.map((p: any) => {
             const dels: string[][] = p.deletions || Array.from({ length: p.days }, () => []);
             const check = demoCheck(dels);
-            data.runs[p.patient.noitruid] = { at: Date.now(), ok: true, message: `${p.days} ngày`, days: check.days.map((d) => ({ day: d.day, id: d.id, time: d.tg })), check };
+            data.runs[runKey(p.patient, p.kind)] = { at: Date.now(), ok: true, message: `${p.days} ngày`, days: check.days.map((d) => ({ day: d.day, id: d.id, time: d.tg })), check };
             return { noitruid: p.patient.noitruid, ok: true, check };
           }) as T;
         }
         case 'patient:check': {
           pushState({ busy: true, task: 'Kiểm tra lại' }); await sleep(800); pushState({ busy: false, task: '' });
-          const r = data.runs[payload.patient.noitruid];
+          const r = data.runs[runKey(payload.patient, payload.kind)];
           r.check = { ...r.check!, at: Date.now() };
           return { ...r } as T;
         }
         case 'order:delete': {
           pushState({ busy: true, task: 'Xóa y lệnh' }); await sleep(800); pushState({ busy: false, task: '' });
-          const r: RunInfo = data.runs[payload.patient.noitruid];
+          const r: RunInfo = data.runs[runKey(payload.patient, payload.kind)];
           r.days = r.days!.map((d) => (d.id === payload.id ? { ...d, deleted: true } : d));
           r.check = { ...r.check!, days: r.check!.days.map((d) => (d.id === payload.id ? { ...d, deleted: true } : d)) };
           addLog('ok', `Đã xóa y lệnh ${payload.id}`);
           return { ...r } as T;
         }
+        case 'dvkt:scan': {
+          pushState({ busy: true, task: 'Quét thủ thuật cũ' }); await sleep(700); pushState({ busy: false, task: '' });
+          const id = payload.patient.noitruid;
+          const it = (n: string, moTa: string, action: 'xoa' | 'thuhoi') => ({ id: n + id, name: n, moTa, trangThai: action === 'xoa' ? 'Hoàn trả' : 'Chờ thực hiện', action });
+          const r: DvScan = data.dvScans?.[id]?.at && data.dvScans[id].days.every((d) => !d.items.length) ? data.dvScans[id] : { at: Date.now(), days: [
+            { id: 'o1', tg: '07:04 09/10/2026', status: 'Hoàn tất', other: 3, items: [it('Giác hơi điều trị các chứng đau', 'Vùng thắt lưng. Ngày 01 lần x 15 phút', 'xoa'), it('Điện châm [kim ngắn]', 'Châm tả: A thị huyệt. Ngày 01 lần x 30 phút', 'thuhoi')] },
+            { id: 'o2', tg: '07:04 10/10/2026', status: 'Hoàn tất', other: 4, items: [it('Kỹ thuật xoa bóp vùng', 'Vùng thắt lưng và mông chân 2 bên', 'thuhoi')] },
+          ] };
+          data.dvScans = { ...(data.dvScans || {}), [id]: r };
+          return r as T;
+        }
+        case 'dvkt:clean': {
+          pushState({ busy: true, task: 'Dọn thủ thuật' }); await sleep(1200); pushState({ busy: false, task: '' });
+          const id = payload.patient.noitruid;
+          const gone = new Set(payload.days.flatMap((d: { items: string[] }) => d.items));
+          const old = data.dvScans![id];
+          data.dvScans = { ...data.dvScans, [id]: { at: Date.now(), days: old.days.map((d) => ({ ...d, items: d.items.filter((x) => !gone.has(x.id)) })).filter((d) => d.items.length) } };
+          addLog('ok', `Đã dọn ${gone.size} thủ thuật`);
+          return { result: [], deleted: gone.size, dvScans: data.dvScans } as T;
+        }
+        case 'cls:list': pushState({ busy: true, task: 'Đọc kết quả CLS' }); await sleep(600); pushState({ busy: false, task: '' });
+          return { dates: ['10/10/2026', '06/10/2026'], rows: [
+            { kind: 'xn', idx: 0, date: '07:30 10/10/2026', name: 'Xét nghiệm huyết học', status: 'Hoàn tất' }, { kind: 'xn', idx: 1, date: '07:30 10/10/2026', name: 'Xét nghiệm hóa sinh', status: 'Hoàn tất' },
+            { kind: 'xn', idx: 2, date: '08:00 06/10/2026', name: 'Xét nghiệm hóa sinh', status: 'Hoàn tất' }, { kind: 'cdha', idx: 0, date: '09:00 10/10/2026', name: 'Siêu âm ổ bụng tổng quát', status: '' },
+          ], at: Date.now() } as T;
+        case 'cls:read': {
+          pushState({ busy: true, task: 'Đọc kết quả CLS' }); await sleep(900); pushState({ busy: false, task: '' });
+          const r: ClsRead = { at: Date.now(), results: [
+            { kind: 'xn', date: '07:30 10/10/2026', name: 'Xét nghiệm huyết học', total: 18, items: [{ name: 'WBC', value: '11.2', unit: 'G/L', ref: '4-10', flag: 'red' }, { name: 'HGB', value: '112', unit: 'g/L', ref: '120-170', flag: 'blue' }] },
+            { kind: 'xn', date: '07:30 10/10/2026', name: 'Xét nghiệm hóa sinh', total: 6, items: [{ name: 'Glucose', value: '7.8', unit: 'mmol/L', ref: '3.9-6.4', flag: 'red' }] },
+            { kind: 'cdha', date: '09:00 10/10/2026', name: 'Siêu âm ổ bụng tổng quát', ketLuan: 'Gan nhiễm mỡ độ I' },
+          ], text: 'Kết quả CLS:\nCông thức máu: WBC: 11.2 G/L; HGB: 112 g/L\nHóa sinh máu: Glucose: 7.8 mmol/L\nSiêu âm ổ bụng tổng quát: Gan nhiễm mỡ độ I' };
+          return r as T;
+        }
+        case 'cls:create': pushState({ busy: true, task: 'Tạo y lệnh kết quả CLS' }); await sleep(900); pushState({ busy: false, task: '' });
+          return { id: 'new', thoiGian: payload.thoiGian } as T;
         case 'view:nav':
           if (payload?.action === 'list' && q.get('navfail')) throw new Error('Hãy đăng nhập OneMES trước');
           return undefined as T;

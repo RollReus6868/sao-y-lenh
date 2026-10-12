@@ -50,7 +50,7 @@
     h += '</table></div></div></div>';
     document.getElementById('divToaThuocDanhSachContent').innerHTML = h;
   };
-  window.onShowLichSuChung = function () {};
+  if (MOCK_PAGE === 'list') window.onShowLichSuChung = function () {};
 
   if (MOCK_PAGE === 'list') {
     // Like OneMES: an empty table first, the patients a little later.
@@ -73,7 +73,8 @@
         '<td><a ' + cl + '>' + o.tg + '</a></td><td><a ' + cl + '>' + o.tgth + '</a></td><td><a ' + cl + '>' + esc(o.bacSi) + '</a></td>' +
         '<td>' + (o.dienBien ? '<a data-content="' + esc(o.dienBien) + '" data-toggle="popover" ' + cl + '>' + short(o.dienBien) + '</a>' : '') + '</td>' +
         '<td>' + (o.dienBienPHCN ? '<a data-content="' + esc(o.dienBienPHCN) + '" data-toggle="popover" ' + cl + '>' + short(o.dienBienPHCN) + '</a>' : '') + '</td>' +
-        '<td></td><td>' + esc(o.khac) + '</td><td>III-C</td><td></td><td></td><td></td></tr>';
+        '<td></td><td>' + esc(o.khac) + '</td><td>III-C</td><td></td><td></td>' +
+        (o.dv ? '<td style="background-color: #fdf500;"></td>' : '<td></td>') + '</tr>';
     });
     h += '</table></div></div></div>';
     document.getElementById('divNoiTruContent').innerHTML = h;
@@ -147,16 +148,122 @@
       Object.keys(tops[top]).forEach(function (g) {
         d += '<tr class="grouploaidv1 collapse in"><td colspan="10"><a style="margin-left: 30px" href="javascript:void(0);" class="item-question">' + esc(g) + ' (' + tops[top][g].length + ')</a></td></tr>';
         tops[top][g].forEach(function (x, i) {
-          var actions = done ? '<td></td><td></td>' :
+          // Like OneMES, a completed order still shows the edit / delete icons on its services.
+          var actions = done ? '<td><a href="javascript:EditDichVu(\'' + x.id + '\');">✎</a> <a href="javascript:DeleteDichVu(\'' + x.id + '\');">⊗</a></td><td></td>' :
             '<td><a href="javascript:EditDichVu(\'' + x.id + '\');">✎</a> <a href="javascript:DeleteDichVu(\'' + x.id + '\');">⊗</a></td><td><a href="javascript:ChuyenTHYeuCauDV(\'' + x.id + '\', \'0\');">↷</a></td>';
           d += '<tr id="' + x.id + '" class="grouploaidv1 collapse in">' + actions + '<td>' + (i + 1) + '</td><td>' + ylenh.tg + '</td><td>' + esc(x.name) +
-            ' <i style="color: red;">(' + esc(x.moTa) + ')</i></td><td>' + esc(x.noiThucHien) + '</td><td>' + esc(x.sl) + '</td><td>100</td><td>' + esc(x.doiTuong) + '</td><td>' + esc(x.trangThai) + '</td></tr>';
+            ' <i style="color: red;">(' + esc(x.moTa) + ')</i></td><td>' + esc(x.noiThucHien) + '</td><td>' + esc(x.sl) + '</td><td>100</td><td>' + esc(x.doiTuong) + '</td><td>' + dvBadge(x.trangThai) + '</td></tr>';
         });
       });
     });
     d += '</table></div>';
     document.getElementById('divDichVu').innerHTML = d;
   }
+
+  function dvBadge(st) {
+    if (st === 'Chờ thực hiện') return '<span class="badge" style="background-color:#3F7DF7">Chờ thực hiện</span>';
+    if (st === 'Chờ tổng hợp') return '<span class="badge" style="background-color:#2eb8ec">Chờ tổng hợp</span>';
+    if (st === 'Hoàn tất') return '<span class="badge badge-danger">Hoàn tất</span>';
+    return esc(st);
+  }
+  window.loadYeuCauDichVu = function () { if (ylenh) { ylenh = call('order', { id: window._ylenh_ID }).value.RetObject; drawTables(ylenh.status === 'Hoàn tất'); } };
+
+  // ----- Sửa DVKT (popup) -----
+  window.checkSuaDV = false;
+  window.LoadDichVuSuaPopup = function () {
+    var o = call('order', { id: window._ylenh_ID }).value.RetObject;
+    var h = '<table class="table table-bordered"><tr><th>x</th><th>STT</th><th>Thời gian chỉ định</th><th>Dịch vụ (' + o.dvkt.length + ')</th><th>SL</th><th>Đối tượng</th><th>Nơi thực hiện</th><th>Trạng thái</th><th>Thành tiền</th></tr>';
+    o.dvkt.forEach(function (x, i) {
+      var a = '';
+      if (x.trangThai === 'Chờ thực hiện') a = '<a href="javascript:ThuHoiDichVu(\'' + x.id + '\');" title="Thu hồi">↶</a>';
+      else if (x.trangThai === 'Mới') a = '<a href="javascript:DeleteDichVu(\'' + x.id + '\');" title="Xóa">⊗</a> <a href="javascript:ChuyenTHYeuCauDV(\'' + x.id + '\', \'0\');" title="Chuyển thực hiện">↷</a>';
+      else if (x.trangThai === 'Hoàn trả') a = '<a href="javascript:DeleteDichVu(\'' + x.id + '\');" title="Xóa">⊗</a>';
+      h += '<tr><td>' + a + '</td><td>' + (i + 1) + '</td><td>' + o.tg + '</td><td>' + esc(x.name) + ' <i>(' + esc(x.moTa) + ')</i></td><td>1</td><td>' + esc(x.doiTuong) + '</td><td>' + esc(x.noiThucHien) + '</td><td>' + dvBadge(x.trangThai) + '</td><td>50.300</td></tr>';
+    });
+    h += '</table><div class="modal-footer"><button type="button" class="btn" onclick="$(\'#divFormModalSuaDV\').modal(\'hide\')">Xác nhận</button><button type="button" class="btn" onclick="$(\'#divFormModalSuaDV\').modal(\'hide\')">Bỏ qua</button></div>';
+    document.getElementById('divModalContentSuaDV').innerHTML = h;
+  };
+  window.showSuaDVKT = function () {
+    window.LoadDichVuSuaPopup();
+    window.jQuery('#divFormModalSuaDV').modal('show');
+    window.checkSuaDV = true;
+  };
+  window.ThuHoiDichVu = function (ID) {
+    swal({ title: 'Bạn có chắc?', text: 'Bạn có muốn thu hồi dịch vụ không?', type: 'warning', showCancelButton: true,
+      confirmButtonClass: 'btn-danger', confirmButtonText: 'Có', cancelButtonText: 'Không', closeOnConfirm: false, closeOnCancel: false },
+    function (ok) {
+      if (ok) {
+        var r = call('thuHoiDV', { id: ID }).value;
+        if (r.Error) { window.callGallAlert(r.InfoMessage); return; }
+        window.loadYeuCauDichVu();
+        if (window.checkSuaDV) window.LoadDichVuSuaPopup();
+        swal.close();
+        toastr.info('Thu hồi yêu cầu dịch vụ thành công');
+      } else swal.close();
+    });
+  };
+  window.ChuyenTHYeuCauDV = function (ID) {
+    var r = call('chuyenTH', { id: ID }).value;
+    if (r.Error) { window.callGallAlert(r.InfoMessage); return; }
+    window.loadYeuCauDichVu();
+    if (window.checkSuaDV) window.LoadDichVuSuaPopup();
+    toastr.info('Chuyển thực hiện yêu cầu dịch vụ thành công');
+  };
+
+  // ----- Thêm y lệnh mới -----
+  window.onshowThamKham = function () {
+    var r = call('themYLenh', { noitruid: window.noitruid }).value;
+    if (r.Error) { window.callGallAlert(r.InfoMessage); return; }
+    window.onDrawWebpartYLenh(r.RetExtraParam1);
+  };
+
+  // ----- Xem kết quả (Lịch sử XN, CĐHA) -----
+  var kq = null;
+  window.onShowLichSuChung = function () {
+    kq = call('kq', {}).value.RetObject;
+    document.getElementById('divModalContentChung').innerHTML =
+      '<ul class="nav nav-tabs"><li><a data-toggle="tab" href="#tabKCB">Lịch sử KCB</a></li><li><a data-toggle="tab" href="#tabXN">Lịch sử XN</a></li><li><a data-toggle="tab" href="#tabCDHA">Lịch sử CĐHA</a></li><li><a data-toggle="tab" href="#tabTDCN">Lịch sử TDCN</a></li></ul>' +
+      '<div class="tab-content"><div id="tabXN"><div class="row"><div class="col-md-4" id="divLichSuXNContent"></div><div class="col-md-8" id="divDrawCt"></div></div></div>' +
+      '<div id="tabCDHA"><div class="row"><div class="col-md-4" id="divLichSuCDHAContent"></div><div class="col-md-8" id="divLichSuCDHAContentChiTiet"></div></div></div>' +
+      '<div id="tabTDCN"><div id="divLichSuTDCNContent"></div></div></div>';
+    window.jQuery('#divFormModalChung').modal('show');
+    // The two lists arrive a moment later.
+    setTimeout(function () {
+      var x = '<table class="table" id="tbDichVu"><tr><th>STT</th><th>TG chỉ định</th><th>Người chỉ định</th><th>Loại xét nghiệm</th><th>Trạng thái</th></tr>';
+      kq.xn.forEach(function (r, i) {
+        x += '<tr onclick="fnLoadChiTiet(\'' + r.id + '\', this, \'' + esc(r.loai) + '\')"><td>' + (i + 1) + '</td><td><span class="badge">' + r.tg + '</span></td><td>BS. Nguyễn Văn Mẫu</td><td>' + esc(r.loai) + '</td><td><span class="badge badge-danger">Hoàn tất</span></td></tr>';
+      });
+      document.getElementById('divLichSuXNContent').innerHTML = x + '</table>';
+      var c = '<table class="table" id="tbDichVu"><tr><th>STT</th><th>Thời gian chỉ định</th><th>Tên dịch vụ</th></tr>';
+      kq.cdha.forEach(function (r, i) {
+        c += '<tr onclick="fnLoadChiTietKetQuaCDHA(\'' + r.id + '\', \'' + r.id + '\', this)"><td>' + (i + 1) + '</td><td><span class="badge">' + r.tg + '</span></td><td>' + esc(r.ten) + '</td></tr>';
+      });
+      document.getElementById('divLichSuCDHAContent').innerHTML = c + '</table>';
+    }, 300);
+  };
+  window.fnLoadChiTiet = function (value) {
+    var r = kq.xn.filter(function (x) { return x.id === value; })[0];
+    setTimeout(function () {
+      var h = '<div class="form-group"><label>Loại dịch vụ</label><input class="form-control" value="' + esc(r.loai) + '"></div>' +
+        '<table class="table"><tr><th>STT</th><th>Chỉ số</th><th>Kết quả</th><th>Khoảng tham chiếu</th><th>Đơn vị</th><th>KQ tiền sử</th><th>Ngày tiền sử</th></tr>' +
+        '<tr><td colspan="7"><b>' + esc(r.dv) + '</b></td></tr>';
+      r.items.forEach(function (it, i) {
+        var st = it[4] === 'red' ? ' style="color: red; font-weight: bold;"' : it[4] === 'blue' ? ' style="color: blue; font-weight: bold;"' : '';
+        h += '<tr><td>' + (i + 1) + '</td><td>' + esc(it[0]) + '</td><td' + st + '>' + esc(it[1]) + '</td><td>' + esc(it[2]) + '</td><td>' + esc(it[3]) + '</td><td></td><td></td></tr>';
+      });
+      document.getElementById('divDrawCt').innerHTML = h + '</table><div class="form-group"><label>Kết quả</label><textarea class="form-control"></textarea></div>';
+    }, 250);
+  };
+  window.fnLoadChiTietKetQuaCDHA = function (value) {
+    var r = kq.cdha.filter(function (x) { return x.id === value; })[0];
+    setTimeout(function () {
+      document.getElementById('divLichSuCDHAContentChiTiet').innerHTML =
+        '<table class="table"><tr><th>STT</th><th>Tên dịch vụ</th></tr><tr><td>1</td><td>' + esc(r.ten) + '</td></tr></table>' +
+        '<div class="form-group"><label>Kết quả</label><div class="note-editable" id="kq_txtMoTa">' + esc(r.moTa) + '</div></div>' +
+        '<div class="form-group"><label>Kết luận</label><textarea class="form-control">' + esc(r.ketLuan) + '</textarea></div>' +
+        '<div class="form-group"><label>Ghi chú</label><textarea class="form-control"></textarea></div>';
+    }, 250);
+  };
 
   window.onDrawWebpartYLenh = function (id) {
     document.getElementById('divWebpart').style.display = 'none';
@@ -444,14 +551,18 @@
   };
   window.DeleteDichVu = function (yeucauid) {
     var row = document.getElementById(yeucauid); if (row) row.style.backgroundColor = 'red';
-    swal({ title: 'Bạn có chắc?', text: 'Bạn có muốn xóa dịch vụ không?', type: 'warning', showCancelButton: true,
+    var it = ylenh && ylenh.dvkt.filter(function (x) { return x.id === yeucauid; })[0];
+    // OneMES asks to "hủy" a service it already returned, to "xóa" the others.
+    var huy = it && it.trangThai === 'Hoàn trả';
+    swal({ title: 'Bạn có chắc?', text: huy ? 'Bạn có muốn hủy dịch vụ không?' : 'Bạn có muốn xóa dịch vụ không?', type: 'warning', showCancelButton: true,
       confirmButtonClass: 'btn-danger', confirmButtonText: 'Có', cancelButtonText: 'Không', closeOnConfirm: false, closeOnCancel: false },
     function (ok) {
       if (ok) {
         var r = call('xoaDichVu', { id: yeucauid }).value;
         if (r.Error) { window.callGallAlert(r.InfoMessage); return; }
         toastr.info('Xóa yêu cầu dịch vụ thành công');
-        drawOrder();
+        window.loadYeuCauDichVu();
+        if (window.checkSuaDV) window.LoadDichVuSuaPopup();
       } else { swal.close(); }
       swal.close();
     });

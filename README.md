@@ -13,13 +13,15 @@ Tool desktop sao chép và sửa y lệnh nội trú trên OneMES 3.0: quét dan
 1. Mở mục **Trình duyệt** ở thanh bên, đăng nhập OneMES như trên Chrome. Nút **Ds Điều trị nội trú** đưa thẳng tới danh sách bệnh nhân.
 2. **Quét danh sách**.
 3. Bấm một bệnh nhân. Tool mở Lịch sử y lệnh và chọn y lệnh nguồn.
-4. Chọn **Số ngày tạo** (1 = chỉ Sao chép; 2–4 = Sao chép + Sao y lệnh 1–3 ngày).
+4. Ở thẻ **Sao chép**, chọn **Y lệnh thường** hoặc **Sắc thuốc thang** (y lệnh có Y lệnh khác "Chỉ định sắc thuốc thang"), rồi **Số ngày** (1 = chỉ Sao chép; 2–4 = Sao chép + Sao y lệnh 1–3 ngày).
 5. Tick ô đỏ ở mục cần xóa cho từng ngày. Bấm tên mục để chọn cả hàng; bấm tiêu đề cột để chọn nhanh hoặc áp mẫu. Vật tư y tế có ghi (Hao phí) hoặc (Bảo hiểm).
 6. Muốn đổi giờ thực hiện, bác sĩ, cấp độ chăm sóc hay diễn biến của ngày nào thì bấm ngày đó ở **Sửa từng ngày**. Sửa ở một ngày thì các ngày sau cũng theo; ngày sau nào sửa riêng thì giữ phần riêng đó.
    Muốn thêm **Cồn xoa bóp** hay **Cao thông mạch** ngày nào thì tick ô xanh **+** ở hàng **Thêm thuốc**. Kho, số lượng, cách dùng đổi ở **Cài đặt → Thêm thuốc khi sao chép**.
-7. **Sao chép & xóa cho N ngày** → xem lại → **Bắt đầu**.
+7. **Sao chép N ngày** (góc phải) → xem lại → **Bắt đầu**.
 8. Xong, tool tự kiểm tra lại và mở thẻ **Kết quả**: xem từng ngày vừa tạo. Ngày nào sai thì bấm **Sửa** rồi **Cập nhật lên OneMES**, hoặc **Xóa** (tool Thu hồi rồi Xóa trên OneMES).
 9. Thẻ **Bệnh án**: lần đầu bấm **Nhập mẫu từ file HTML** và chọn trang Thông tin bệnh án đã hoàn tất (lưu bằng Ctrl+S trong Chrome). Có thể lưu nhiều mẫu (tự điền rồi **Lưu làm mẫu**, hoặc nhập thêm file) và chọn mẫu ở ô **Mẫu** rồi **Điền từ mẫu**; đổi tên, xóa mẫu ở Cài đặt. Bệnh nhân mới bắt đầu từ mẫu có ngôi sao; sửa rồi **Cập nhật bệnh án lên OneMES**. Tool chỉ điền ô còn trống trên OneMES, ô đã có nội dung giữ nguyên.
+10. Thẻ **Dọn thủ thuật**: **Quét các ngày cũ** liệt kê thủ thuật **Hoàn trả** hoặc **Chờ thực hiện** ở các ngày trước hôm nay có cột DV vàng (bỏ qua y lệnh sắc thuốc thang). Bỏ tick mục không muốn dọn, bấm **Dọn**.
+11. Thẻ **Kết quả CLS**: **Đọc Xem kết quả**, chọn ngày, **Lấy kết quả**: tool ghi các chỉ số màu đỏ hoặc xanh dương (tên + kết quả) và kết luận CĐHA. Sửa nội dung, chọn giờ và ngày, rồi **Tạo y lệnh mới**.
 
 Lần đầu nên bật **Từng bước** và thử với 1 bệnh nhân.
 
@@ -34,6 +36,9 @@ Nhật ký: `%APPDATA%\SaoYLenh\logs`.
 - Mỗi ngày tiếp theo: mở, kiểm tra trạng thái Mới, xóa, Hoàn tất.
 - Sửa giờ, bác sĩ, cấp độ, diễn biến: ngày 1 sửa trước khi Sao y lệnh; ngày sau chỉ Thu hồi khi khác với điều đã chọn. Điền vào ô, bấm Lưu, đọc lại, rồi Hoàn tất.
 - Thêm thuốc: trên y lệnh đang Mới, bấm Kê Tây y/VTYT, chọn kho, gõ từ khóa vào ô Thuốc/VTYT và chọn đúng tên, điền số lượng và cách dùng, bấm Thêm, rồi Chấp nhận. Không bao giờ bấm X hay Bỏ qua của popup này (OneMES xóa cả đơn thuốc). Thuốc tick ở mọi ngày được thêm trên ngày 1 trước Sao y lệnh; thuốc chỉ tick vài ngày thì thêm riêng từng ngày. Ngày đã có thuốc đó thì không thêm lần nữa.
+- Sắc thuốc thang: sao chép như y lệnh thường. Kiểm tra trùng ngày chỉ tính y lệnh cùng loại, nên ngày đã có y lệnh thường vẫn nhận được y lệnh sắc.
+- Dọn thủ thuật: Hoàn trả thì bấm xóa (Có). Chờ thực hiện thì mở Sửa DVKT, Thu hồi (Có), rồi xóa (Có). Y lệnh vẫn Hoàn tất. Không bao giờ bấm nút chuyển thực hiện.
+- Kết quả CLS: mở Xem kết quả, bấm từng dòng của Lịch sử XN và Lịch sử CĐHA thuộc ngày đã chọn, lấy giá trị chữ đỏ hoặc xanh dương và Kết luận. Tạo y lệnh: Thêm y lệnh mới, điền giờ thực hiện (chỉ định sớm hơn 1 phút) và Diễn biến bệnh, Lưu, đọc lại, Hoàn tất nếu bật Tự Hoàn tất.
 - Bệnh án: Tổng kết → Lập bìa bệnh án, đọc nội dung hiện có, chỉ điền các ô còn trống, gọi Lưu Thông tin chung và Lưu Thông tin chuyên khoa của chính trang đó, rồi mở lại để so.
 - Khi OneMES báo cảnh báo hoặc trang không như mong đợi, tool dừng bệnh nhân đó và ghi nhật ký, không đoán.
 

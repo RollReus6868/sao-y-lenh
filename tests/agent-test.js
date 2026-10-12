@@ -16,7 +16,9 @@ const { createDriver } = require('../src/driver');
     check(pts[1].chanDoan.includes('cổ vai'), 'diagnosis parsed');
 
     const { rows, source } = await d.loadPatient(pts[0]);
-    check(rows.length === 4, 'order history has 4 rows');
+    check(rows.length === 5, 'order history has 5 rows');
+    check(rows[1].khac.includes('Sắc thuốc thang') && !rows[1].dienBienPHCN, 'sắc thuốc thang order listed second');
+    check(rows[0].dv && rows[1].dv && !rows[2].dv && rows[3].dv && rows[4].dv, 'yellow DV column read');
     check(source && source.id === rows[0].id, 'source = newest order with both progress notes');
     check(source.thuoc.length === 5 && source.dvkt.length === 5, 'source items read');
     check(source.thuoc[1].name === 'HOẠT HUYẾT KHỨ Ứ ẨM' && source.thuoc[1].group === 'Thuốc Tây Y' && source.thuoc[1].sl === '2', 'drug columns aligned');

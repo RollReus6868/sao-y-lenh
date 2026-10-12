@@ -34,7 +34,7 @@ async function waitFor(what, fn, ms = 30000) {
   args.push(`--remote-debugging-port=${PORT}`);
   const app = spawn(exe || electronBin, args, {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, SYL_DATA_DIR: dataDir, SYL_ONEMES_URL: m.base + '/login.aspx', SYL_NO_UPDATE_CHECK: '1' },
+    env: { ...process.env, SYL_DATA_DIR: dataDir, SYL_ONEMES_URL: m.base + '/login.aspx', SYL_NO_UPDATE_CHECK: '1', SYL_TODAY: '00:00 12/10/2026' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let appOut = '';
@@ -193,6 +193,42 @@ async function waitFor(what, fn, ms = 30000) {
     const ba = m.mock.getState().patients[1].benhAn;
     check(ba.txtLyDoVaoVien === 'Đau lưng (mẫu e2e)' && ba.ckTsThuocLa === true && ba.HinhThai.join() === '1,3' && ba.CDCS === ' Cấp II' && ba.TomTatBa === 'Tóm tắt đã sửa', 'bệnh án: template + edit written to OneMES');
     check(!(await ui.$('[data-ba-warn]')), 'bệnh án: read back without differences');
+
+    // Dọn thủ thuật on the old days: untick one, clean the other two.
+    m.mock.getState().log.length = 0;
+    await ui.click('[data-tab=dv]');
+    await ui.click('[data-action=dv-scan]');
+    await ui.waitForSelector('[data-dv-item]', { timeout: 60000 });
+    check((await ui.$$('[data-dv-item]')).length === 3, 'dọn: three services listed');
+    await ui.click('[data-dv-item="Kỹ thuật xoa bóp vùng"]');
+    await ui.click('[data-action=dv-clean]');
+    await ui.click('[data-action=dv-confirm]');
+    await ui.waitForSelector('[data-runbar]', { timeout: 10000 });
+    await waitFor('dọn finished', async () => !(await ui.$('[data-runbar]')), 120000);
+    const lgd = m.mock.getState().log.map((x) => x[0]);
+    check(lgd.filter((x) => x === 'thuHoiDV').length === 1 && lgd.filter((x) => x === 'xoaDichVu').length === 2 && !lgd.includes('chuyenTH'), 'dọn: one recalled, two deleted: ' + lgd.join());
+    await ui.waitForSelector('[data-dv-item]', { timeout: 10000 });
+    check((await ui.$$('[data-dv-item]')).length === 1 && !!(await ui.$('[data-dv-item="Kỹ thuật xoa bóp vùng"]')), 'dọn: the unticked one is still listed');
+
+    // Kết quả CLS into a new order.
+    await ui.click('[data-tab=cls]');
+    await ui.click('[data-action=cls-list]');
+    await ui.waitForSelector('[data-cls-date="10/10/2026"]', { timeout: 60000 });
+    await ui.click('[data-cls-date="10/10/2026"]');
+    await ui.click('[data-action=cls-read]');
+    await ui.waitForSelector('[data-cls-results]', { timeout: 60000 });
+    const clsText = await ui.inputValue('[data-field=cls-text]');
+    check(/^Kết quả CLS:\nCông thức máu: WBC: 11.2 G\/L/.test(clsText) && /Gan nhiễm mỡ độ I/.test(clsText), 'CLS: abnormal values read: ' + JSON.stringify(clsText));
+    await ui.fill('[data-cls] [data-field=gio]', '14:20');
+    await ui.press('[data-cls] [data-field=gio]', 'Enter');
+    await ui.fill('[data-field=cls-ngay]', '11/10/2026');
+    const before2 = m.mock.getState().patients[1].orders.map((o) => o.id);
+    await ui.click('[data-action=cls-create]');
+    await ui.click('[data-action=cls-confirm]');
+    await ui.waitForSelector('[data-runbar]', { timeout: 10000 });
+    await waitFor('CLS order created', async () => !(await ui.$('[data-runbar]')), 120000);
+    const cls = m.mock.getState().patients[1].orders.filter((o) => !before2.includes(o.id));
+    check(cls.length === 1 && cls[0].dienBien === clsText && hm(cls[0].dateTH) === '14:20' && cls[0].dateTH.getDate() === 11 && cls[0].status === 'Hoàn tất', 'CLS: new order with the text at 14:20 11/10, completed');
 
     // Choice is remembered and shown in the list.
     await ui.click('[data-action=back]');

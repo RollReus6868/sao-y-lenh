@@ -3,8 +3,8 @@ import { AlertTriangle, Check, CheckCircle2, ClipboardCheck, Clock, Loader2, Pen
 import { cn } from '@/kit/cn';
 import { Button, EmptyState, Pill } from '@/kit/ui';
 import { useApp } from '@/lib/useApp';
-import { itemName, type CheckDay, type CheckItem, type DayEdit, type Patient, type RunInfo } from '@/lib/types';
-import { ActionBar, Sheet } from '@/components/common';
+import { itemName, runKey, type CheckDay, type CheckItem, type DayEdit, type Kind, type Patient, type RunInfo } from '@/lib/types';
+import { Sheet } from '@/components/common';
 import { OrderFields, editSummary, type OrderBase } from '@/components/OrderFields';
 import { dayLabel, hhmmOf, parseDay } from '@/lib/dates';
 
@@ -14,13 +14,14 @@ const when = (t: number) => new Date(t).toLocaleString('vi-VN', { hour: '2-digit
 
 // What the tool found when it read back the days it just created, with a way to
 // remove a day that came out wrong.
-export function ResultView({ patient }: { patient: Patient }) {
+export function ResultView({ patient, kind = 'thuong' }: { patient: Patient; kind?: Kind }) {
   const { data, state, call, toast, setData } = useApp();
   const [ask, setAsk] = useState<CheckDay | null>(null);
   const [pending, setPending] = useState('');
   const [editing, setEditing] = useState('');
   const [fix, setFix] = useState<Fix | null>(null);
-  const run = data?.runs[patient.noitruid];
+  const rk = runKey(patient, kind);
+  const run = data?.runs[rk];
   const check = run?.check;
   const checking = state.busy && state.task === 'Kiểm tra lại';
   const deleting = state.busy && state.task === 'Xóa y lệnh';
@@ -28,10 +29,10 @@ export function ResultView({ patient }: { patient: Patient }) {
   const created = (run?.days || []).filter((d) => !d.deleted);
 
   const save = (r: RunInfo | null) => {
-    if (r && data) setData({ ...data, runs: { ...data.runs, [patient.noitruid]: r } });
+    if (r) setData((x) => x && { ...x, runs: { ...x.runs, [rk]: r } });
   };
   const recheck = async () => {
-    const r = await call<RunInfo>('patient:check', { patient }).catch(() => null);
+    const r = await call<RunInfo>('patient:check', { patient, kind }).catch(() => null);
     save(r);
     if (r?.check) toast(r.check.ok ? 'success' : 'warning', r.check.ok ? 'Kiểm tra xong: đúng như đã chọn' : 'Kiểm tra xong: có ngày cần xem lại');
   };
@@ -40,7 +41,7 @@ export function ResultView({ patient }: { patient: Patient }) {
     setAsk(null);
     if (!d) return;
     setPending(d.id);
-    const r = await call<RunInfo>('order:delete', { patient, id: d.id }).catch(() => null);
+    const r = await call<RunInfo>('order:delete', { patient, kind, id: d.id }).catch(() => null);
     setPending('');
     save(r);
     if (r) toast('success', `Đã xóa y lệnh ngày ${d.day}${d.tg ? ` (${d.tg})` : ''}`);
@@ -53,6 +54,7 @@ export function ResultView({ patient }: { patient: Patient }) {
     setPending(f.day.id);
     const r = await call<RunInfo>('order:update', {
       patient,
+      kind,
       id: f.day.id,
       edit: f.edit,
       remove: f.remove.map((it) => ({ id: it.id, base: it.base, name: it.name })),
@@ -89,6 +91,9 @@ export function ResultView({ patient }: { patient: Patient }) {
               {check && ` · kiểm tra lúc ${when(check.at)}`}
             </div>
           </div>
+          <Button variant="outline" size="sm" className="shrink-0" disabled={state.busy || !created.length} onClick={recheck} data-action="recheck">
+            {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />} {checking ? 'Đang kiểm tra…' : 'Kiểm tra lại'}
+          </Button>
         </div>
 
         <div className="mt-3 space-y-3">
@@ -107,12 +112,6 @@ export function ResultView({ patient }: { patient: Patient }) {
           ))}
         </div>
       </div>
-
-      <ActionBar>
-        <Button variant="gradient" size="xl" className="w-full" disabled={state.busy || !created.length} onClick={recheck} data-action="recheck">
-          {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />} {checking ? 'Đang kiểm tra…' : 'Kiểm tra lại trên OneMES'}
-        </Button>
-      </ActionBar>
 
       <Sheet
         open={!!ask}

@@ -2,7 +2,7 @@
 // calls OneMES's own functions; it never calls the server directly.
 // Every function returns plain data so it survives structured clone.
 (function () {
-  if (window.__SYL && window.__SYL.version === 8) return;
+  if (window.__SYL && window.__SYL.version === 9) return;
 
   const txt = (el) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
   const norm = (s) =>
@@ -216,12 +216,17 @@
   }
 
   // ---------- Lịch sử y lệnh ----------
-  function showOrderList() {
+  // all = show every order (Số lượng hiển thị "Tất cả"), needed to reach the first days.
+  function showOrderList(all) {
     hookToastr();
     if (typeof window.backForm === 'function' && isShown(byId('divWebpartPopup'))) window.backForm();
     if (typeof window.onshowDsYLenh !== 'function') return { ok: false, reason: 'no-onshowDsYLenh' };
     const sl = byId('soLuongHienThi');
-    if (sl && sl.value && parseInt(sl.value, 10) < 25) {
+    if (sl && all) {
+      const opts = [...sl.options].map((o) => o.value);
+      const max = opts.map((v) => parseInt(v, 10)).filter((n) => n > 0).sort((a, b) => b - a)[0];
+      if (max && parseInt(sl.value, 10) !== max) sl.value = String(max);
+    } else if (sl && sl.value && parseInt(sl.value, 10) < 25) {
       sl.value = '25';
     }
     if (byId('divDsYLenh') && typeof window.loadListYLenh === 'function') window.loadListYLenh();
@@ -249,6 +254,7 @@
       theoDoi: col('Y lệnh theo dõi'),
       khac: col('Y lệnh khác'),
       cdcs: col('CĐ CS'),
+      dv: col('DV'),
     };
     const full = (td) => {
       if (!td) return '';
@@ -271,9 +277,18 @@
         theoDoi: full(g('theoDoi')),
         khac: full(g('khac')),
         cdcs: txt(g('cdcs')),
+        // DV column painted yellow (#fdf500): the day has services still to deal with.
+        dv: isYellow(g('dv')),
       });
     }
     return { ok: true, noitruid: String(window.noitruid || ''), rows };
+  }
+
+  const rgb = (c) => (/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/.exec(c || '') || []).slice(1).map(Number);
+  function isYellow(td) {
+    if (!td) return false;
+    const [r, g, b, a] = rgb(getComputedStyle(td).backgroundColor);
+    return a !== 0 && r > 200 && g > 200 && b < 120;
   }
 
   // ---------- Một y lệnh ----------
@@ -908,8 +923,235 @@
     return { ok: true };
   }
 
+  // ---------- Sửa DVKT (popup) ----------
+  // showSuaDVKT() lists the order's services with their own links: ThuHoiDichVu (status
+  // Chờ thực hiện -> Mới), DeleteDichVu, ChuyenTHYeuCauDV.
+  function suaDVModal() {
+    return byId('divFormModalSuaDV');
+  }
+  function dvSuaOpen() {
+    hookToastr();
+    if (typeof window.showSuaDVKT !== 'function') return { ok: false, reason: 'no-showSuaDVKT' };
+    window.showSuaDVKT();
+    return { ok: true };
+  }
+  function dvSuaState() {
+    const m = suaDVModal();
+    const open = !!m && (isShown(m) || m.classList.contains('in'));
+    const rows = [];
+    if (open) {
+      const seen = new Set();
+      for (const a of m.querySelectorAll('a[href*="DichVu"], a[onclick*="DichVu"], a[href*="YeuCauDV"], a[onclick*="YeuCauDV"]')) {
+        const code = (a.getAttribute('href') || '') + ' ' + (a.getAttribute('onclick') || '');
+        const mm = /(ThuHoiDichVu|DeleteDichVu|ChuyenTHYeuCauDV|EditDichVu)\('([0-9a-f-]{36})'/i.exec(code);
+        if (!mm) continue;
+        const id = mm[2].toLowerCase();
+        let r = rows.find((x) => x.id === id);
+        if (!r) {
+          const tr = a.closest('tr');
+          r = { id, thuHoi: false, del: false, chuyen: false, text: txt(tr) };
+          rows.push(r);
+          seen.add(id);
+        }
+        if (/ThuHoiDichVu/i.test(mm[1])) r.thuHoi = true;
+        if (/DeleteDichVu/i.test(mm[1])) r.del = true;
+        if (/ChuyenTHYeuCauDV/i.test(mm[1])) r.chuyen = true;
+      }
+    }
+    return { open, rows };
+  }
+  function dvThuHoi(id) {
+    const st = dvSuaState();
+    if (!st.open) return { ok: false, reason: 'Bảng Sửa DVKT chưa mở' };
+    const r = st.rows.find((x) => x.id === norm(id));
+    if (!r || !r.thuHoi) return { ok: false, reason: 'Không thấy nút Thu hồi của dịch vụ này trong Sửa DVKT' };
+    if (typeof window.ThuHoiDichVu !== 'function') return { ok: false, reason: 'no-ThuHoiDichVu' };
+    window.ThuHoiDichVu(id);
+    return { ok: true };
+  }
+  function dvSuaClose() {
+    const m = suaDVModal();
+    if (!m) return { ok: true };
+    if (window.jQuery && window.jQuery.fn && window.jQuery.fn.modal) window.jQuery(m).modal('hide');
+    else m.style.display = 'none';
+    return { ok: true };
+  }
+
+  // ---------- Xem kết quả (Lịch sử KCB: XN, CĐHA) ----------
+  function kqModal() {
+    return byId('divFormModalChung');
+  }
+  function kqOpen() {
+    hookToastr();
+    if (typeof window.onShowLichSuChung !== 'function') return { ok: false, reason: 'no-onShowLichSuChung' };
+    const a = [...document.querySelectorAll('a[onclick*="onShowLichSuChung"]')].find((x) => /xem kết quả/i.test(txt(x))) || null;
+    for (const id of ['divLichSuXNContent', 'divDrawCt', 'divLichSuCDHAContent', 'divLichSuCDHAContentChiTiet']) {
+      const el = byId(id);
+      if (el) el.innerHTML = '';
+    }
+    window.onShowLichSuChung(a);
+    return { ok: true };
+  }
+  // Clicks the Lịch sử XN / Lịch sử CĐHA tabs, in case their lists load on demand.
+  function kqTabs() {
+    const m = kqModal();
+    if (!m) return { ok: false };
+    let n = 0;
+    for (const a of m.querySelectorAll('a, li, button')) {
+      if (a.children.length > 1) continue;
+      if (/^lịch sử (xn|cđha|cdha)$/i.test(txt(a))) {
+        a.click();
+        n++;
+      }
+    }
+    return { ok: true, n };
+  }
+  const TIME_RE = /(\d{1,2}:\d{2})\s+(\d{1,2}\/\d{1,2}\/\d{4})/;
+  // The rows of one history table: what opens each row, its date and its name.
+  function kqRows(root, fn, nameHeads) {
+    const out = [];
+    if (!root) return out;
+    const opens = [...root.querySelectorAll(`[onclick*="${fn}("]`)];
+    const trs = [];
+    for (const el of opens) {
+      const tr = el.closest('tr');
+      if (tr && !trs.includes(tr)) trs.push(tr);
+    }
+    trs.forEach((tr, i) => {
+      const tbl = tr.closest('table');
+      const heads = headerCols(tbl);
+      const tds = [...tr.children].filter((x) => x.tagName === 'TD');
+      let name = '';
+      for (const h of nameHeads) {
+        const k = heads.indexOf(norm(h));
+        if (k >= 0 && tds[k]) {
+          name = txt(tds[k]);
+          break;
+        }
+      }
+      const st = heads.indexOf(norm('Trạng thái'));
+      const m = TIME_RE.exec(txt(tr));
+      out.push({ idx: i, date: m ? `${m[1]} ${m[2]}` : '', name, status: st >= 0 && tds[st] ? txt(tds[st]) : '' });
+    });
+    return out;
+  }
+  function kqList() {
+    const m = kqModal();
+    const xn = byId('divLichSuXNContent');
+    const cd = byId('divLichSuCDHAContent');
+    return {
+      ok: !!(xn && cd),
+      open: !!m && (isShown(m) || m.classList.contains('in')),
+      xn: kqRows(xn, 'fnLoadChiTiet', ['Loại xét nghiệm', 'Tên dịch vụ']).filter((r) => r),
+      cdha: kqRows(cd, 'fnLoadChiTietKetQuaCDHA', ['Tên dịch vụ', 'Loại dịch vụ']),
+      busy: isBusy(),
+    };
+  }
+  // Opens row idx of the XN or CĐHA history and empties the result area first, so the
+  // driver can tell the new result from the previous one.
+  function kqOpenRow(kind, idx) {
+    const root = byId(kind === 'cdha' ? 'divLichSuCDHAContent' : 'divLichSuXNContent');
+    const fn = kind === 'cdha' ? 'fnLoadChiTietKetQuaCDHA' : 'fnLoadChiTiet';
+    if (!root) return { ok: false, reason: 'Chưa mở Xem kết quả' };
+    const trs = [];
+    for (const el of root.querySelectorAll(`[onclick*="${fn}("]`)) {
+      const tr = el.closest('tr');
+      if (tr && !trs.some((x) => x.tr === tr)) trs.push({ tr, el });
+    }
+    const t = trs[idx];
+    if (!t) return { ok: false, reason: 'Không thấy dòng ' + (idx + 1) };
+    const target = kind === 'cdha' ? byId('divLichSuCDHAContentChiTiet') : byId('divDrawCt');
+    if (target) target.innerHTML = '';
+    t.el.click();
+    return { ok: true };
+  }
+  const isRed = (c) => {
+    const [r, g, b] = rgb(c);
+    return r > 150 && g < 100 && b < 100;
+  };
+  const isBlue = (c) => {
+    const [r, g, b] = rgb(c);
+    return b > 150 && r < 100 && g < 160;
+  };
+  // Red or blue text in a result cell marks a value outside the reference range.
+  function flagOf(td) {
+    const els = [td, ...td.querySelectorAll('*')].filter((e) => txt(e));
+    for (const e of els) {
+      const c = getComputedStyle(e).color;
+      if (isRed(c)) return 'red';
+      if (isBlue(c)) return 'blue';
+    }
+    return null;
+  }
+  function kqDetailXN() {
+    const root = byId('divDrawCt') || byId('divLichSuXNContent');
+    if (!root) return { ok: false, reason: 'no-detail' };
+    const tbl = [...root.querySelectorAll('table')].find((t) => {
+      const h = headerCols(t);
+      return h.includes(norm('Chỉ số')) && h.some((x) => x && x.startsWith(norm('Kết quả')));
+    });
+    if (!tbl) return { ok: true, ready: false, items: [] };
+    const h = headerCols(tbl);
+    const c = { name: h.indexOf(norm('Chỉ số')), value: h.findIndex((x) => x && x.startsWith(norm('Kết quả'))), ref: h.findIndex((x) => x && x.startsWith(norm('Khoảng tham chiếu'))), unit: h.indexOf(norm('Đơn vị')) };
+    const items = [];
+    let group = '';
+    for (const tr of tbl.querySelectorAll('tr')) {
+      if (tr.querySelector('th')) continue;
+      const tds = [...tr.children].filter((x) => x.tagName === 'TD');
+      if (tds.length <= 2 || c.value >= tds.length) {
+        const t = txt(tr);
+        if (t) group = t;
+        continue;
+      }
+      const name = txt(tds[c.name]);
+      if (!name) continue;
+      items.push({ group, name, value: txt(tds[c.value]), ref: c.ref >= 0 ? txt(tds[c.ref]) : '', unit: c.unit >= 0 ? txt(tds[c.unit]) : '', flag: flagOf(tds[c.value]) });
+    }
+    const field = (label) => {
+      const l = [...root.querySelectorAll('label, span, div, td')].find((e) => e.children.length === 0 && norm(txt(e)) === norm(label));
+      const inp = l && (l.parentElement.querySelector('input, textarea') || (l.nextElementSibling && l.nextElementSibling.querySelector && l.nextElementSibling.querySelector('input, textarea')));
+      return inp ? inp.value || '' : '';
+    };
+    return { ok: true, ready: items.length > 0, loai: field('Loại dịch vụ'), items, busy: isBusy() };
+  }
+  function kqDetailCDHA() {
+    const root = byId('divLichSuCDHAContentChiTiet');
+    if (!root) return { ok: false, reason: 'no-detail' };
+    const label = [...root.querySelectorAll('label, span, div, td, b, strong')].find((e) => e.children.length === 0 && /^kết luận:?$/i.test(txt(e)));
+    let ketLuan = '';
+    let found = false;
+    if (label) {
+      let n = label;
+      for (let i = 0; i < 4 && n && !found; i++) {
+        const box = n.parentElement && n.parentElement.querySelector('textarea, .note-editable, input[type=text]');
+        if (box) {
+          ketLuan = box.tagName === 'TEXTAREA' || box.tagName === 'INPUT' ? box.value : txt(box);
+          found = true;
+        }
+        n = n.parentElement;
+      }
+    }
+    const tbl = [...root.querySelectorAll('table')].find((t) => headerCols(t).includes(norm('Tên dịch vụ')));
+    const dv = tbl ? [...tbl.querySelectorAll('tr')].filter((tr) => !tr.querySelector('th')).map((tr) => txt([...tr.children].pop())).filter(Boolean) : [];
+    return { ok: true, ready: found, ketLuan: (ketLuan || '').trim(), dichVu: dv, busy: isBusy() };
+  }
+  function kqClose() {
+    const m = kqModal();
+    if (m && window.jQuery && window.jQuery.fn && window.jQuery.fn.modal) window.jQuery(m).modal('hide');
+    return { ok: true };
+  }
+
+  // ---------- Thêm y lệnh mới ----------
+  function newOrder() {
+    hookToastr();
+    if (typeof window.backForm === 'function' && isShown(byId('divWebpartPopup'))) window.backForm();
+    if (typeof window.onshowThamKham !== 'function') return { ok: false, reason: 'no-onshowThamKham' };
+    window.onshowThamKham(byId('showThamKham'));
+    return { ok: true };
+  }
+
   window.__SYL = {
-    version: 8,
+    version: 9,
     where,
     readPatients,
     listLink,
@@ -933,6 +1175,18 @@
     saveBenhAn,
     deleteThuoc,
     deleteDichVu,
+    dvSuaOpen,
+    dvSuaState,
+    dvThuHoi,
+    dvSuaClose,
+    kqOpen,
+    kqList,
+    kqTabs,
+    kqOpenRow,
+    kqDetailXN,
+    kqDetailCDHA,
+    kqClose,
+    newOrder,
     openKeDon,
     keDonState,
     keDonSetLoai,

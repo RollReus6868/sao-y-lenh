@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BedDouble, ClipboardCheck, FileText, Globe, MousePointerClick, Check, ChevronDown, ClipboardCopy, Copy, ListChecks, PencilLine, Pill as PillIcon, Play, Plus, RefreshCw, RotateCcw, ScanLine, Search, Stethoscope, Users, X } from 'lucide-react';
+import { BedDouble, ClipboardCheck, FileText, Globe, MousePointerClick, Check, ChevronDown, ClipboardCopy, Copy, Eraser, FlaskConical, ListChecks, PencilLine, Pill as PillIcon, Play, Plus, RefreshCw, RotateCcw, ScanLine, Search, Stethoscope, Users, X } from 'lucide-react';
 import { cn } from '@/kit/cn';
 import { Button, Chip, EmptyState, Input, PageHeader, Pill, Segmented, Select, Switch } from '@/kit/ui';
 import { useApp } from '@/lib/useApp';
-import { baseKey, itemName, type AddItem, type Choice, type DayEdit, type Item, type LoadResult, type Patient, type Plan, type RunResult, type Template } from '@/lib/types';
-import { ActionBar, RunBar, Sheet } from '@/components/common';
+import { baseKey, isSac, itemName, runKey, type AddItem, type Choice, type DayEdit, type Item, type Kind, type LoadResult, type Patient, type Plan, type RunResult, type Template } from '@/lib/types';
+import { RunBar, Sheet } from '@/components/common';
 import { OrderFields, editSummary, type OrderBase } from '@/components/OrderFields';
 import { addDays, dayLabel, ddmm, hhmmOf, parseDay, weekdayShort } from '@/lib/dates';
 import { ResultView } from '@/pages/Result';
 import { BenhAnView } from '@/pages/BenhAn';
+import { ClsView, DvCleanView } from '@/pages/DvCls';
 
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
@@ -21,7 +22,7 @@ export function PatientsPage({ onBrowser }: { onBrowser: () => void }) {
   return (
     <div className="flex min-w-0 flex-1 gap-3">
       <section className="glass-panel relative flex w-[400px] shrink-0 flex-col overflow-hidden" data-column="list">
-        <PatientList onOpen={(p) => !running && setOpen(p)} selected={open?.noitruid} onBrowser={onBrowser} />
+        <PatientList onOpen={(p) => !running && setOpen(p)} selected={open?.noitruid} onBrowser={onBrowser} showRun={!open} />
       </section>
       <section className="glass-panel relative flex min-w-0 flex-1 flex-col overflow-hidden" data-column="detail">
         {open ? (
@@ -37,7 +38,7 @@ export function PatientsPage({ onBrowser }: { onBrowser: () => void }) {
 }
 
 // ---------------- danh sách ----------------
-function PatientList({ onOpen, selected, onBrowser }: { onOpen: (p: Patient) => void; selected?: string; onBrowser: () => void }) {
+function PatientList({ onOpen, selected, onBrowser, showRun }: { onOpen: (p: Patient) => void; selected?: string; onBrowser: () => void; showRun: boolean }) {
   const { patients, setPatients, data, state, call, toast, refresh } = useApp();
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -90,8 +91,16 @@ function PatientList({ onOpen, selected, onBrowser }: { onOpen: (p: Patient) => 
         title="Bệnh nhân"
         description={patients.length ? `${patients.length} bệnh nhân trong Ds Điều trị nội trú` : 'Ds Điều trị nội trú'}
         icon={<Users />}
-        actions={patients.length > 0 && <Button variant="outline" size="sm" onClick={scan} disabled={state.busy} data-action="scan"><RefreshCw /> Quét lại</Button>}
+        actions={!patients.length ? (
+          <Button variant="gradient" size="sm" onClick={scan} disabled={state.busy} data-action="scan"><ScanLine /> {state.busy && state.task === 'Quét danh sách' ? 'Đang quét…' : 'Quét danh sách'}</Button>
+        ) : (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button variant="outline" size="sm" onClick={scan} disabled={state.busy} data-action="scan" title="Quét lại Ds Điều trị nội trú"><RefreshCw /> Quét lại</Button>
+            <Button variant="gradient" size="sm" disabled={!picked.size || state.busy} onClick={() => setConfirm(true)} data-action="run-batch" title={picked.size ? `Chạy ${picked.size} bệnh nhân đã chọn` : 'Tick bệnh nhân đã có lựa chọn để chạy một lượt'}><Play /> Chạy{picked.size ? ` ${picked.size}` : ''}</Button>
+          </div>
+        )}
       />
+      {state.busy && showRun && <RunBar onBrowser={onBrowser} />}
       {patients.length > 0 && (
         <div className="flex-shrink-0 space-y-2 px-4 pb-3 sm:px-5">
           <div className="relative">
@@ -165,19 +174,6 @@ function PatientList({ onOpen, selected, onBrowser }: { onOpen: (p: Patient) => 
           ))
         )}
       </div>
-      <ActionBar>
-        {state.busy && state.task === 'Sao chép y lệnh' ? (
-          <RunBar onBrowser={onBrowser} />
-        ) : !patients.length ? (
-          <Button variant="gradient" size="xl" className="w-full" onClick={scan} disabled={state.busy} data-action="scan">
-            <ScanLine /> {state.busy ? 'Đang quét…' : 'Quét danh sách'}
-          </Button>
-        ) : (
-          <Button variant="gradient" size="xl" className="w-full" disabled={!picked.size || state.busy} onClick={() => setConfirm(true)} data-action="run-batch">
-            <Play /> {picked.size ? `Chạy ${picked.size} bệnh nhân đã chọn` : 'Mở bệnh nhân để chọn mục xóa'}
-          </Button>
-        )}
-      </ActionBar>
       <Sheet
         open={confirm}
         onClose={() => setConfirm(false)}
@@ -218,22 +214,24 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const [saveTpl, setSaveTpl] = useState<number | null>(null);
   const [tplName, setTplName] = useState('');
   const [confirm, setConfirm] = useState(false);
-  const [tab, setTab] = useState<'pick' | 'result' | 'benhan'>('pick');
+  const [tab, setTab] = useState<'pick' | 'result' | 'benhan' | 'dv' | 'cls'>('pick');
+  const [kind, setKind] = useState<Kind>('thuong');
+  const ck = runKey(patient, kind); // choices and results of sắc thuốc thang copies are kept apart
   const [edits, setEdits] = useState<(DayEdit | null)[]>(NO_EDITS);
   const [adds, setAdds] = useState<string[][]>(EMPTY);
   const [eday, setEday] = useState<number | null>(null);
   const loaded = useRef(false);
 
-  const load = async (sourceId?: string) => {
+  const load = async (sourceId?: string, k: Kind = kind) => {
     setLoading(true);
     loaded.current = false;
-    const r = await call<LoadResult>('patient:load', { patient, sourceId }).catch(() => null);
+    const r = await call<LoadResult>('patient:load', { patient, sourceId, kind: k }).catch(() => null);
     setLoading(false);
     setRes(r);
     if (r?.lists) refresh(); // doctor / care level lists were read for the first time
     if (r?.source) {
       const items = [...r.source.thuoc, ...r.source.dvkt];
-      const ch = data?.choices[patient.noitruid];
+      const ch = data?.choices[runKey(patient, k)];
       if (ch) {
         setDays(ch.days);
         setSel([0, 1, 2, 3].map((i) => items.filter((it) => (ch.deletions[i] || []).includes(baseKey(it.key))).map((it) => it.key)));
@@ -256,8 +254,8 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     if (!loaded.current || !data) return;
     const t = setTimeout(() => {
       const choice: Choice = { days, deletions: sel.slice(0, days).map((d) => d.map(baseKey)), edits: edits.slice(0, days), adds: adds.slice(0, days) };
-      call('choice:set', { id: patient.noitruid, choice }).catch(() => {});
-      setData({ ...data, choices: { ...data.choices, [patient.noitruid]: choice } });
+      call('choice:set', { id: ck, choice }).catch(() => {});
+      setData((x) => x && { ...x, choices: { ...x.choices, [ck]: choice } });
     }, 400);
     return () => clearTimeout(t);
   }, [sel, days, edits, adds]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -319,7 +317,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const run = async () => {
     setConfirm(false);
     if (!src) return;
-    const plan: Plan = { patient, sourceId: src.id, days, deletions: sel.slice(0, days), edits: edits.slice(0, days), adds: adds.slice(0, days) };
+    const plan: Plan = { patient, kind, sourceId: src.id, days, deletions: sel.slice(0, days), edits: edits.slice(0, days), adds: adds.slice(0, days) };
     const r = await call<RunResult[]>('run', { plans: [plan] }).catch(() => null);
     await refresh();
     if (r && r[0] && (r[0].check || r[0].ok)) setTab('result');
@@ -331,7 +329,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     }));
     load(); // the newest order is now the source for next time
     if (r && r[0]) {
-      if (r[0].ok) toast('success', `Xong ${days} ngày cho ${patient.hoTen}`);
+      if (r[0].ok) toast('success', `Xong ${days} ngày${kind === 'sac' ? ' sắc thuốc thang' : ''} cho ${patient.hoTen}`);
       else toast(r[0].stopped ? 'warning' : 'error', r[0].message || 'Có lỗi, xem Nhật ký');
     }
   };
@@ -341,9 +339,16 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     list.forEach((it) => m.set(it.group || '', [...(m.get(it.group || '') || []), it]));
     return [...m.entries()];
   };
-  const candidates = (res?.rows || []).filter((r) => r.dienBien && r.dienBienPHCN);
+  const candidates = (res?.rows || []).filter((r) => (kind === 'sac' ? isSac(r) : !isSac(r) && r.dienBien && r.dienBienPHCN));
   const running = state.busy && state.task === 'Sao chép y lệnh';
-  const lastRun = data?.runs[patient.noitruid];
+  const lastRun = data?.runs[ck];
+  const changeKind = (k: Kind) => {
+    if (k === kind) return;
+    setKind(k);
+    setRes(null);
+    load(undefined, k);
+  };
+  const setSetting = (p: Record<string, unknown>) => call('settings:set', p).then((st) => setData((x) => x && { ...x, settings: st as NonNullable<typeof data>['settings'] }));
   const total = sel.slice(0, days).reduce((a, d) => a + d.length, 0);
   const cols = `minmax(0,1fr) repeat(${days}, 56px)`;
 
@@ -437,8 +442,8 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
         </div>
         <Button variant="ghost" size="icon" aria-label="Đọc lại" title="Đọc lại y lệnh" onClick={() => load(src?.id)} disabled={state.busy}><RefreshCw /></Button>
       </div>
-      <div className="flex flex-shrink-0 gap-1 px-3 pb-2 sm:px-4" role="tablist">
-        <TabBtn on={tab === 'pick'} onClick={() => setTab('pick')} data-tab="pick"><ListChecks /> Chọn mục xóa</TabBtn>
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-1 px-3 pb-2 sm:px-4" role="tablist">
+        <TabBtn on={tab === 'pick'} onClick={() => setTab('pick')} data-tab="pick"><ListChecks /> Sao chép</TabBtn>
         <TabBtn on={tab === 'result'} onClick={() => setTab('result')} data-tab="result">
           <ClipboardCheck /> Kết quả
           {lastRun?.check ? (
@@ -449,20 +454,39 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
           <FileText /> Bệnh án
           {data?.benhAn?.[patient.noitruid]?.sentAt ? <span className="h-2 w-2 rounded-full bg-emerald-500" /> : null}
         </TabBtn>
+        <TabBtn on={tab === 'dv'} onClick={() => setTab('dv')} data-tab="dv">
+          <Eraser /> Dọn thủ thuật
+          {data?.dvScans?.[patient.noitruid]?.days.some((d) => d.items.length) ? <span className="h-2 w-2 rounded-full bg-amber-500" /> : null}
+        </TabBtn>
+        <TabBtn on={tab === 'cls'} onClick={() => setTab('cls')} data-tab="cls"><FlaskConical /> Kết quả CLS</TabBtn>
+        <div className="ml-auto flex items-center gap-3 pl-2">
+          <label className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground" title="Tool dừng trước mỗi thao tác trên OneMES để anh/chị bấm tiếp"><Switch checked={!!data?.settings.stepMode} onChange={(v) => setSetting({ stepMode: v })} label="Chạy từng bước" /> Từng bước</label>
+          <label className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground" title="Hoàn tất mỗi y lệnh sau khi sửa xong"><Switch checked={!!data?.settings.autoComplete} onChange={(v) => setSetting({ autoComplete: v })} label="Tự Hoàn tất" /> Tự Hoàn tất</label>
+        </div>
       </div>
+      {state.busy && <RunBar onBrowser={onBrowser} />}
 
-      {tab === 'benhan' ? <BenhAnView patient={patient} /> : tab === 'result' ? <ResultView patient={patient} /> : <>
+      {tab === 'benhan' ? <BenhAnView patient={patient} /> : tab === 'result' ? <ResultView patient={patient} kind={kind} /> : tab === 'dv' ? <DvCleanView patient={patient} /> : tab === 'cls' ? <ClsView patient={patient} /> : <>
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-border/40 px-3 pb-2 sm:px-4" data-pick-bar>
+        <Segmented value={kind} onChange={changeKind} disabled={state.busy} options={[{ value: 'thuong' as Kind, label: 'Y lệnh thường', title: 'Y lệnh có Diễn biến bệnh và Diễn biến PHCN' }, { value: 'sac' as Kind, label: 'Sắc thuốc thang', title: 'Y lệnh có Y lệnh khác: Chỉ định sắc thuốc thang' }]} />
+        <span className="ml-1 text-[11px] font-semibold text-muted-foreground">Số ngày</span>
+        <Segmented value={days} onChange={setDays} disabled={state.busy || !src} options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n), title: n === 1 ? 'Chỉ Sao chép' : `Sao chép + Sao y lệnh ${n - 1} ngày` }))} />
+        <span className="ml-auto text-[11px] text-muted-foreground">xóa {total}{addCount ? ` · thêm ${addCount}` : ''}</span>
+        <Button variant="gradient" size="sm" disabled={!src || state.busy} onClick={() => setConfirm(true)} data-action="run">
+          <Copy /> Sao chép {days} ngày
+        </Button>
+      </div>
       <div className="scroll-thin min-h-0 flex-1 overflow-auto px-3 pb-4 sm:px-4" data-detail>
         {loading && !src ? (
           <div className="space-y-3 pt-2">{[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-muted/50" />)}</div>
         ) : !src ? (
-          <EmptyState icon={<ClipboardCopy />} title="Không có y lệnh nguồn" text="Bệnh nhân này chưa có y lệnh Hoàn tất nào đủ cả Diễn biến bệnh và Diễn biến PHCN." action={<Button variant="outline" size="sm" onClick={() => load()}><RefreshCw /> Đọc lại</Button>} />
+          <EmptyState icon={<ClipboardCopy />} title="Không có y lệnh nguồn" text={kind === 'sac' ? 'Bệnh nhân này chưa có y lệnh Hoàn tất nào có Y lệnh khác "Chỉ định sắc thuốc thang".' : 'Bệnh nhân này chưa có y lệnh Hoàn tất nào đủ cả Diễn biến bệnh và Diễn biến PHCN.'} action={<Button variant="outline" size="sm" onClick={() => load()}><RefreshCw /> Đọc lại</Button>} />
         ) : (
           <>
             <div className="rounded-xl border border-border/50 bg-card/50 p-3" data-source>
               <div className="flex items-center gap-2">
                 <Copy className="h-4 w-4 shrink-0 text-primary" />
-                <span className="text-sm font-bold">Y lệnh nguồn</span>
+                <span className="text-sm font-bold">Y lệnh nguồn{kind === 'sac' ? ' (sắc thuốc thang)' : ''}</span>
                 <Pill tone={/hoàn tất/i.test(src.status) ? 'success' : 'warning'}>{src.status}</Pill>
                 <Select className="ml-auto h-8 max-w-[160px] text-xs" value={src.id} disabled={state.busy} onChange={(e) => load(e.target.value)} aria-label="Đổi y lệnh nguồn">
                   {candidates.map((r) => <option key={r.id} value={r.id}>{r.tg}</option>)}
@@ -471,16 +495,13 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
               </div>
               <div className="mt-2 space-y-1 text-xs">
                 <div className="line-clamp-2"><span className="font-semibold text-muted-foreground">Diễn biến: </span>{src.dienBien}</div>
-                <div className="line-clamp-2"><span className="font-semibold text-muted-foreground">PHCN: </span>{src.dienBienPHCN}</div>
+                {(kind !== 'sac' || !!src.dienBienPHCN) && <div className="line-clamp-2"><span className="font-semibold text-muted-foreground">PHCN: </span>{src.dienBienPHCN}</div>}
+                {kind === 'sac' && <div className="line-clamp-1"><span className="font-semibold text-muted-foreground">Y lệnh khác: </span>{res?.rows.find((r) => r.id === src.id)?.khac}</div>}
               </div>
               {!!res?.skipped.length && <div className="mt-2 text-xs text-amber-600 dark:text-amber-400">Bỏ qua {res.skipped.map((s) => `${s.tg} (${s.status})`).join(', ')} vì chưa Hoàn tất.</div>}
             </div>
 
-            <div className="mt-3 flex items-center gap-3">
-              <span className="text-sm font-bold">Số ngày tạo</span>
-              <Segmented value={days} onChange={setDays} disabled={state.busy} options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n), title: n === 1 ? 'Chỉ Sao chép' : `Sao chép + Sao y lệnh ${n - 1} ngày` }))} />
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">Ngày 1 là bản Sao chép. {days > 1 ? `Ngày 2–${days} do Sao y lệnh (ngày) = ${days - 1} tạo ra.` : 'Không dùng Sao y lệnh.'} Tick ô đỏ = xóa mục đó ở ngày đó{catalog.length ? ', ô xanh = thêm thuốc ở ngày đó' : ''}.</p>
+            <p className="mt-2 text-[11px] text-muted-foreground">Ngày 1 là bản Sao chép. {days > 1 ? `Ngày 2–${days} do Sao y lệnh (ngày) = ${days - 1} tạo ra.` : 'Không dùng Sao y lệnh.'} Tick ô đỏ = xóa mục đó ở ngày đó{catalog.length ? ', ô xanh = thêm thuốc ở ngày đó' : ''}.</p>
 
             <div className="mt-3 rounded-xl border border-border/50 bg-card/50" data-day-edits>
               <div className="flex flex-wrap items-center gap-1.5 px-3 py-2">
@@ -526,22 +547,6 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
         )}
       </div>
 
-      <ActionBar>
-        {running ? (
-          <RunBar onBrowser={onBrowser} />
-        ) : (
-          <div className="space-y-3">
-            <div className="flex items-center gap-4 text-xs">
-              <label className="flex items-center gap-2"><Switch checked={!!data?.settings.stepMode} onChange={(v) => data && call('settings:set', { stepMode: v }).then((s) => setData({ ...data, settings: s as typeof data.settings }))} label="Chạy từng bước" /> Từng bước</label>
-              <label className="flex items-center gap-2"><Switch checked={!!data?.settings.autoComplete} onChange={(v) => data && call('settings:set', { autoComplete: v }).then((s) => setData({ ...data, settings: s as typeof data.settings }))} label="Tự Hoàn tất" /> Tự Hoàn tất</label>
-              <span className="ml-auto text-muted-foreground">xóa {total} mục{addCount ? ` · thêm ${addCount}` : ''}</span>
-            </div>
-            <Button variant="gradient" size="xl" className="w-full" disabled={!src || state.busy} onClick={() => setConfirm(true)} data-action="run">
-              <Copy /> Sao chép & xóa cho {days} ngày
-            </Button>
-          </div>
-        )}
-      </ActionBar>
       </>}
 
       <Sheet open={menu !== null} onClose={() => setMenu(null)} title={menu !== null ? `Ngày ${menu + 1} (${dayDate(menu)}): chọn nhanh` : ''}>
@@ -564,7 +569,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
       <Sheet
         open={confirm}
         onClose={() => setConfirm(false)}
-        title={`Sao chép & xóa cho ${days} ngày`}
+        title={`Sao chép${kind === 'sac' ? ' y lệnh sắc thuốc thang' : ''} cho ${days} ngày`}
         footer={<><Button variant="outline" size="lg" onClick={() => setConfirm(false)}>Hủy</Button><Button size="lg" className="flex-1" onClick={run} data-action="confirm-run"><Play /> Bắt đầu</Button></>}
       >
         <ol className="space-y-2 text-sm">
@@ -587,7 +592,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
 
 function TabBtn({ on, children, ...p }: { on: boolean; children: React.ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button type="button" role="tab" aria-selected={on} className={cn('flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors [&_svg]:size-3.5', on ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground')} {...p}>
+    <button type="button" role="tab" aria-selected={on} className={cn('flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-xs font-semibold transition-colors [&_svg]:size-3.5', on ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground')} {...p}>
       {children}
     </button>
   );

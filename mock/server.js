@@ -95,9 +95,11 @@ function freshState() {
       khac: opts.khac || '',
       status: opts.status || 'Hoàn tất',
       thuoc: (opts.noItems ? [] : it.thuoc).map((x) => ({ ...x, id: uid(), trangThai: 'Mới' })),
-      dvkt: (opts.noItems ? [] : it.dvkt).map((x) => ({ ...x, id: uid(), noiThucHien: 'P. Thủ thuật K.Nội B', sl: '1', doiTuong: 'Bảo hiểm', trangThai: 'Mới' })),
+      dvkt: (opts.dvkt || (opts.noItems ? [] : it.dvkt)).map((x, i) => ({ ...x, id: uid(), noiThucHien: 'P. Thủ thuật K.Nội B', sl: '1', doiTuong: 'Bảo hiểm', trangThai: (opts.dvStatus && opts.dvStatus[i]) || 'Mới' })),
     };
   };
+  // Old days: most services done, a few left Hoàn trả or Chờ thực hiện (DV column yellow).
+  const DONE = ['Hoàn tất', 'Hoàn tất', 'Hoàn tất', 'Hoàn tất', 'Hoàn tất'];
   const patients = [
     { buong: 'Buồng 103', bg: 'Buồng 103 / G3-NB', maBN: '2400000001', hoTen: 'NGUYỄN THỊ MẪU A', tuoi: '75', gt: 'Nữ', chanDoan: 'Tọa cốt phong [Đau dây thần kinh hông to]' },
     { buong: 'Buồng 105', bg: 'Buồng 105 / G9-NB', maBN: '2600000002', hoTen: 'TRẦN VĂN MẪU B', tuoi: '62', gt: 'Nam', chanDoan: 'Chứng tý [Hội chứng cổ vai cánh tay]' },
@@ -105,12 +107,21 @@ function freshState() {
   ].map((p, i) => {
     const noitruid = uid();
     const benhAnId = uid();
+    const old = i === 2 ? [DONE, DONE] : [['Hoàn trả', 'Chờ thực hiện', 'Hoàn tất', 'Hoàn tất', 'Hoàn tất'], ['Hoàn tất', 'Hoàn tất', 'Chờ thực hiện', 'Hoàn tất', 'Hoàn tất']];
     const orders = [
-      mkOrder(addDays(base, -3), { dienBienPHCN: p.noPHCN ? '' : undefined }),
-      mkOrder(addDays(base, -2), { dienBienPHCN: p.noPHCN ? '' : undefined }),
+      mkOrder(addDays(base, -3), { dienBienPHCN: p.noPHCN ? '' : undefined, dvStatus: old[0] }),
+      mkOrder(addDays(base, -2), { dienBienPHCN: p.noPHCN ? '' : undefined, dvStatus: old[1] }),
       mkOrder(addDays(base, -1), { dienBienPHCN: '', khac: 'Chỉ định CLS', noItems: true }),
       mkOrder(base, { dienBienPHCN: p.noPHCN ? '' : undefined }),
     ];
+    // A sắc thuốc thang order next to the usual one (its pending service is not cleaned).
+    if (i === 0) {
+      const d = addDays(base, -1);
+      d.setHours(15, 0);
+      const s = mkOrder(d, { dienBien: 'Chỉ định sắc thuốc thang', dienBienPHCN: '', khac: 'Chỉ định Sắc thuốc thang', dvkt: [{ top: 'Thủ thuật', group: 'Y học dân tộc', name: 'Sắc thuốc thang', moTa: '1 thang/ngày' }], dvStatus: ['Chờ thực hiện'] });
+      s.thuoc = [{ id: uid(), group: 'Thuốc Đông Y', loaiKe: 'Dự trù', kho: 'Kho Đông y', name: 'Thang thuốc mẫu', hamLuong: '', dvt: 'Thang', duongDung: 'Uống', sl: '1', cachDung: 'Sắc uống ngày 1 thang', doiTuong: 'Bảo hiểm', trangThai: 'Mới' }];
+      orders.push(s);
+    }
     return { ...p, noitruid, benhAnId, benhAn: {}, tgVao: fmt(addDays(base, -10 - i)), orders };
   });
   return { patients, log: [] };
@@ -124,6 +135,31 @@ const findOrder = (id) => {
     if (o) return { p, o };
   }
   return null;
+};
+
+// Lịch sử XN / CĐHA behind Xem kết quả. Generic sample values; red = high, blue = low.
+const KQ = {
+  xn: [
+    { id: 'xn1', tg: '07:30 10/10/2026', loai: 'Xét nghiệm huyết học', dv: 'Tổng phân tích tế bào máu ngoại vi', items: [
+      ['(H01) Số lượng bạch cầu (WBC)', '11.2', '4-10', 'G/L', 'red'],
+      ['(H02) Số lượng hồng cầu (RBC)', '4.5', '3.8-5.5', 'T/L', ''],
+      ['(H07) Huyết sắc tố (HGB)', '112', '120-170', 'g/L', 'blue'],
+      ['(H14) Thể tích khối tiểu cầu (PCT)', '0.12', '0.16-0.33', '%', 'blue'],
+    ] },
+    { id: 'xn2', tg: '07:30 10/10/2026', loai: 'Xét nghiệm hóa sinh', dv: 'Sinh hóa máu', items: [
+      ['(S34) Định lượng Glucose [Máu]', '7.8', '3.9-6.4', 'mmol/L', 'red'],
+      ['(S10) Định lượng Creatinin (máu)', '80', '62-120', 'µmol/L', ''],
+      ['(S20) Định lượng Kali', '3.2', '3.5-5.0', 'mmol/L', 'blue'],
+    ] },
+    { id: 'xn3', tg: '08:00 06/10/2026', loai: 'Xét nghiệm hóa sinh', dv: 'Sinh hóa máu', items: [
+      ['(S36) Định lượng Cholesterol toàn phần (máu)', '6.1', '3.9-5.2', 'mmol/L', 'red'],
+      ['(S10) Định lượng Creatinin (máu)', '75', '62-120', 'µmol/L', ''],
+    ] },
+  ],
+  cdha: [
+    { id: 'cd1', tg: '09:00 10/10/2026', ten: 'Siêu âm ổ bụng tổng quát', moTa: 'Gan: kích thước bình thường, nhu mô tăng âm nhẹ.', ketLuan: 'Gan nhiễm mỡ độ I' },
+    { id: 'cd2', tg: '09:30 06/10/2026', ten: 'Chụp X-quang cột sống thắt lưng thẳng nghiêng', moTa: 'Gai xương thân đốt L4, L5.', ketLuan: 'Thoái hóa cột sống thắt lưng' },
+  ],
 };
 
 function copyOrder(o, days, loai, status = 'Mới') {
@@ -203,13 +239,56 @@ const api = {
       for (const o of p.orders) {
         const i = o.dvkt.findIndex((x) => x.id === id);
         if (i >= 0) {
-          if (o.status !== 'Mới') return { Error: true, InfoMessage: 'Y lệnh đã hoàn tất, không thể xóa dịch vụ' };
+          // A returned (Hoàn trả) or recalled (Mới) service goes on any order; the rest only on a Mới order.
+          const st = o.dvkt[i].trangThai;
+          if (o.status !== 'Mới' && st !== 'Hoàn trả' && st !== 'Mới') return { Error: true, InfoMessage: 'Dịch vụ đang ' + st + ', không thể xóa' };
+          if (st === 'Chờ thực hiện' || st === 'Hoàn tất') return { Error: true, InfoMessage: 'Dịch vụ đang ' + st + ', không thể xóa' };
           o.dvkt.splice(i, 1);
           state.log.push(['xoaDichVu', o.id, id]);
           return { Error: false };
         }
       }
     return { Error: true, InfoMessage: 'Không tìm thấy dịch vụ' };
+  },
+  // Sửa DVKT: Thu hồi a service waiting to be done (ServerSideThuHoiDichVu).
+  thuHoiDV({ id }) {
+    for (const p of state.patients)
+      for (const o of p.orders) {
+        const x = o.dvkt.find((y) => y.id === id);
+        if (x) {
+          if (x.trangThai !== 'Chờ thực hiện') return { Error: true, InfoMessage: 'Dịch vụ không ở trạng thái chờ thực hiện' };
+          x.trangThai = 'Mới';
+          state.log.push(['thuHoiDV', o.id, id]);
+          return { Error: false };
+        }
+      }
+    return { Error: true, InfoMessage: 'Không tìm thấy dịch vụ' };
+  },
+  // Sends a service to be done. The tool must never call it.
+  chuyenTH({ id }) {
+    for (const p of state.patients)
+      for (const o of p.orders) {
+        const x = o.dvkt.find((y) => y.id === id);
+        if (x) {
+          x.trangThai = 'Chờ thực hiện';
+          state.log.push(['chuyenTH', o.id, id]);
+          return { Error: false };
+        }
+      }
+    return { Error: true, InfoMessage: 'Không tìm thấy dịch vụ' };
+  },
+  // Thêm y lệnh mới: an empty Mới order at the current time of the (mock) day.
+  themYLenh({ noitruid }) {
+    const p = state.patients.find((x) => x.noitruid === noitruid);
+    if (!p) return { Error: true, InfoMessage: 'Không tìm thấy bệnh nhân' };
+    const d = new Date(2026, 9, 12, 9, 30);
+    const o = { id: uid(), date: d, dateTH: d, bacSi: { id: 'd1', name: 'BS. Nguyễn Văn Mẫu' }, capDo: { id: 'c3', text: '(III-C) III-C' }, dienBien: '', dienBienPHCN: '', khac: '', status: 'Mới', thuoc: [], dvkt: [] };
+    p.orders.push(o);
+    state.log.push(['themYLenh', o.id]);
+    return { Error: false, RetExtraParam1: o.id };
+  },
+  kq() {
+    return { Error: false, RetObject: KQ };
   },
   // Lưu on the order form (ServerSideUpdateYLenh).
   luu({ id, thoiGian, thoiGianThucHien, dienBien, dienBienPHCN, bacSi, capDo }) {
@@ -297,6 +376,7 @@ function orderView(p, o) {
     dienBien: o.dienBien,
     dienBienPHCN: o.dienBienPHCN,
     khac: o.khac,
+    dv: o.dvkt.some((x) => x.trangThai !== 'Hoàn tất'),
     status: o.status,
     thuoc: o.thuoc,
     dvkt: o.dvkt,
@@ -330,11 +410,18 @@ function page(wpid, query, host) {
     return `${head}<div id="divHeader" class="mock-head">HỒ SƠ ĐIỀU TRỊ: KHOA NỘI B
  <a id="showDsYLenh" onclick="onshowDsYLenh(this);" href="javascript:void(0)">Lịch sử y lệnh</a>
  <a href="/home.aspx?scope=sys&wpid=danhsachdieutrinoitrudraw">Về danh sách</a>
+ <a id="showThamKham" onclick="onshowThamKham(this)" href="javascript:void(0)">Thêm y lệnh mới</a>
+ <a onclick="onShowLichSuChung(this)" href="javascript:void(0)">Xem kết quả</a>
  <span class="mock-menu">Tổng kết: <a onclick="onShowTtBenhAn('${(state.patients.find((x) => x.noitruid === nt) || {}).benhAnId || ''}', 'divNoiTruContent');">Lập bìa bệnh án</a></span></div>
 <div id="divWebpart" style="margin-top: 10px;"><div id="divNoiTruContent"><p>Thông tin bệnh nhân</p></div></div>
 <div class="modal fade" id="modalKeDon" style="display:none"><div class="modal-dialog"><div class="modal-content">
   <div class="modal-header">Kê đơn thuốc <button type="button" class="close" onclick="onClosePopup()">×</button></div>
   <div id="divContentModalThamKhamKeDon"></div></div></div></div>
+<div class="modal fade" id="divFormModalSuaDV" style="display:none"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <div class="modal-header">Sửa DVKT đã chỉ định</div><div id="divModalContentSuaDV"></div></div></div></div>
+<div class="modal fade" id="divFormModalChung" style="display:none"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <div class="modal-header">Lịch sử KCB <button type="button" class="close" data-dismiss="modal" onclick="$('#divFormModalChung').modal('hide')">×</button></div>
+  <div id="divModalContentChung"></div></div></div></div>
 <div id="divWebpartPopup" style="display:none; margin-top: 10px">
   <div><span id="divStatusPopup" style="padding-right:5px;"></span> <span id="txtYLenhInfo"></span></div>
   <div id="divWorkflowStatusPopup">

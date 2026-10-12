@@ -1,4 +1,11 @@
-# Sao Y Lệnh 0.3.4
+# Sao Y Lệnh 0.4.0
+
+- **Dọn thủ thuật các ngày cũ** (thẻ mới **Dọn thủ thuật** của mỗi bệnh nhân): bấm **Quét các ngày cũ**, tool mở từng ngày trước hôm nay có cột DV màu vàng (bỏ qua ngày có y lệnh sắc thuốc thang) và liệt kê các thủ thuật **Hoàn trả** hoặc **Chờ thực hiện**. Bỏ tick mục không muốn dọn rồi bấm **Dọn**: thủ thuật Hoàn trả thì xóa; Chờ thực hiện thì vào **Sửa DVKT**, **Thu hồi**, rồi xóa, như trong video.
+- **Sao chép y lệnh sắc thuốc thang**: ở thẻ **Sao chép** chọn **Sắc thuốc thang** thay cho **Y lệnh thường**. Tool lấy y lệnh có Y lệnh khác "Chỉ định sắc thuốc thang" làm nguồn và sao chép như bình thường, đủ các tính năng cũ (số ngày, xóa mục, sửa từng ngày, thêm thuốc, Kết quả). Ngày đã có y lệnh thường vẫn sao chép y lệnh sắc vào được, chỉ không cho hai y lệnh sắc trùng ngày.
+- **Cập nhật kết quả cận lâm sàng** (thẻ mới **Kết quả CLS**): bấm **Đọc Xem kết quả**, chọn ngày, bấm **Lấy kết quả**. Tool đọc lần lượt Lịch sử XN rồi Lịch sử CĐHA từ trên xuống, ghi các chỉ số màu đỏ hoặc xanh dương (tên chỉ số + kết quả) và kết luận CĐHA; chỉ số bình thường bỏ qua. Anh/chị sửa nội dung, chọn giờ và ngày, rồi **Tạo y lệnh mới**: tool bấm **Thêm y lệnh mới**, điền giờ và nội dung vào Diễn biến bệnh, Lưu.
+- **Nút gọn hơn**: bỏ các nút to ở cuối trang. Các nút chính (Quét, Chạy, Sao chép, Cập nhật bệnh án, Kiểm tra lại) nhỏ lại và nằm ở góc trên bên phải; Từng bước và Tự Hoàn tất nằm cạnh các thẻ. Khi tool đang chạy, thanh tiến trình và nút **Dừng** là một dải mỏng ở trên.
+
+## 0.3.4
 
 - **Nhiều mẫu bệnh án**: lưu được bao nhiêu mẫu cũng được. Trong thẻ **Bệnh án** của mỗi bệnh nhân có ô **Mẫu** để chọn mẫu, rồi bấm **Điền từ mẫu**.
 - Tạo mẫu bằng hai cách: tự điền các mục rồi bấm **Lưu làm mẫu** (chọn **Thêm mẫu mới** hoặc **Ghi đè mẫu có sẵn**), hoặc **Nhập mẫu từ file HTML** (mỗi file thêm một mẫu mới).

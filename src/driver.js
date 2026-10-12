@@ -64,7 +64,7 @@ function createDriver(host) {
 
   async function call(fn, ...args) {
     const a = args.map((x) => JSON.stringify(x)).join(',');
-    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==8){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
+    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==9){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
   }
 
   function checkStop() {
@@ -212,9 +212,9 @@ function createDriver(host) {
     });
   }
 
-  async function listOrders() {
+  async function listOrders(all = false) {
     // The list is drawn after the page's own scripts finish; retry the call.
-    await waitFor('Lịch sử y lệnh', async () => (await call('showOrderList')).ok);
+    await waitFor('Lịch sử y lệnh', async () => (await call('showOrderList', all)).ok);
     const r = await waitFor('danh sách y lệnh', async () => {
       const x = await call('readOrderList');
       return x.ok ? x : null;
@@ -222,8 +222,13 @@ function createDriver(host) {
     return r.rows;
   }
 
-  function pickSource(rows) {
-    return rows.find((r) => r.dienBien && r.dienBienPHCN) || null;
+  // kind 'sac': orders whose Y lệnh khác reads "Chỉ định sắc thuốc thang"; 'thuong': the
+  // usual orders with both progress notes. The two are copied separately.
+  function canSource(r, kind) {
+    return kind === 'sac' ? isSac(r) : !isSac(r) && !!(r.dienBien && r.dienBienPHCN);
+  }
+  function pickSource(rows, kind = 'thuong') {
+    return rows.find((r) => canSource(r, kind)) || null;
   }
 
   // OneMES fills the drug and service tables after the order opens (and again after
@@ -262,14 +267,14 @@ function createDriver(host) {
 
   // Loads the patient and reads the source order: the given one, or the newest order
   // that has both progress notes and is Hoàn tất (only those can be copied).
-  async function loadPatient(p, sourceId) {
+  async function loadPatient(p, sourceId, kind = 'thuong') {
     const rows = await openPatient(p);
     if (sourceId) {
       const src = rows.find((r) => r.id === norm(sourceId));
       return { rows, source: src ? await openOrder(src.id) : null, skipped: [] };
     }
     const skipped = [];
-    for (const r of rows.filter((x) => x.dienBien && x.dienBienPHCN).slice(0, 5)) {
+    for (const r of rows.filter((x) => canSource(x, kind)).slice(0, 5)) {
       const o = await openOrder(r.id);
       if (/hoàn tất/i.test(o.status)) return { rows, source: o, skipped };
       skipped.push({ id: r.id, tg: r.tg, status: o.status });
@@ -625,10 +630,11 @@ function createDriver(host) {
 
   async function runInner(plan, result) {
     const N = Math.max(1, Math.min(4, plan.days | 0));
+    const kind = plan.kind === 'sac' ? 'sac' : 'thuong';
     const del = Array.from({ length: N }, (_, i) => [...new Set((plan.deletions && plan.deletions[i]) || [])]);
     const autoComplete = plan.autoComplete !== false;
     const name = plan.patient.hoTen || plan.patient.maBN;
-    log('info', `Bắt đầu: ${name}, ${N} ngày`);
+    log('info', `Bắt đầu: ${name}, ${N} ngày${kind === 'sac' ? ' (y lệnh sắc thuốc thang)' : ''}`);
 
     const before = await openPatient(plan.patient);
     const beforeIds = new Set(before.map((r) => r.id));
@@ -638,17 +644,19 @@ function createDriver(host) {
     const catalog = plan.addItems || [];
     const add = Array.from({ length: N }, (_, i) => catalog.filter((it) => ((plan.adds && plan.adds[i]) || []).includes(it.id)));
 
-    // Never create a second order for a day that already has one.
+    // Never create a second order of the same kind for a day that already has one.
+    // Sắc thuốc thang orders sit next to the usual order of the day, so each kind only
+    // counts its own (orders made by Cập nhật kết quả CLS count for neither).
     const srcDate = parseTime(before.find((r) => r.id === norm(src.id))?.tg) || parseTime(src.thoiGian);
     result.expect = expectations(src, del, srcDate, autoComplete, edits, add);
     if (srcDate) {
       const taken = [];
       for (let k = 1; k <= N; k++) {
         const d = addDays(srcDate, k);
-        if (before.some((r) => dayStamp(parseTime(r.tg)) === dayStamp(d))) taken.push(ddmmOf(d));
+        if (before.some((r) => sameKind(r, kind) && dayStamp(parseTime(r.tg)) === dayStamp(d))) taken.push(ddmmOf(d));
       }
       if (taken.length) {
-        throw new PageError(`Đã có y lệnh ngày ${taken.join(', ')}. Hãy chọn y lệnh nguồn mới nhất, hoặc xóa y lệnh trùng trên OneMES trước`);
+        throw new PageError(`Đã có y lệnh${kind === 'sac' ? ' sắc thuốc thang' : ''} ngày ${taken.join(', ')}. Hãy chọn y lệnh nguồn mới nhất, hoặc xóa y lệnh trùng trên OneMES trước`);
       }
     }
 
@@ -706,7 +714,7 @@ function createDriver(host) {
 
     // 5. Find the copies made by Sao y lệnh and match them to days 2..N by date.
     const after = await listOrders();
-    const fresh = after.filter((r) => !beforeIds.has(r.id) && r.id !== d1);
+    const fresh = after.filter((r) => !beforeIds.has(r.id) && r.id !== d1 && !isClsRow(r));
     // The history list is the reference for dates; the form field is a fallback.
     const base = parseTime(after.find((r) => r.id === d1)?.tg) || parseTime(day1.thoiGian);
     const byDay = [];
@@ -921,6 +929,269 @@ function createDriver(host) {
     return { changed: true, del: r };
   }
 
+  // ---------- dọn dịch vụ kỹ thuật các ngày cũ ----------
+  // Days before `before` (default: today) whose DV column is yellow, except the
+  // sắc thuốc thang orders. Each is opened and its services that are Hoàn trả or
+  // Chờ thực hiện are listed. Read only.
+  const DV_DO = /hoàn trả|chờ thực hiện/i;
+  async function scanDvCu(patient, opts = {}) {
+    const name = patient.hoTen || patient.maBN;
+    await gotoPatient(patient);
+    const rows = await listOrders(true);
+    const cut = opts.before ? parseTime(opts.before) || new Date(opts.before) : new Date();
+    const today = new Date(cut.getFullYear(), cut.getMonth(), cut.getDate());
+    const yellow = rows.filter((r) => r.dv && !isSac(r) && parseTime(r.tg) && parseTime(r.tg) < today);
+    yellow.sort((a, b) => parseTime(a.tg) - parseTime(b.tg));
+    log('info', `${name}: ${yellow.length} ngày cũ có cột DV màu vàng`);
+    const days = [];
+    for (const r of yellow) {
+      checkStop();
+      const o = await openOrder(r.id);
+      const items = o.dvkt
+        .filter((x) => DV_DO.test(x.trangThai))
+        .map((x) => ({ id: x.id, name: x.name, moTa: x.moTa, group: x.group, trangThai: x.trangThai, action: /hoàn trả/i.test(x.trangThai) ? 'xoa' : 'thuhoi' }));
+      days.push({ id: r.id, tg: r.tg, status: o.status, items, other: o.dvkt.filter((x) => !DV_DO.test(x.trangThai)).length });
+    }
+    await call('back').catch(() => {});
+    const n = days.reduce((a, d) => a + d.items.length, 0);
+    log('info', `${name}: ${n} thủ thuật cần dọn (hoàn trả hoặc chờ thực hiện)`);
+    return { days, at: Date.now() };
+  }
+
+  async function suaDVOpen(label) {
+    const st = await call('dvSuaState');
+    if (st.open) return st;
+    await settle();
+    const r = await call('dvSuaOpen');
+    if (!r.ok) throw new PageError(`${label}: không mở được Sửa DVKT (${r.reason})`);
+    return waitFor('bảng Sửa DVKT', async () => {
+      await failOnAlert();
+      const x = await call('dvSuaState');
+      return x.open ? x : null;
+    });
+  }
+
+  async function suaDVClose() {
+    await call('dvSuaClose').catch(() => {});
+    await waitFor('đóng Sửa DVKT', async () => !(await call('dvSuaState')).open, 5000).catch(() => {});
+  }
+
+  // Waits until service `id` is gone from the order (and from Sửa DVKT if open).
+  async function waitDvGone(orderId, id) {
+    await waitFor('xóa dịch vụ xong', async () => {
+      const s = await failOnAlert();
+      if (s.visible) return null;
+      const x = await call('readOrder');
+      if (!x.ok || norm(x.id) !== norm(orderId) || x.busy) return null;
+      if (x.dvkt.some((y) => y.id === norm(id))) return null;
+      const st = await call('dvSuaState');
+      return !st.open || !st.rows.some((y) => y.id === norm(id));
+    }, 30000);
+  }
+
+  async function deleteOneDv(orderId, label, it, viaPopup) {
+    await step(`${label}: xóa "${it.name}"`);
+    await settle();
+    let r;
+    if (viaPopup) {
+      const st = await call('dvSuaState');
+      const row = st.rows.find((x) => x.id === norm(it.id));
+      if (!row || !row.del) throw new PageError(`${label}: Sửa DVKT không có nút xóa cho "${it.name}"`);
+    }
+    r = await call('deleteDichVu', it.id);
+    if (!r.ok) throw new PageError(`${label}: không xóa được "${it.name}" (${r.reason})`);
+    await confirmDialogMatching(/(xóa|hủy) dịch vụ/i, 'hộp thoại xóa dịch vụ');
+    await waitDvGone(orderId, it.id);
+  }
+
+  /**
+   * days = [{ id, items: [service ids] }] from scanDvCu, as ticked by the user.
+   * Hoàn trả: delete. Chờ thực hiện: Sửa DVKT > Thu hồi (status becomes Mới) > delete.
+   * Every service is re-read first; one whose status changed meanwhile is left alone.
+   */
+  async function cleanDvCu(patient, days) {
+    const name = patient.hoTen || patient.maBN;
+    await gotoPatient(patient);
+    await listOrders(true);
+    const out = [];
+    for (const d of days) {
+      checkStop();
+      const res = { id: d.id, tg: d.tg, deleted: [], skipped: [], failed: [] };
+      out.push(res);
+      if (!d.items || !d.items.length) continue;
+      let o = await openOrder(d.id);
+      const label = `${name}, y lệnh ${d.tg || o.thoiGian}`;
+      for (const id of d.items) {
+        checkStop();
+        o = await readStable(d.id);
+        const it = o.dvkt.find((x) => x.id === norm(id));
+        if (!it) {
+          res.skipped.push({ id, why: 'không còn trên y lệnh' });
+          continue;
+        }
+        try {
+          if (/hoàn trả/i.test(it.trangThai)) {
+            if (it.canDelete) await deleteOneDv(d.id, label, it, false);
+            else {
+              const st = await suaDVOpen(label);
+              if (!st.rows.some((x) => x.id === it.id && x.del)) throw new PageError(`${label}: không thấy nút xóa "${it.name}"`);
+              await deleteOneDv(d.id, label, it, true);
+            }
+          } else if (/chờ thực hiện/i.test(it.trangThai)) {
+            const st = await suaDVOpen(label);
+            const row = st.rows.find((x) => x.id === it.id);
+            if (!row) throw new PageError(`${label}: Sửa DVKT không có "${it.name}"`);
+            if (row.thuHoi) {
+              await step(`${label}: thu hồi "${it.name}"`);
+              await settle();
+              const since = await call('now');
+              const r = await call('dvThuHoi', it.id);
+              if (!r.ok) throw new PageError(`${label}: ${r.reason}`);
+              await confirmDialogMatching(/thu hồi dịch vụ/i, 'hộp thoại thu hồi dịch vụ');
+              await waitFor('thu hồi dịch vụ', async () => {
+                await failOnAlert();
+                const t = await call('toasts', since);
+                if (!t.some((x) => /thu hồi yêu cầu dịch vụ thành công/i.test(x.msg))) return null;
+                const x = await call('dvSuaState');
+                const y = x.rows.find((z) => z.id === it.id);
+                return y && y.del;
+              }, 30000);
+              log('ok', `${label}: đã thu hồi "${it.name}"`);
+            } else if (!row.del) throw new PageError(`${label}: Sửa DVKT không có nút thu hồi hay xóa cho "${it.name}"`);
+            await deleteOneDv(d.id, label, it, true);
+          } else {
+            res.skipped.push({ id, name: it.name, why: `trạng thái giờ là "${it.trangThai}"` });
+            log('warn', `${label}: "${it.name}" đang ở "${it.trangThai}", bỏ qua`);
+            continue;
+          }
+          res.deleted.push({ id, name: it.name });
+          log('ok', `${label}: đã xóa "${it.name}"`);
+        } catch (e) {
+          if (e instanceof StopError) throw e;
+          res.failed.push({ id, name: it.name, why: e.message });
+          log('err', e.message);
+          await call('swalClick', 'cancel').catch(() => {});
+          await suaDVClose();
+          throw e;
+        }
+      }
+      await suaDVClose();
+    }
+    await call('back').catch(() => {});
+    log('ok', `${name}: xong dọn thủ thuật`);
+    return out;
+  }
+
+  // ---------- kết quả cận lâm sàng ----------
+  async function kqOpen(patient) {
+    await gotoPatient(patient);
+    await settle();
+    const r = await call('kqOpen');
+    if (!r.ok) throw new PageError(`Không mở được Xem kết quả (${r.reason})`);
+    // The lists arrive a moment later; a patient may have none at all.
+    const start = Date.now();
+    let tabs = false;
+    return waitFor('Xem kết quả', async () => {
+      await failOnAlert();
+      const x = await call('kqList');
+      if (!x.ok || x.busy) return null;
+      if (x.xn.length || x.cdha.length) return x;
+      if (!tabs && Date.now() - start > 1500) {
+        tabs = true;
+        await call('kqTabs');
+      }
+      return Date.now() - start > 8000 ? x : null;
+    });
+  }
+
+  // The dates (dd/MM/yyyy) that have a result in Lịch sử XN or Lịch sử CĐHA.
+  async function clsList(patient) {
+    const name = patient.hoTen || patient.maBN;
+    const l = await kqOpen(patient);
+    await call('kqClose');
+    const rows = [...l.xn.map((x) => ({ ...x, kind: 'xn' })), ...l.cdha.map((x) => ({ ...x, kind: 'cdha' }))];
+    const dates = [...new Set(rows.map((r) => (r.date.split(' ')[1] || '')).filter(Boolean))];
+    dates.sort((a, b) => parseTime('00:00 ' + b) - parseTime('00:00 ' + a));
+    log('info', `${name}: có kết quả ${dates.length} ngày (${l.xn.length} xét nghiệm, ${l.cdha.length} CĐHA)`);
+    return { dates, rows, at: Date.now() };
+  }
+
+  // Reads every XN and CĐHA of the chosen dates (top to bottom) and keeps the values
+  // shown in red or blue, plus each CĐHA's Kết luận.
+  async function clsRead(patient, dates) {
+    const name = patient.hoTen || patient.maBN;
+    const l = await kqOpen(patient);
+    const want = new Set(dates);
+    const dayOf = (r) => r.date.split(' ')[1] || '';
+    const out = [];
+    for (const kind of ['xn', 'cdha']) {
+      for (const r of l[kind]) {
+        checkStop();
+        if (!want.has(dayOf(r))) continue;
+        const o = await call('kqOpenRow', kind, r.idx);
+        if (!o.ok) throw new PageError(o.reason);
+        if (kind === 'xn') {
+          const d = await waitFor(`kết quả ${r.name || 'xét nghiệm'}`, async () => {
+            await failOnAlert();
+            const x = await call('kqDetailXN');
+            return x.ready && !x.busy ? x : null;
+          });
+          const bad = d.items.filter((x) => x.flag);
+          out.push({ kind, date: r.date, name: r.name, loai: d.loai, items: bad, total: d.items.length });
+          log('info', `${name}: ${r.name} ${r.date}: ${bad.length}/${d.items.length} chỉ số bất thường`);
+        } else {
+          const d = await waitFor(`kết quả ${r.name || 'CĐHA'}`, async () => {
+            await failOnAlert();
+            const x = await call('kqDetailCDHA');
+            return x.ready && !x.busy ? x : null;
+          });
+          out.push({ kind, date: r.date, name: r.name || d.dichVu.join(', '), ketLuan: d.ketLuan });
+          log('info', `${name}: ${r.name} ${r.date}: đã đọc kết luận`);
+        }
+      }
+    }
+    await call('kqClose');
+    return { results: out, text: clsText(out), at: Date.now() };
+  }
+
+  /**
+   * Thêm y lệnh mới, then writes time and diễn biến bệnh into it and saves.
+   * thoiGian = 'HH:mm dd/MM/yyyy' (thời gian thực hiện; chỉ định one minute earlier).
+   */
+  async function clsCreate(patient, { thoiGian, dienBien }, autoComplete = false) {
+    const name = patient.hoTen || patient.maBN;
+    const th = parseTime(thoiGian);
+    if (!th) throw new PageError(`Thời gian "${thoiGian}" không đúng dạng giờ:phút ngày/tháng/năm`);
+    if (!String(dienBien || '').trim()) throw new PageError('Nội dung y lệnh đang trống');
+    await gotoPatient(patient);
+    const before = await listOrders();
+    const ids = new Set(before.map((r) => r.id));
+    await step(`${name}: Thêm y lệnh mới`);
+    await settle();
+    const r = await call('newOrder');
+    if (!r.ok) throw new PageError(`Không thấy nút Thêm y lệnh mới (${r.reason})`);
+    const o = await waitFor('y lệnh mới', async () => {
+      await failOnAlert();
+      const w = await where();
+      if (!w.popupOpen) return null;
+      const x = await call('readOrder');
+      return x.ok && x.id && x.status && !ids.has(norm(x.id)) ? x : null;
+    }, 60000);
+    if (!isNew(o)) throw new PageError(`Y lệnh mới có trạng thái "${o.status}", dừng`);
+    const id = norm(o.id);
+    const label = `${name}, y lệnh mới`;
+    log('ok', `${label}: đã tạo (${o.thoiGian})`);
+    const f = { thoiGianThucHien: fmtTime(th), thoiGian: fmtTime(new Date(th.getTime() - 60000)), dienBien };
+    if (o.thoiGianThucHien === f.thoiGianThucHien) delete f.thoiGianThucHien;
+    if (o.thoiGian === f.thoiGian) delete f.thoiGian;
+    await applyFields(id, label, f);
+    const back = await readStable(id);
+    if (back.thoiGianThucHien && back.thoiGianThucHien !== fmtTime(th)) throw new PageError(`${label}: giờ thực hiện trên OneMES là ${back.thoiGianThucHien}, không phải ${fmtTime(th)}`);
+    if (autoComplete) await complete(id, label);
+    await call('back').catch(() => {});
+    return { id, thoiGian: fmtTime(th) };
+  }
+
   // ---------- danh sách bác sĩ, cấp độ chăm sóc ----------
   async function loadLists(esBase) {
     const w = await waitFor('trang OneMES', () => where());
@@ -1007,7 +1278,56 @@ function createDriver(host) {
     return { values: back.values, missing, kept, filled: todo.map((f) => f.id), diff, at: Date.now() };
   }
 
-  return { call, where, addThuoc, scanPatients, openPatient, listOrders, pickSource, loadPatient, openOrder, readOrder, run, gotoList, verify, deleteOrder, updateDay, loadLists, readBenhAn, saveBenhAn, fieldsFor };
+  return { call, where, addThuoc, scanPatients, openPatient, listOrders, pickSource, loadPatient, scanDvCu, cleanDvCu, clsList, clsRead, clsCreate, openOrder, readOrder, run, gotoList, verify, deleteOrder, updateDay, loadLists, readBenhAn, saveBenhAn, fieldsFor };
+}
+
+const SAC_RE = /sắc thuốc thang/i;
+const isSac = (r) => SAC_RE.test(String((r && r.khac) || ''));
+// Orders written by Cập nhật kết quả CLS start with this line.
+const CLS_HEAD = 'Kết quả CLS:';
+const isClsRow = (r) => String((r && r.dienBien) || '').trim().startsWith(CLS_HEAD);
+const sameKind = (r, kind) => (kind === 'sac' ? isSac(r) : !isSac(r) && !isClsRow(r));
+
+// "Xét nghiệm huyết học" -> "Công thức máu", other groups lose "Xét nghiệm".
+function clsGroup(s) {
+  const t = String(s || '').replace(/\s+/g, ' ').trim();
+  if (/huyết học/i.test(t)) return 'Công thức máu';
+  if (/hóa sinh|hoá sinh/i.test(t)) return 'Hóa sinh máu';
+  const x = t.replace(/^xét nghiệm\s*/i, '').trim();
+  return x ? x.charAt(0).toUpperCase() + x.slice(1) : 'Xét nghiệm';
+}
+// "(S34) Định lượng Procalcitonin (PCT) (máu)" -> "PCT"; otherwise the plain name.
+function clsName(s) {
+  let t = String(s || '').replace(/\s+/g, ' ').trim();
+  t = t.replace(/^\([A-Z]?\d+[A-Z0-9.]*\)\s*/i, '').replace(/\s*[([](máu|huyết thanh|nước tiểu)[)\]]\s*$/i, '').trim();
+  const ab = /\(([A-Za-z0-9#%.\-+/ ]{1,12})\)\s*$/.exec(t);
+  if (ab && /[A-Za-z]/.test(ab[1])) return ab[1].trim();
+  return t.replace(/^định lượng\s+/i, '').replace(/^đo\s+/i, '').trim();
+}
+// The text of the new order: one line per test group, then one per CĐHA.
+function clsText(results) {
+  const days = [...new Set(results.map((r) => (r.date.split(' ')[1] || '')))];
+  const many = days.length > 1;
+  const lines = [CLS_HEAD];
+  for (const day of days) {
+    const rs = results.filter((r) => (r.date.split(' ')[1] || '') === day);
+    const block = [];
+    const groups = new Map();
+    for (const r of rs.filter((x) => x.kind === 'xn')) {
+      for (const it of r.items) {
+        const g = clsGroup(r.name || r.loai || it.group);
+        if (!groups.has(g)) groups.set(g, []);
+        const v = `${clsName(it.name)}: ${it.value}${it.unit ? (it.unit === '%' ? '' : ' ') + it.unit : ''}`;
+        if (!groups.get(g).includes(v)) groups.get(g).push(v);
+      }
+    }
+    for (const [g, vs] of groups) block.push(`${g}: ${vs.join('; ')}`);
+    for (const r of rs.filter((x) => x.kind === 'cdha')) if (r.ketLuan) block.push(`${r.name}: ${r.ketLuan.replace(/\s*\n\s*/g, '; ')}`);
+    if (!block.length) continue;
+    if (many) lines.push(`Ngày ${day.slice(0, 5)}:`);
+    lines.push(...block.map((b) => (many ? '- ' + b : b)));
+  }
+  return lines.length > 1 ? lines.join('\n') : '';
 }
 
 function countBy(list) {

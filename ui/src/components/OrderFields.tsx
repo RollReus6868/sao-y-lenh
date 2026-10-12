@@ -109,7 +109,7 @@ function F({ label, changed, onReset, hint, className, children }: { label: stri
 
 // 24-hour "HH:mm" typed as text ("7:30", "0730", "7h30" are accepted), so the
 // computer's AM/PM setting never gets in the way.
-function TimeInput({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+export function TimeInput({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
   const [text, setText] = useState(value);
   const [bad, setBad] = useState(false);
   useEffect(() => { setText(value); setBad(false); }, [value]);

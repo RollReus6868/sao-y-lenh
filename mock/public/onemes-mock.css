@@ -18,3 +18,7 @@ h4{margin:12px 0 4px}
 .select2-results__option{padding:4px}
 .select2-results__option--highlighted{background:#5897fb;color:#fff}
 .select2-hidden-accessible{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden;clip:rect(0 0 0 0)}
+#divFormModalSuaDV,#divFormModalChung{position:fixed;inset:30px;background:#fff;border:1px solid #999;z-index:40;overflow:auto;padding:8px}
+.badge-danger{background:#ed5565}
+#divFormModalChung .row{display:flex;gap:8px}
+#divFormModalChung .col-md-4{flex:1}#divFormModalChung .col-md-8{flex:2}

@@ -259,6 +259,77 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     fresh = newOrders(1, before);
     check(r.ok && count(fresh[0], 'CỒN XOA BÓP') === 1 && !m.mock.getState().log.some((x) => x[0] === 'themThuoc'), 'thêm: drug already copied from the source is not added again');
 
+    // --- dọn thủ thuật các ngày cũ ---
+    console.log('dọn thủ thuật');
+    m.mock.reset();
+    pts = await d.scanPatients();
+    const CUT = '00:00 12/10/2026';
+    let sc = await d.scanDvCu(pts[0], { before: CUT });
+    check(sc.days.length === 2, 'dọn: two old yellow days (today, the CLS day and the sắc day left out): ' + sc.days.map((x) => x.tg).join(', '));
+    check(sc.days[0].items.map((x) => x.action).join() === 'xoa,thuhoi' && sc.days[1].items.map((x) => x.action).join() === 'thuhoi', 'dọn: Hoàn trả to delete, Chờ thực hiện to recall, oldest day first');
+    check(!(await d.scanDvCu(pts[2], { before: CUT })).days.length, 'dọn: patient with every service done has nothing');
+    m.mock.getState().log.length = 0;
+    const cleaned = await d.cleanDvCu(pts[0], sc.days.map((x) => ({ id: x.id, tg: x.tg, items: x.items.map((i) => i.id) })));
+    const lgc = m.mock.getState().log.map((x) => x[0]);
+    check(cleaned.reduce((a, x) => a + x.deleted.length, 0) === 3 && cleaned.every((x) => !x.failed.length), 'dọn: three services deleted');
+    check(lgc.filter((x) => x === 'thuHoiDV').length === 2 && lgc.filter((x) => x === 'xoaDichVu').length === 3, 'dọn: two Thu hồi in Sửa DVKT, three deletions');
+    check(!lgc.includes('chuyenTH') && !lgc.includes('thuHoi') && !lgc.includes('hoanTat'), 'dọn: never sent a service, never recalled the order');
+    const st0 = m.mock.getState().patients[0];
+    const oldDay = st0.orders.find((o) => o.id === sc.days[0].id);
+    check(oldDay.status === 'Hoàn tất' && oldDay.dvkt.length === 3 && oldDay.dvkt.every((x) => x.trangThai === 'Hoàn tất'), 'dọn: order stays Hoàn tất with its done services');
+    check(st0.orders.find((o) => o.khac.includes('Sắc')).dvkt[0].trangThai === 'Chờ thực hiện', 'dọn: sắc thuốc thang order untouched');
+    check(!(await d.call('dvSuaState')).open, 'dọn: Sửa DVKT closed');
+    check(!(await d.scanDvCu(pts[0], { before: CUT })).days.length, 'dọn: nothing left after cleaning');
+    // Only the ticked service on a day.
+    sc = await d.scanDvCu(pts[1], { before: CUT });
+    m.mock.getState().log.length = 0;
+    await d.cleanDvCu(pts[1], [{ id: sc.days[0].id, tg: sc.days[0].tg, items: [sc.days[0].items[1].id] }]);
+    const left = await d.scanDvCu(pts[1], { before: CUT });
+    check(left.days.length === 2 && left.days[0].items.length === 1 && left.days[0].items[0].action === 'xoa', 'dọn: unticked services left alone');
+
+    // --- sao chép y lệnh sắc thuốc thang ---
+    console.log('sắc thuốc thang');
+    m.mock.reset();
+    pts = await d.scanPatients();
+    const lpS = await d.loadPatient(pts[0], null, 'sac');
+    const lpT = await d.loadPatient(pts[0]);
+    const khacOf = (lp) => lp.rows.find((x) => x.id === lp.source.id).khac;
+    check(lpS.source && /sắc thuốc thang/i.test(khacOf(lpS)) && !/sắc/i.test(khacOf(lpT)), 'sắc: each kind picks its own source');
+    check(!(await d.loadPatient(pts[1], null, 'sac')).source, 'sắc: none for a patient without one');
+    before = ids(0);
+    r = await d.run({ patient: pts[0], sourceId: lpS.source.id, kind: 'sac', days: 2, deletions: [[], []] });
+    fresh = newOrders(0, before);
+    check(r.ok && fresh.length === 2 && fresh.every((o) => /sắc/i.test(o.khac) && o.status === 'Hoàn tất'), 'sắc: two sắc days copied and completed');
+    check(fresh[0].date.getDate() === 12 && hm(fresh[0].date) === '15:00', 'sắc: copied onto today, next to the usual order');
+    const dupS = await d.run({ patient: pts[0], sourceId: lpS.source.id, kind: 'sac', days: 1, deletions: [[]] }).catch((x) => x);
+    check(dupS instanceof Error && /sắc thuốc thang ngày 12\/10/.test(dupS.message), 'sắc: a second sắc order for a day is refused: ' + dupS.message);
+    before = ids(0);
+    r = await d.run({ patient: pts[0], sourceId: lpT.source.id, days: 1, deletions: [[]] });
+    check(r.ok && newOrders(0, before).length === 1, 'sắc: the usual copy still goes onto a day that has a sắc order');
+
+    // --- cập nhật kết quả cận lâm sàng ---
+    console.log('kết quả CLS');
+    const cl = await d.clsList(pts[1]);
+    check(cl.dates.join() === '10/10/2026,06/10/2026', 'CLS: dates found, newest first: ' + cl.dates.join());
+    let rd = await d.clsRead(pts[1], ['10/10/2026']);
+    check(rd.results.length === 3 && rd.results[0].total === 4, 'CLS: two tests and one imaging read for 10/10');
+    const WANT = 'Kết quả CLS:\nCông thức máu: WBC: 11.2 G/L; HGB: 112 g/L; PCT: 0.12%\nHóa sinh máu: Glucose: 7.8 mmol/L; Kali: 3.2 mmol/L\nSiêu âm ổ bụng tổng quát: Gan nhiễm mỡ độ I';
+    check(rd.text === WANT, 'CLS: red and blue values only, short names: ' + JSON.stringify(rd.text));
+    rd = await d.clsRead(pts[1], ['10/10/2026', '06/10/2026']);
+    check(/^Kết quả CLS:\nNgày 10\/10:\n- Công thức máu/.test(rd.text) && /\nNgày 06\/10:\n- Hóa sinh máu: Cholesterol toàn phần: 6.1 mmol\/L\n- Chụp X-quang/.test(rd.text), 'CLS: several days get a heading each: ' + JSON.stringify(rd.text));
+    before = ids(1);
+    m.mock.getState().log.length = 0;
+    const cr = await d.clsCreate(pts[1], { thoiGian: '14:20 13/10/2026', dienBien: WANT }, false);
+    fresh = newOrders(1, before);
+    check(fresh.length === 1 && cr.id === fresh[0].id && fresh[0].status === 'Mới' && fresh[0].dienBien === WANT, 'CLS: new order holds the text, left Mới');
+    check(fresh[0].dateTH.getDate() === 13 && hm(fresh[0].dateTH) === '14:20' && hm(fresh[0].date) === '14:19', 'CLS: chosen date and time set');
+    check(m.mock.getState().log.map((x) => x[0]).join() === 'themYLenh,luu', 'CLS: only Thêm y lệnh mới and Lưu');
+    // The CLS order on 13/10 does not block copying the usual order onto that day.
+    ({ source } = await d.loadPatient(pts[1]));
+    before = ids(1);
+    r = await d.run({ patient: pts[1], sourceId: source.id, days: 1, deletions: [[]] });
+    check(r.ok && newOrders(1, before).length === 1 && source.dienBienPHCN, 'CLS: usual copy still allowed on the CLS day');
+
     // --- Ds Điều trị nội trú from start pages without the link ---
     console.log('nút Ds');
     await page.goto(m.base + '/home.aspx?scope=sys&lang=vi');

@@ -224,14 +224,41 @@ const commands = {
       log('info', 'Quét Ds Điều trị nội trú');
       return d.scanPatients();
     }),
-  'patient:load': ({ patient, sourceId }) =>
+  'patient:load': ({ patient, sourceId, kind }) =>
     task('Đọc y lệnh', async (d) => {
-      const r = await d.loadPatient(patient, sourceId);
-      if (!r.source) log('warn', `${patient.hoTen}: không có y lệnh Hoàn tất nào đủ Diễn biến bệnh và Diễn biến PHCN`);
+      const r = await d.loadPatient(patient, sourceId, kind);
+      if (!r.source) log('warn', kind === 'sac' ? `${patient.hoTen}: không có y lệnh sắc thuốc thang nào đã Hoàn tất` : `${patient.hoTen}: không có y lệnh Hoàn tất nào đủ Diễn biến bệnh và Diễn biến PHCN`);
       // The Bác sĩ / Cấp độ chăm sóc choices are read once and kept.
       let lists = null;
       if (!store.get().lists) lists = await readLists(d).catch(() => null);
       return { ...r, lists };
+    }),
+  'dvkt:scan': ({ patient, before }) =>
+    task('Quét thủ thuật cũ', async (d) => {
+      const r = await d.scanDvCu(patient, { before: before || process.env.SYL_TODAY });
+      return store.setDvScan(patient.noitruid, r);
+    }),
+  'dvkt:clean': ({ patient, days }) =>
+    task('Dọn thủ thuật', async (d) => {
+      let res;
+      try {
+        res = await d.cleanDvCu(patient, days || []);
+      } finally {
+        // Whatever happened, read the days again so the list shows what is left.
+        const r = await d.scanDvCu(patient, { before: process.env.SYL_TODAY }).catch(() => null);
+        if (r) store.setDvScan(patient.noitruid, r);
+      }
+      const n = res.reduce((a, x) => a + x.deleted.length, 0);
+      return { result: res, deleted: n, dvScans: store.get().dvScans };
+    }),
+  'cls:list': ({ patient }) => task('Đọc kết quả CLS', (d) => d.clsList(patient)),
+  'cls:read': ({ patient, dates }) => task('Đọc kết quả CLS', (d) => d.clsRead(patient, dates || [])),
+  'cls:create': ({ patient, thoiGian, dienBien }) =>
+    task('Tạo y lệnh kết quả CLS', async (d) => {
+      log('info', `${patient.hoTen}: tạo y lệnh mới cho kết quả CLS (${thoiGian})`);
+      const r = await d.clsCreate(patient, { thoiGian, dienBien }, store.get().settings.autoComplete);
+      log('ok', `${patient.hoTen}: đã tạo y lệnh kết quả CLS ${r.thoiGian}`);
+      return r;
     }),
   'lists:load': () => task('Đọc danh sách bác sĩ', (d) => readLists(d)),
   run: ({ plans }) =>
@@ -241,16 +268,17 @@ const commands = {
         const p = { ...plans[i], ...pickSettings() };
         push({ progress: { patient: p.patient.hoTen, index: i, total: plans.length } });
         try {
+          const key = runKey(p.patient, p.kind);
           if (!p.sourceId) {
-            const r = await d.loadPatient(p.patient);
+            const r = await d.loadPatient(p.patient, null, p.kind);
             if (!r.source) throw new Error('Không có y lệnh nguồn phù hợp');
             p.sourceId = r.source.id;
             if (p.baseDeletions) p.deletions = resolveKeys(r.source, p.baseDeletions);
           }
           const r = await d.run(p);
           const check = await checkAfter(d, p.patient, r);
-          store.setRun(p.patient.noitruid, { ok: true, message: `${p.days} ngày`, ...runRecord(r), check });
-          forgetNotes(p.patient.noitruid);
+          store.setRun(key, { ok: true, message: `${p.days} ngày`, ...runRecord(r), check });
+          forgetNotes(key);
           out.push({ noitruid: p.patient.noitruid, ok: true, result: r, check });
           if (stopFlag) break;
         } catch (e) {
@@ -259,24 +287,24 @@ const commands = {
           // Whatever was created before the error still gets checked, so it can be fixed or removed.
           const part = e.partial && e.partial.days.length ? e.partial : null;
           const check = part && !e.stopped ? await checkAfter(d, p.patient, part) : null;
-          store.setRun(p.patient.noitruid, { ok: false, message: msg, ...(part ? runRecord(part) : {}), check });
+          store.setRun(runKey(p.patient, p.kind), { ok: false, message: msg, ...(part ? runRecord(part) : {}), check });
           out.push({ noitruid: p.patient.noitruid, ok: false, message: msg, stopped: !!e.stopped, check });
           if (e.stopped) break;
         }
       }
       return out;
     }),
-  'patient:check': ({ patient }) =>
+  'patient:check': ({ patient, kind }) =>
     task('Kiểm tra lại', async (d) => {
-      const run = store.get().runs[patient.noitruid];
+      const run = store.get().runs[runKey(patient, kind)];
       const ids = ((run && run.days) || []).filter((x) => !x.deleted);
       if (!ids.length) throw new Error('Chưa có ngày nào do tool tạo để kiểm tra');
       const check = await d.verify(patient, run.expect, ids);
-      return store.patchRun(patient.noitruid, { check: keepDeleted(run.check, check) });
+      return store.patchRun(runKey(patient, kind), { check: keepDeleted(run.check, check) });
     }),
-  'order:delete': ({ patient, id }) =>
+  'order:delete': ({ patient, kind, id }) =>
     task('Xóa y lệnh', async (d) => {
-      const run = store.get().runs[patient.noitruid];
+      const run = store.get().runs[runKey(patient, kind)];
       const day = run && (run.days || []).find((x) => x.id === id);
       // Only orders this tool created can be deleted from here.
       if (!day) throw new Error('Chỉ xóa được y lệnh do tool vừa tạo');
@@ -284,11 +312,11 @@ const commands = {
       await d.deleteOrder(patient, id);
       const days = run.days.map((x) => (x.id === id ? { ...x, deleted: true } : x));
       const check = run.check && { ...run.check, days: run.check.days.map((x) => (x.id === id ? { ...x, deleted: true } : x)) };
-      return store.patchRun(patient.noitruid, { days, check });
+      return store.patchRun(runKey(patient, kind), { days, check });
     }),
-  'order:update': ({ patient, id, edit, remove }) =>
+  'order:update': ({ patient, kind, id, edit, remove }) =>
     task('Sửa y lệnh', async (d) => {
-      const run = store.get().runs[patient.noitruid];
+      const run = store.get().runs[runKey(patient, kind)];
       const day = run && (run.days || []).find((x) => x.id === id && !x.deleted);
       if (!day) throw new Error('Chỉ sửa được y lệnh do tool vừa tạo');
       log('info', `${patient.hoTen}: sửa y lệnh ngày ${day.day} (${day.time || ''})`);
@@ -297,7 +325,7 @@ const commands = {
       const expect = run.expect ? { ...run.expect, days: run.expect.days.map((e) => (e.day === day.day ? expectAfterEdit(e, edit, remove) : e)) } : null;
       const one = await d.verify(patient, expect, [{ day: day.day, id }]);
       const days = ((run.check && run.check.days) || []).filter((x) => x.id !== id).concat(one.days).sort((a, b) => a.day - b.day);
-      return store.patchRun(patient.noitruid, { expect, check: { at: one.at, ok: !days.some((x) => !x.deleted && x.problems.length), days } });
+      return store.patchRun(runKey(patient, kind), { expect, check: { at: one.at, ok: !days.some((x) => !x.deleted && x.problems.length), days } });
     }),
   'benhAn:set': ({ id, values }) => store.setBenhAn(id, { values, savedAt: Date.now() }),
   'benhAn:clear': ({ id }) => store.setBenhAn(id, null),
@@ -329,6 +357,11 @@ const commands = {
   'update:install': () => installUpdate(),
   'open:releases': () => shell.openExternal(`https://github.com/RollReus6868/sao-y-lenh/releases/latest`),
 };
+
+// Sắc thuốc thang copies keep their own choices and results next to the usual ones.
+function runKey(patient, kind) {
+  return kind === 'sac' ? `${patient.noitruid}|sac` : patient.noitruid;
+}
 
 async function readLists(d) {
   const r = await d.loadLists(store.get().settings.esBase);

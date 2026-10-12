@@ -39,50 +39,45 @@ export function levelTone(l: string) {
 export const levelLabel: Record<string, string> = { ok: 'XONG', warn: 'BỎ QUA', error: 'LỖI', info: 'TIN' };
 export const clock = (t: number) => new Date(t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-// Shown in the action bar while the tool works: progress, current step, Stop / Continue.
+// A thin strip shown while the tool works: what it does, the next step, Continue / Stop.
 export function RunBar({ onBrowser }: { onBrowser?: () => void }) {
   const { state, call } = useApp();
   const log = useLog();
-  const last = log.slice(-3);
+  const last = log[log.length - 1];
   const p = state.progress;
   return (
-    <div className="space-y-3" data-runbar>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-        <div className="gradient-progress progress-animated h-full rounded-full transition-all" style={{ width: p ? `${Math.max(8, ((p.index + 0.5) / p.total) * 100)}%` : '40%' }} />
-      </div>
-      <div className="flex items-center gap-2 text-sm">
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+    <div className="flex-shrink-0 space-y-1.5 border-b border-border/40 bg-primary/5 px-3 py-2 sm:px-4" data-runbar>
+      <div className="flex items-center gap-2 text-xs">
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
         <span className="min-w-0 flex-1 truncate font-semibold">
           {state.task}
           {p && p.total > 1 ? ` · ${p.index + 1}/${p.total}` : ''}
           {p ? ` · ${p.patient}` : ''}
         </span>
-        {onBrowser && <button type="button" onClick={onBrowser} className="shrink-0 text-xs font-semibold text-primary hover:underline">Xem trình duyệt</button>}
-      </div>
-      {state.stepWaiting && (
-        <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
-          <Pause className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1">Bước tiếp: <b>{state.stepWaiting}</b></span>
-        </div>
-      )}
-      <div className="space-y-1">
-        {last.map((e, i) => (
-          <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className={cn('rounded px-1.5 py-px text-[10px] font-bold', levelTone(e.level))}>{levelLabel[e.level]}</span>
-            <span className="truncate">{e.msg}</span>
-          </div>
-        ))}
-      </div>
-      <div className="flex gap-2">
+        {onBrowser && <button type="button" onClick={onBrowser} className="shrink-0 font-semibold text-primary hover:underline">Xem trình duyệt</button>}
         {state.stepWaiting && (
-          <Button variant="gradient" size="xl" className="flex-1" onClick={() => call('step:continue')} data-action="continue">
+          <Button variant="gradient" size="sm" onClick={() => call('step:continue')} data-action="continue">
             <Play /> Làm bước này
           </Button>
         )}
-        <Button variant="destructive" size="xl" className={state.stepWaiting ? '' : 'flex-1'} onClick={() => call('stop')} data-action="stop">
+        <Button variant="destructive" size="sm" onClick={() => call('stop')} data-action="stop">
           <Square /> Dừng
         </Button>
       </div>
+      <div className="h-1 overflow-hidden rounded-full bg-muted">
+        <div className="gradient-progress progress-animated h-full rounded-full transition-all" style={{ width: p ? `${Math.max(8, ((p.index + 0.5) / p.total) * 100)}%` : '40%' }} />
+      </div>
+      {state.stepWaiting ? (
+        <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300">
+          <Pause className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 flex-1">Bước tiếp: <b>{state.stepWaiting}</b></span>
+        </div>
+      ) : last ? (
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span className={cn('rounded px-1.5 py-px text-[10px] font-bold', levelTone(last.level))}>{levelLabel[last.level]}</span>
+          <span className="truncate">{last.msg}</span>
+        </div>
+      ) : null}
     </div>
   );
 }

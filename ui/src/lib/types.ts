@@ -2,7 +2,7 @@ export interface Patient {
   noitruid: string; url: string; buong: string; tgVao: string; bg: string; maBN: string; hoTen: string;
   tuoi: string; gt: string; doiTuong: string; trangThai: string; bacSi: string; chanDoan: string; khoa: string;
 }
-export interface OrderRow { id: string; tg: string; tgth: string; bacSi: string; dienBien: string; dienBienPHCN: string; khac: string }
+export interface OrderRow { id: string; tg: string; tgth: string; bacSi: string; dienBien: string; dienBienPHCN: string; khac: string; dv?: boolean }
 export interface Item {
   kind: 'thuoc' | 'dvkt'; id: string; key: string; canDelete: boolean; group: string; name: string;
   hamLuong?: string; dvt?: string; duongDung?: string; sl: string; cachDung?: string; moTa?: string; kho?: string; loaiKe?: string;
@@ -47,6 +47,7 @@ export interface BaSchema { source: string; groups: BaGroup[] }
 export interface Data {
   settings: Settings; templates: Template[]; choices: Record<string, Choice>; runs: Record<string, RunInfo>;
   lists: Lists | null; benhAn: Record<string, BenhAnDraft>; benhAnMaus: BenhAnMau[]; benhAnMauId: string | null;
+  dvScans?: Record<string, DvScan>;
 }
 export interface BenhAnMau { id: string; name: string; values: BaValues; at: number }
 export interface MauList { benhAnMaus: BenhAnMau[]; benhAnMauId: string | null; id?: string }
@@ -57,7 +58,7 @@ export interface AppState {
   viewUrl: string; canGoBack?: boolean; update: UpdateInfo | null;
 }
 export interface LogEntry { at: number; level: 'info' | 'ok' | 'warn' | 'error'; msg: string }
-export interface Plan { patient: Patient; sourceId?: string; days: number; deletions?: string[][]; baseDeletions?: string[][]; edits?: (DayEdit | null)[]; adds?: string[][] }
+export interface Plan { patient: Patient; kind?: Kind; sourceId?: string; days: number; deletions?: string[][]; baseDeletions?: string[][]; edits?: (DayEdit | null)[]; adds?: string[][] }
 export interface RunResult { noitruid: string; ok: boolean; message?: string; stopped?: boolean; check?: Check | null }
 
 export const baseKey = (key: string) => key.replace(/#\d+$/, '');
@@ -65,3 +66,20 @@ export const baseKey = (key: string) => key.replace(/#\d+$/, '');
 /** Vật tư y tế rows carry "(Hao phí)" or "(Bảo hiểm)" so the user knows which to drop. */
 export const itemName = (it: { kind: string; group?: string; name: string; doiTuong?: string }) =>
   it.kind === 'thuoc' && /vật tư/i.test(it.group || '') && it.doiTuong ? `${it.name} (${it.doiTuong})` : it.name;
+
+// 'sac': orders whose Y lệnh khác is "Chỉ định sắc thuốc thang", copied apart from the usual ones.
+export type Kind = 'thuong' | 'sac';
+export const runKey = (p: { noitruid: string }, kind?: Kind) => (kind === 'sac' ? `${p.noitruid}|sac` : p.noitruid);
+export const isSac = (r: { khac?: string }) => /sắc thuốc thang/i.test(r.khac || '');
+
+// Dọn thủ thuật: old days with services Hoàn trả (delete) or Chờ thực hiện (recall, then delete).
+export interface DvItem { id: string; name: string; moTa?: string; group?: string; trangThai: string; action: 'xoa' | 'thuhoi' }
+export interface DvDay { id: string; tg: string; status: string; items: DvItem[]; other: number }
+export interface DvScan { days: DvDay[]; at: number }
+export interface DvCleanDay { id: string; tg: string; deleted: { id: string; name: string }[]; skipped: { id: string; why: string }[]; failed: { id: string; name: string; why: string }[] }
+
+// Kết quả cận lâm sàng.
+export interface ClsRow { kind: 'xn' | 'cdha'; idx: number; date: string; name: string; status: string }
+export interface ClsList { dates: string[]; rows: ClsRow[]; at: number }
+export interface ClsResult { kind: 'xn' | 'cdha'; date: string; name: string; items?: { name: string; value: string; unit: string; ref: string; flag: 'red' | 'blue' | null }[]; total?: number; ketLuan?: string }
+export interface ClsRead { results: ClsResult[]; text: string; at: number }

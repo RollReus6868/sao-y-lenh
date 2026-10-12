@@ -27,6 +27,7 @@ const DEFAULTS = {
   benhAn: {}, // noitruid -> { values, savedAt, readAt, sentAt } Thông tin bệnh án being prepared
   benhAnMaus: [], // [{ id, name, values, at }] filled-in Thông tin bệnh án examples
   benhAnMauId: null, // the example new patients start from
+  dvScans: {}, // noitruid -> { days: [{ id, tg, items: [{ id, name, trangThai, action }] }], at } old services to clean
 };
 
 function createStore(dir) {
@@ -93,6 +94,12 @@ function createStore(dir) {
     setRun(id, r) {
       data.runs[id] = { ...r, at: Date.now() };
       save();
+    },
+    setDvScan(id, r) {
+      if (r) data.dvScans[id] = r;
+      else delete data.dvScans[id];
+      save();
+      return data.dvScans[id] || null;
     },
     patchRun(id, patch) {
       if (!data.runs[id]) return null;

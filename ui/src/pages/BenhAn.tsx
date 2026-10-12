@@ -5,7 +5,7 @@ import { Button, EmptyState, Input, Select, Switch, Textarea } from '@/kit/ui';
 import { useApp } from '@/lib/useApp';
 import { allFields, filledCount, isFilled, schema, templateFromFile } from '@/lib/benhAn';
 import type { BaField, BaValue, BaValues, BenhAnDraft, MauList, Patient } from '@/lib/types';
-import { ActionBar, Sheet } from '@/components/common';
+import { Sheet } from '@/components/common';
 
 const when = (t?: number) => (t ? new Date(t).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '');
 const labelOf = (id: string) => allFields.find((f) => f.id === id)?.label || id;
@@ -119,6 +119,9 @@ export function BenhAnView({ patient }: { patient: Patient }) {
           </Button>
           <Button variant="ghost" size="xs" onClick={openSaveMau} disabled={!n} data-action="ba-save-mau"><BookmarkPlus /> Lưu làm mẫu</Button>
           <Button variant="ghost" size="xs" onClick={() => file.current?.click()} data-action="ba-import"><FileInput /> Nhập mẫu từ file HTML</Button>
+          <Button variant="gradient" size="sm" className="ml-auto" disabled={state.busy || !n} onClick={() => setAsk('save')} data-action="ba-save">
+            {saving ? <Loader2 className="animate-spin" /> : <Upload />} {saving ? 'Đang ghi…' : 'Cập nhật lên OneMES'}
+          </Button>
         </div>
         {maus.length > 0 && (
           <div className="flex items-center gap-1.5" data-mau-pick>
@@ -175,12 +178,6 @@ export function BenhAnView({ patient }: { patient: Patient }) {
           ))}
         </div>
       </div>
-
-      <ActionBar>
-        <Button variant="gradient" size="xl" className="w-full" disabled={state.busy || !n} onClick={() => setAsk('save')} data-action="ba-save">
-          {saving ? <Loader2 className="animate-spin" /> : <Upload />} {saving ? 'Đang ghi lên OneMES…' : 'Cập nhật bệnh án lên OneMES'}
-        </Button>
-      </ActionBar>
 
       <Sheet
         open={ask === 'save'}
