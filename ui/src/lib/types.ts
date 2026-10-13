@@ -16,13 +16,13 @@ export interface Order {
   thuoc: Item[]; dvkt: Item[]; saoYLenh: SelectInfo | null; hinhThucSao: SelectInfo | null;
 }
 export interface Lists { at: number; bacSi: { id: string; name: string; login: string }[]; capDo: { id: string; ma: string; ten: string; text: string }[] }
-export interface LoadResult { rows: OrderRow[]; source: Order | null; skipped: { id: string; tg: string; status: string }[]; lists?: Lists | null }
+export interface LoadResult { rows: OrderRow[]; source: Order | null; skipped: { id: string; tg: string; status: string }[]; lists?: Lists | null; auto?: AutoTicks | null }
 export interface Settings {
   baseUrl: string; autoComplete: boolean; stepMode: boolean; hinhThuc: string; defaultDays: number;
   bacSiFav: { id: string; name: string }[]; esBase: string; gpuOff: boolean; themThuoc: AddItem[];
 }
 /** A drug the user can tick to add on a day, through Kê Tây y/VTYT. */
-export interface AddItem { id: string; label: string; kho: string; ten: string; tim: string; sl: string; cachDung: string; loai: string }
+export interface AddItem { id: string; label: string; kho: string; ten: string; tim: string; sl: string; cachDung: string; loai: string; tuTick?: string }
 export interface Template { id: string; name: string; keys: string[] }
 /** Corrections for one created day; a field left out keeps what the copy got. */
 export interface DayEdit {
@@ -30,7 +30,10 @@ export interface DayEdit {
   /** Sắc thuốc thang: full "HH:mm dd/MM/yyyy" times, each with its own date. */
   chiDinh?: string; thucHien?: string;
 }
-export interface Choice { days: number; deletions: string[][]; edits?: (DayEdit | null)[]; adds?: string[][]; savedAt?: number }
+/** addsFor: the source the Thêm thuốc ticks were made for; another source ticks again. */
+export interface Choice { days: number; deletions: string[][]; edits?: (DayEdit | null)[]; adds?: string[][]; addsFor?: string; savedAt?: number }
+/** Thêm thuốc ticks the tool made from the recent usual orders. */
+export interface AutoTicks { adds: string[][]; why: { day: number; id: string; from: string }[]; for: string }
 export interface CheckItem {
   kind: 'thuoc' | 'dvkt'; id: string; base: string; group: string; name: string; hamLuong?: string; dvt?: string; duongDung?: string;
   sl: string; cachDung?: string; moTa?: string; thoiGian?: string; noiThucHien?: string; doiTuong: string; trangThai: string;
@@ -62,8 +65,9 @@ export interface AppState {
   viewUrl: string; canGoBack?: boolean; viewZoom?: number; update: UpdateInfo | null;
 }
 export interface LogEntry { at: number; level: 'info' | 'ok' | 'warn' | 'error'; msg: string }
-export interface Plan { patient: Patient; kind?: Kind; sourceId?: string; days: number; deletions?: string[][]; baseDeletions?: string[][]; edits?: (DayEdit | null)[]; adds?: string[][] }
-export interface RunResult { noitruid: string; ok: boolean; message?: string; stopped?: boolean; check?: Check | null }
+export interface Plan { patient: Patient; kind?: Kind; sourceId?: string; days: number; deletions?: string[][]; baseDeletions?: string[][]; edits?: (DayEdit | null)[]; adds?: string[][]; addsFor?: string }
+/** sac: the sắc thuốc thang copy run right after a usual one. */
+export interface RunResult { noitruid: string; ok: boolean; message?: string; stopped?: boolean; check?: Check | null; sac?: { ok: boolean; skipped?: boolean; message?: string; days?: number; stopped?: boolean } }
 
 export const baseKey = (key: string) => key.replace(/#\d+$/, '');
 

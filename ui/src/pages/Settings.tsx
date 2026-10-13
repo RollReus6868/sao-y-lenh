@@ -118,6 +118,7 @@ const THUOC_FIELDS: { k: keyof AddItem; label: string; hint?: string; wide?: boo
   { k: 'tim', label: 'Từ khóa tìm', hint: 'Gõ vào ô Thuốc/VTYT để tìm' },
   { k: 'sl', label: 'Số lượng' },
   { k: 'loai', label: 'Loại kê', hint: 'KÊ LĨNH hoặc TỦ TRỰC' },
+  { k: 'tuTick', label: 'Tự tick sau (ngày)', hint: 'Y lệnh thường ngày D có thuốc này thì tick sẵn ngày D + số này; để trống = không tự tick' },
   { k: 'cachDung', label: 'Cách dùng', wide: true },
 ];
 
@@ -128,15 +129,15 @@ function ThuocSection({ data, setData }: { data: Data; setData: (d: Data) => voi
   useEffect(() => setList(data.settings.themThuoc || []), [data.settings.themThuoc]);
   const dirty = JSON.stringify(list) !== JSON.stringify(saved);
   const set = (i: number, k: keyof AddItem, v: string) => setList((l) => l.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
-  const ok = list.every((x) => x.label.trim() && x.kho.trim() && x.ten.trim() && Number(x.sl) > 0);
+  const ok = list.every((x) => x.label.trim() && x.kho.trim() && x.ten.trim() && Number(x.sl) > 0 && /^\d{0,2}$/.test(String(x.tuTick ?? '').trim()));
   const save = async (l: AddItem[]) => {
-    const r = await call<Settings>('settings:set', { themThuoc: l.map((x) => ({ ...x, label: x.label.trim(), kho: x.kho.trim(), ten: x.ten.trim(), tim: x.tim.trim(), sl: x.sl.trim(), cachDung: x.cachDung.trim(), loai: x.loai.trim() })) });
+    const r = await call<Settings>('settings:set', { themThuoc: l.map((x) => ({ ...x, label: x.label.trim(), kho: x.kho.trim(), ten: x.ten.trim(), tim: x.tim.trim(), sl: x.sl.trim(), cachDung: x.cachDung.trim(), loai: x.loai.trim(), tuTick: String(x.tuTick ?? '').trim() })) });
     setData({ ...data, settings: r });
     toast('success', 'Đã lưu danh sách thuốc thêm');
   };
   return (
     <SettingsSection icon={<PillIcon />} title="Thêm thuốc khi sao chép" color="emerald">
-      <p className="text-xs text-muted-foreground">Mỗi thuốc ở đây có một hàng ô xanh <b>+</b> trong trang bệnh nhân. Tick ngày nào thì tool mở <b>Kê Tây y/VTYT</b> của ngày đó, chọn kho, tìm thuốc, điền số lượng, cách dùng, bấm Thêm rồi Chấp nhận.</p>
+      <p className="text-xs text-muted-foreground">Mỗi thuốc ở đây có một hàng ô xanh <b>+</b> trong trang bệnh nhân. Tick ngày nào thì tool mở <b>Kê Tây y/VTYT</b> của ngày đó, chọn kho, tìm thuốc, điền số lượng, cách dùng, bấm Thêm rồi Chấp nhận. Có <b>Tự tick sau</b> thì khi mở bệnh nhân, tool đọc các y lệnh thường gần đây và tick sẵn ngày cần thêm (ví dụ Cao thông mạch 3: ngày 13 có thì tick ngày 16); anh/chị vẫn bỏ tick được.</p>
       <div className="space-y-3" data-thuoc-settings>
         {list.map((x, i) => (
           <div key={x.id} className="rounded-xl border border-border/50 bg-card/40 p-3" data-thuoc={x.id}>
@@ -148,7 +149,7 @@ function ThuocSection({ data, setData }: { data: Data; setData: (d: Data) => voi
               {THUOC_FIELDS.map((f) => (
                 <label key={f.k} className={cn('text-[11px] font-semibold text-muted-foreground', f.wide && 'col-span-2')} title={f.hint}>
                   {f.label}
-                  <Input value={x[f.k]} onChange={(e) => set(i, f.k, e.target.value)} className="mt-0.5 h-8 text-xs" placeholder={f.hint} />
+                  <Input value={x[f.k] ?? ''} onChange={(e) => set(i, f.k, e.target.value)} className="mt-0.5 h-8 text-xs" placeholder={f.hint} />
                 </label>
               ))}
             </div>
@@ -156,11 +157,11 @@ function ThuocSection({ data, setData }: { data: Data; setData: (d: Data) => voi
         ))}
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => setList((l) => [...l, { id: `t${Date.now()}`, label: '', kho: 'KCPSX', ten: '', tim: '', sl: '1', cachDung: '', loai: 'KÊ LĨNH' }])}><Plus /> Thêm thuốc khác</Button>
+        <Button variant="outline" size="sm" onClick={() => setList((l) => [...l, { id: `t${Date.now()}`, label: '', kho: 'KCPSX', ten: '', tim: '', sl: '1', cachDung: '', loai: 'KÊ LĨNH', tuTick: '' }])}><Plus /> Thêm thuốc khác</Button>
         <Button variant="ghost" size="sm" onClick={() => setList(DEFAULT_THUOC)} title="Về lại Cồn xoa bóp và Cao thông mạch như ban đầu"><RotateCcw /> Mặc định</Button>
         <Button size="sm" className="ml-auto" disabled={!dirty || !ok} onClick={() => save(list)} data-action="thuoc-save">Lưu</Button>
       </div>
-      {!ok && <p className="text-xs text-red-500">Mỗi thuốc cần tên hiển thị, kho, tên thuốc và số lượng lớn hơn 0.</p>}
+      {!ok && <p className="text-xs text-red-500">Mỗi thuốc cần tên hiển thị, kho, tên thuốc và số lượng lớn hơn 0; Tự tick sau là số ngày hoặc để trống.</p>}
     </SettingsSection>
   );
 }

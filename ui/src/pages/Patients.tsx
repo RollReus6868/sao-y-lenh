@@ -3,7 +3,7 @@ import { BedDouble, ClipboardCheck, FileText, Globe, MousePointerClick, Check, C
 import { cn } from '@/kit/cn';
 import { Button, Chip, EmptyState, Input, PageHeader, Pill, Segmented, Select, Switch } from '@/kit/ui';
 import { useApp } from '@/lib/useApp';
-import { baseKey, isSac, itemName, runKey, type AddItem, type Choice, type DayEdit, type Item, type Kind, type LoadResult, type OrderRow, type Patient, type Picked, type Plan, type RunResult, type Template } from '@/lib/types';
+import { baseKey, isSac, itemName, runKey, type AddItem, type AutoTicks, type Choice, type DayEdit, type Item, type Kind, type LoadResult, type OrderRow, type Patient, type Picked, type Plan, type RunResult, type Template } from '@/lib/types';
 import { RunBar, Sheet } from '@/components/common';
 import { OrderFields, editSummary, type OrderBase } from '@/components/OrderFields';
 import { addDays, dayLabel, ddmm, hhmmOf, parseDay, parseTime, weekdayShort } from '@/lib/dates';
@@ -67,12 +67,14 @@ function PatientList({ onOpen, selected, onBrowser, showRun }: { onOpen: (p: Pat
     setConfirm(false);
     const plans: Plan[] = patients
       .filter((p) => picked.has(p.noitruid) && choices[p.noitruid])
-      .map((p) => ({ patient: p, days: choices[p.noitruid].days, baseDeletions: choices[p.noitruid].deletions, edits: choices[p.noitruid].edits, adds: choices[p.noitruid].adds }));
+      .map((p) => ({ patient: p, days: choices[p.noitruid].days, baseDeletions: choices[p.noitruid].deletions, edits: choices[p.noitruid].edits, adds: choices[p.noitruid].adds, addsFor: choices[p.noitruid].addsFor }));
     const r = await call<RunResult[]>('run', { plans }).catch(() => null);
     await refresh();
     if (r) {
       const ok = r.filter((x) => x.ok).length;
-      toast(ok === r.length ? 'success' : 'warning', `Xong ${ok}/${r.length} bệnh nhân${ok < r.length ? ', xem Nhật ký' : ''}`);
+      const sacBad = r.filter((x) => x.sac && !x.sac.ok).length;
+      const sacOk = r.filter((x) => x.sac?.ok && !x.sac.skipped).length;
+      toast(ok === r.length && !sacBad ? 'success' : 'warning', `Xong ${ok}/${r.length} bệnh nhân${sacOk ? `, sắc thuốc thang ${sacOk}` : ''}${sacBad ? `, sắc lỗi ${sacBad}` : ''}${ok < r.length || sacBad ? ', xem Nhật ký' : ''}`);
       setPicked(new Set());
     }
   };
@@ -183,7 +185,7 @@ function PatientList({ onOpen, selected, onBrowser, showRun }: { onOpen: (p: Pat
           <Button variant="default" size="lg" className="flex-1" onClick={runBatch} data-action="confirm-run"><Play /> Bắt đầu</Button>
         </>}
       >
-        <p className="mb-3 text-sm text-muted-foreground">Mỗi bệnh nhân: tool chọn y lệnh Hoàn tất mới nhất có đủ 2 diễn biến, sao chép, rồi xóa theo lựa chọn đã lưu. Mục không còn trong y lệnh sẽ được bỏ qua và ghi nhật ký.</p>
+        <p className="mb-3 text-sm text-muted-foreground">Mỗi bệnh nhân: tool chọn y lệnh Hoàn tất mới nhất có đủ 2 diễn biến, sao chép, rồi xóa theo lựa chọn đã lưu, tick sẵn thuốc thêm theo các ngày trước. Mục không còn trong y lệnh sẽ được bỏ qua và ghi nhật ký. Sao chép xong, bệnh nhân nào có y lệnh sắc thuốc thang thì tool tự sao chép tiếp sắc thuốc thang cùng số ngày.</p>
         <div className="space-y-1.5">
           {patients.filter((p) => picked.has(p.noitruid)).map((p) => (
             <div key={p.noitruid} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm">
@@ -219,6 +221,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const ck = runKey(patient, kind); // choices and results of sắc thuốc thang copies are kept apart
   const [edits, setEdits] = useState<(DayEdit | null)[]>(NO_EDITS);
   const [adds, setAdds] = useState<string[][]>(EMPTY);
+  const [auto, setAuto] = useState<AutoTicks | null>(null);
   const [eday, setEday] = useState<number | null>(null);
   const loaded = useRef(false);
 
@@ -228,20 +231,24 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     const r = await call<LoadResult>('patient:load', { patient, sourceId, kind: k }).catch(() => null);
     setLoading(false);
     setRes(r);
+    setAuto(r?.auto || null);
     if (r?.lists) refresh(); // doctor / care level lists were read for the first time
     if (r?.source) {
       const items = [...r.source.thuoc, ...r.source.dvkt];
       const ch = data?.choices[runKey(patient, k)];
+      // Ticks the user left for this very source stay; for a new source the tool ticks
+      // again from the recent usual orders (Cao thông mạch +3 ngày, Cồn xoa bóp +5).
+      const keepAdds = ch?.adds && (ch.addsFor === r.source.id || !r.auto);
+      const auto = r.auto ? r.auto.adds : EMPTY;
       if (ch) {
         setDays(ch.days);
         setSel([0, 1, 2, 3].map((i) => items.filter((it) => (ch.deletions[i] || []).includes(baseKey(it.key))).map((it) => it.key)));
         setEdits([0, 1, 2, 3].map((i) => (ch.edits && ch.edits[i]) || null));
-        setAdds([0, 1, 2, 3].map((i) => (ch.adds && ch.adds[i]) || []));
       } else {
         setSel(EMPTY);
         setEdits(NO_EDITS);
-        setAdds(EMPTY);
       }
+      setAdds([0, 1, 2, 3].map((i) => (keepAdds ? (ch!.adds![i] || []) : auto[i] || [])));
       loaded.current = true;
     }
   };
@@ -253,7 +260,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   useEffect(() => {
     if (!loaded.current || !data) return;
     const t = setTimeout(() => {
-      const choice: Choice = { days, deletions: sel.slice(0, days).map((d) => d.map(baseKey)), edits: edits.slice(0, days), adds: adds.slice(0, days) };
+      const choice: Choice = { days, deletions: sel.slice(0, days).map((d) => d.map(baseKey)), edits: edits.slice(0, days), adds: adds.slice(0, days), addsFor: res?.source?.id };
       call('choice:set', { id: ck, choice }).catch(() => {});
       setData((x) => x && { ...x, choices: { ...x.choices, [ck]: choice } });
     }, 400);
@@ -365,7 +372,9 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     }));
     load(); // the newest order is now the source for next time
     if (r && r[0]) {
-      if (r[0].ok) toast('success', `Xong ${days} ngày${kind === 'sac' ? ' sắc thuốc thang' : ''} cho ${patient.hoTen}`);
+      const sr = r[0].sac;
+      if (r[0].ok && sr && !sr.ok) toast(sr.stopped || sr.skipped ? 'warning' : 'error', `Xong ${days} ngày cho ${patient.hoTen}. Sắc thuốc thang: ${sr.message || 'có lỗi'}, xem Nhật ký`);
+      else if (r[0].ok) toast('success', `Xong ${days} ngày${kind === 'sac' ? ' sắc thuốc thang' : ''} cho ${patient.hoTen}${sr?.ok && !sr.skipped ? `, kèm ${sr.days} ngày sắc thuốc thang` : ''}`);
       else toast(r[0].stopped ? 'warning' : 'error', r[0].message || 'Có lỗi, xem Nhật ký');
     }
   };
@@ -441,11 +450,13 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
       <div className="col-span-full mt-2 flex items-center gap-2 px-1 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 [&_svg]:size-3.5" data-add-section><Plus />Thêm thuốc (Kê Tây y/VTYT)</div>
       {catalog.map((c) => {
         const inSrc = src ? hasDrug(src.thuoc, c) : false;
+        const why = (auto && auto.for === src?.id ? auto.why : []).filter((w) => w.id === c.id && w.day <= days);
         return (
           <div key={c.id} className="contents" data-add={c.id}>
             <button type="button" onClick={() => toggleAddRow(c.id)} title={`${c.ten} · kho ${c.kho} · SL ${c.sl}\n${c.cachDung}\nBấm để chọn/bỏ cả hàng`} className="min-w-0 rounded-lg px-1.5 py-1.5 text-left hover:bg-muted/50">
               <div className="truncate text-[13px] font-semibold">{c.label}{inSrc && <span className="ml-1 text-[11px] font-normal text-muted-foreground">(đã có trong y lệnh nguồn)</span>}</div>
               <div className="truncate text-[11px] text-muted-foreground">{[c.kho, `SL ${c.sl}`, c.cachDung].filter(Boolean).join(' · ')}</div>
+              {why.length > 0 && <div className="truncate text-[11px] font-semibold text-emerald-600 dark:text-emerald-400" data-auto-tick>Tự tick {why.map((w) => `N${w.day} (vì ${w.from} có)`).join(', ')}</div>}
             </button>
             {Array.from({ length: days }, (_, k) => {
               const on = adds[k].includes(c.id);
@@ -636,6 +647,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
               {confirmEdits[k] && <div className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">Sửa: {editSummary(confirmEdits[k])}</div>}
             </li>
           ))}
+          {kind !== 'sac' && <li className="rounded-lg bg-primary/10 px-3 py-2 text-xs" data-auto-sac>Sao chép xong, nếu bệnh nhân có y lệnh sắc thuốc thang, tool tự sao chép tiếp sắc thuốc thang {days} ngày (giờ chỉ định, thực hiện và bác sĩ lấy theo y lệnh thường như ở chế độ Sắc thuốc thang).</li>}
           <li className="text-xs text-muted-foreground">{data?.settings.autoComplete ? 'Mỗi ngày sửa xong sẽ được Hoàn tất.' : 'Các ngày 2+ để ở trạng thái Mới cho anh/chị tự xem và Hoàn tất.'}{data?.settings.stepMode ? ' Chạy từng bước: tool dừng trước mỗi thao tác.' : ''}</li>
         </ol>
       </Sheet>

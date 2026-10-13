@@ -178,7 +178,9 @@ export function demoApi() {
             const usual = (tg: string, tgth: string, bacSi: string) => ({ id: 'u' + tgth, tg, tgth, bacSi, dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' });
             return { rows: [usual('07:09 14/10/2026', '07:10 14/10/2026', 'BS. Trần Thị Hai'), { id: 'sac', tg: sac.thoiGian, tgth: sac.thoiGianThucHien, bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: sac.dienBien, dienBienPHCN: '', khac: 'Chỉ định Sắc thuốc thang' }, usual('07:04 13/10/2026', '07:05 13/10/2026', 'BS. Lê Văn Ba')], source: sac, skipped: [] } as T;
           }
-          return { rows: [{ id: 'src', tg: '07:04 13/10/2026', tgth: '07:05 13/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }, { id: 'old', tg: '07:04 12/10/2026', tgth: '07:05 12/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }], source, skipped: [] } as T;
+          // Cao thông mạch was on 11/10, so day 1 (14/10) is ticked by the tool.
+          const auto = { adds: [['cao-thong-mach'], [], [], []], why: [{ day: 1, id: 'cao-thong-mach', from: '11/10' }], for: source.id };
+          return { auto, rows: [{ id: 'src', tg: '07:04 13/10/2026', tgth: '07:05 13/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }, { id: 'old', tg: '07:04 12/10/2026', tgth: '07:05 12/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }], source, skipped: [] } as T;
         case 'run': {
           pushState({ busy: true, task: 'Sao chép y lệnh', progress: { patient: payload.plans[0].patient.hoTen, index: 0, total: payload.plans.length } });
           if (q.get('step')) { pushState({ stepWaiting: 'Ngày 2: xóa "Lirystad 150"' }); return new Promise(() => {}) as Promise<T>; }
@@ -187,7 +189,7 @@ export function demoApi() {
             const dels: string[][] = p.deletions || Array.from({ length: p.days }, () => []);
             const check = demoCheck(dels);
             data.runs[runKey(p.patient, p.kind)] = { at: Date.now(), ok: true, message: `${p.days} ngày`, days: check.days.map((d) => ({ day: d.day, id: d.id, time: d.tg })), check };
-            return { noitruid: p.patient.noitruid, ok: true, check };
+            return { noitruid: p.patient.noitruid, ok: true, check, ...(p.kind !== 'sac' ? { sac: { ok: true, days: p.days } } : {}) };
           }) as T;
         }
         case 'patient:check': {

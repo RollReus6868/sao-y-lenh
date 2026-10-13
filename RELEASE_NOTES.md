@@ -1,4 +1,9 @@
-# Sao Y Lệnh 0.4.4
+# Sao Y Lệnh 0.5.0
+
+- **Tự sao chép sắc thuốc thang**: sao chép y lệnh thường của một bệnh nhân xong (và không lỗi), nếu bệnh nhân đó có y lệnh sắc thuốc thang thì tool tự sao chép tiếp sắc thuốc thang với **cùng số ngày**, không cần chuyển sang chế độ Sắc thuốc thang và bấm Sao chép nữa. Cách điền giữ như cũ: giờ thực hiện theo y lệnh thường cùng ngày, giờ chỉ định và bác sĩ theo y lệnh thường ngày hôm trước; mục DVKT đã chọn xóa ở chế độ Sắc thuốc thang vẫn được dùng. Bệnh nhân không có sắc thuốc thang thì bỏ qua; y lệnh thường lỗi thì không chạy sắc. Chạy nhiều bệnh nhân (nút **Chạy**) cũng vậy. Kết quả sắc xem ở thẻ **Kết quả** khi chọn **Sắc thuốc thang**.
+- **Tick sẵn Cao thông mạch và Cồn xoa bóp**: khi mở bệnh nhân, tool đọc các y lệnh thường (có cả Diễn biến bệnh và Diễn biến PHCN) gần đây. Ngày nào có **Cao thông mạch** thì tick sẵn ô **+** ở ngày đó **+ 3 ngày**; có **Cồn xoa bóp** thì **+ 5 ngày** (ví dụ ngày 13 có Cao thông mạch thì ngày 16 được tick). Dưới tên thuốc ghi rõ "Tự tick N… (vì ngày … có)". Anh/chị vẫn bỏ tick hoặc tick thêm được trước khi bấm Sao chép. Số ngày này đổi ở **Cài đặt → Thêm thuốc khi sao chép → Tự tick sau (ngày)**; để trống là không tự tick.
+
+## 0.4.4
 
 - **Kết quả CLS kiểm tra lại khoảng tham chiếu**: OneMES đôi khi tô xanh/đỏ cả chỉ số vẫn nằm trong khoảng tham chiếu. Giờ tool so từng chỉ số tô màu với cột **Khoảng tham chiếu**: nằm ngoài khoảng mới ghi vào y lệnh, còn nằm trong khoảng thì bỏ qua. Danh sách kết quả ghi rõ "bỏ N chỉ số tô màu nhầm" (rê chuột vào để xem chỉ số nào). Khoảng tham chiếu không đọc được (ví dụ chỉ ghi chữ) thì vẫn theo màu của OneMES.
 - **Không có bất thường**: nếu các xét nghiệm đã quét không có chỉ số nào bất thường, nội dung ghi "Các chỉ số trong giới hạn bình thường" (có kết luận CĐHA thì ghi "Xét nghiệm: các chỉ số trong giới hạn bình thường" rồi đến kết luận).

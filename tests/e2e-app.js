@@ -261,8 +261,32 @@ async function waitFor(what, fn, ms = 30000) {
     const logs = fs.readdirSync(path.join(dataDir, 'logs'));
     check(logs.length === 1 && /đã xóa "Lirystad 150"/.test(fs.readFileSync(path.join(dataDir, 'logs', logs[0]), 'utf8')), 'log file written');
 
+    // Patient A: Cao thông mạch on 10/10 → ticked by the tool on 13/10 (day 1); after the
+    // usual copy the sắc thuốc thang order is copied by itself for the same number of days.
+    const pA = m.mock.getState().patients[0];
+    const o10 = pA.orders.find((o) => o.date.getDate() === 10 && !/sắc/i.test(o.khac));
+    o10.thuoc.push({ ...o10.thuoc[0], id: require('crypto').randomUUID(), name: 'CAO THÔNG MẠCH', hamLuong: '12000mg+10000mg+8000mg', dvt: 'Chai' });
+    await ui.click('[data-patient="2400000001"] >> button >> nth=1');
+    await ui.waitForSelector('[data-grid]', { timeout: 30000 });
+    await waitFor('auto tick', async () => !!(await ui.$('[aria-label="Thêm Cao thông mạch ngày 1"][aria-pressed=true]')), 15000);
+    check(!(await ui.$('[aria-label="Thêm Cao thông mạch ngày 2"][aria-pressed=true]')) && !(await ui.$('[aria-label="Thêm Cồn xoa bóp ngày 1"][aria-pressed=true]')) && /Tự tick N1 \(vì 10\/10 có\)/.test(await ui.textContent('[data-add="cao-thong-mach"]')), 'tick sẵn: Cao thông mạch on day 1 only, with the reason');
+    const beforeA = pA.orders.map((o) => o.id);
+    await ui.click('[data-action=run]');
+    check(!!(await ui.$('[data-auto-sac]')), 'confirm sheet says sắc thuốc thang follows');
+    await ui.click('[data-action=confirm-run]');
+    await ui.waitForSelector('[data-runbar]', { timeout: 10000 });
+    await waitFor('run + sắc finished', async () => !(await ui.$('[data-runbar]')), 300000);
+    const newA = m.mock.getState().patients[0].orders.filter((o) => !beforeA.includes(o.id));
+    const usualA = newA.filter((o) => !/sắc/i.test(o.khac)).sort((a, b) => a.date - b.date);
+    const sacA = newA.filter((o) => /sắc/i.test(o.khac)).sort((a, b) => a.dateTH - b.dateTH);
+    check(usualA.length === 3 && usualA.map((o) => o.thuoc.filter((x) => x.name === 'CAO THÔNG MẠCH').length).join() === '1,0,0', 'tick sẵn: Cao thông mạch added on day 1 only: ' + usualA.map((o) => o.thuoc.map((x) => x.name).join('/')).join(' | '));
+    check(sacA.length === 3 && sacA.map((o) => o.dateTH.getDate()).join() === '12,13,14' && sacA.every((o) => o.status === 'Hoàn tất'), 'sắc: copied by itself for 3 days (thực hiện 12–14/10): ' + sacA.map((o) => o.dateTH.toString()).join(' | '));
+    check(sacA[1] && hm(sacA[1].dateTH) === hm(usualA[0].dateTH) && sacA[1].date.getDate() === 12, 'sắc: day 2 thực hiện as the new usual order of 13/10, chỉ định on 12/10');
+    const savedA = JSON.parse(fs.readFileSync(path.join(dataDir, 'data.json'), 'utf8'));
+    check(savedA.runs[pA.noitruid + '|sac'] && savedA.runs[pA.noitruid + '|sac'].ok && savedA.runs[pA.noitruid].ok, 'sắc: both runs recorded');
+
     if (process.env.SHOTS) {
-      await ui.click('[data-patient="2400000001"] >> button >> nth=1');
+      await ui.click('[data-tab=pick]');
       await ui.waitForSelector('[data-grid]', { timeout: 30000 });
       await sleep(1500);
       try {

@@ -16,7 +16,8 @@ Tool desktop sao chép và sửa y lệnh nội trú trên OneMES 3.0: quét dan
 4. Ở thẻ **Sao chép**, chọn **Y lệnh thường** hoặc **Sắc thuốc thang** (y lệnh có Y lệnh khác "Chỉ định sắc thuốc thang"), rồi **Số ngày** (1 = chỉ Sao chép; 2–4 = Sao chép + Sao y lệnh 1–3 ngày).
 5. Tick ô đỏ ở mục cần xóa cho từng ngày. Bấm tên mục để chọn cả hàng; bấm tiêu đề cột để chọn nhanh hoặc áp mẫu. Vật tư y tế có ghi (Hao phí) hoặc (Bảo hiểm).
 6. Muốn đổi giờ thực hiện, bác sĩ, cấp độ chăm sóc hay diễn biến của ngày nào thì bấm ngày đó ở **Sửa từng ngày**. Sửa ở một ngày thì các ngày sau cũng theo; ngày sau nào sửa riêng thì giữ phần riêng đó.
-   Muốn thêm **Cồn xoa bóp** hay **Cao thông mạch** ngày nào thì tick ô xanh **+** ở hàng **Thêm thuốc**. Kho, số lượng, cách dùng đổi ở **Cài đặt → Thêm thuốc khi sao chép**.
+   Muốn thêm **Cồn xoa bóp** hay **Cao thông mạch** ngày nào thì tick ô xanh **+** ở hàng **Thêm thuốc**. Tool tick sẵn theo các y lệnh thường trước đó (Cao thông mạch + 3 ngày, Cồn xoa bóp + 5 ngày); bỏ tick được. Kho, số lượng, cách dùng, số ngày tự tick đổi ở **Cài đặt → Thêm thuốc khi sao chép**.
+   Sao chép y lệnh thường xong, tool tự sao chép tiếp y lệnh sắc thuốc thang (nếu có) cùng số ngày.
 7. **Sao chép N ngày** (góc phải) → xem lại → **Bắt đầu**.
 8. Xong, tool tự kiểm tra lại và mở thẻ **Kết quả**: xem từng ngày vừa tạo. Ngày nào sai thì bấm **Sửa** rồi **Cập nhật lên OneMES**, hoặc **Xóa** (tool Thu hồi rồi Xóa trên OneMES).
 9. Thẻ **Bệnh án**: lần đầu bấm **Nhập mẫu từ file HTML** và chọn trang Thông tin bệnh án đã hoàn tất (lưu bằng Ctrl+S trong Chrome). Có thể lưu nhiều mẫu (tự điền rồi **Lưu làm mẫu**, hoặc nhập thêm file) và chọn mẫu ở ô **Mẫu** rồi **Điền từ mẫu**; đổi tên, xóa mẫu ở Cài đặt. Bệnh nhân mới bắt đầu từ mẫu có ngôi sao; sửa rồi **Cập nhật bệnh án lên OneMES**. Tool chỉ điền ô còn trống trên OneMES, ô đã có nội dung giữ nguyên.

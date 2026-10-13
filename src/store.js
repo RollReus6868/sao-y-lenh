@@ -16,9 +16,10 @@ const DEFAULTS = {
     gpuOff: process.platform === 'win32', // software rendering: stops the window flicker on some PCs
     viewZoom: 0.7, // zoom of the OneMES page in Trình duyệt (the user found 100% too close)
     // Drugs the user can tick to add per day (Kê Tây y/VTYT). Defaults as the user enters them by hand.
+    // tuTick: the tool ticks the drug that many days after a usual order holding it.
     themThuoc: [
-      { id: 'con-xoa-bop', label: 'Cồn xoa bóp', kho: 'KCPSX', ten: 'CỒN XOA BÓP', tim: 'cồn xoa', sl: '1', cachDung: 'Mỗi lần dùng 5ml, xoa bóp các chỗ đau 4 lần/ngày', loai: 'KÊ LĨNH' },
-      { id: 'cao-thong-mach', label: 'Cao thông mạch', kho: 'KCPSX', ten: 'CAO THÔNG MẠCH', tim: 'cao thông', sl: '1', cachDung: 'Uống 20ml/lần * 2 lần/ngày * 3 ngày (sáng, chiều) sau ăn', loai: 'KÊ LĨNH' },
+      { id: 'con-xoa-bop', label: 'Cồn xoa bóp', kho: 'KCPSX', ten: 'CỒN XOA BÓP', tim: 'cồn xoa', sl: '1', cachDung: 'Mỗi lần dùng 5ml, xoa bóp các chỗ đau 4 lần/ngày', loai: 'KÊ LĨNH', tuTick: '5' },
+      { id: 'cao-thong-mach', label: 'Cao thông mạch', kho: 'KCPSX', ten: 'CAO THÔNG MẠCH', tim: 'cao thông', sl: '1', cachDung: 'Uống 20ml/lần * 2 lần/ngày * 3 ngày (sáng, chiều) sau ăn', loai: 'KÊ LĨNH', tuTick: '3' },
     ],
   },
   templates: [],
@@ -48,6 +49,10 @@ function createStore(dir) {
     ...data,
     settings: { ...fresh.settings, ...(data.settings || {}) },
   };
+  // 0.5.0: Thêm thuốc ticks itself N days after a usual order holding the drug
+  // (tuTick; '' = never). Lists saved before get the user's numbers for the two defaults.
+  const TU_TICK = { 'con-xoa-bop': '5', 'cao-thong-mach': '3' };
+  data.settings.themThuoc = (data.settings.themThuoc || []).map((x) => (x.tuTick === undefined ? { ...x, tuTick: TU_TICK[x.id] || '' } : x));
   // Before 0.3.4 there was one example (benhAnMau); it becomes the first in the list.
   if (data.benhAnMau) {
     if (!data.benhAnMaus.length && data.benhAnMau.values) {

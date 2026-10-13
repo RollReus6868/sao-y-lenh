@@ -282,6 +282,64 @@ function createDriver(host) {
     return { rows, source: null, skipped };
   }
 
+  // Thêm thuốc ticks made for the user (0.5.0): reads the drugs of the usual orders
+  // (both progress notes) of the last `tuTick` days before the source, then ticks
+  // each drug on the copied day that falls `tuTick` days after a day holding it.
+  // Completed orders are read once and remembered.
+  const drugCache = new Map();
+  async function autoTicks(rows, src, catalog, deletions = []) {
+    const items = (catalog || []).filter((it) => +it.tuTick > 0);
+    const srcRow = rows.find((r) => r.id === norm(src.id));
+    const base = (srcRow && rowDate(srcRow, 'thuong')) || parseTime(src.thoiGian);
+    if (!items.length || !base) return { adds: [[], [], [], []], why: [] };
+    const from = addDays(dayOnly(base), 1 - Math.max(...items.map((it) => +it.tuTick)));
+    const history = [];
+    for (const r of rows.filter((x) => canSource(x, 'thuong'))) {
+      const d = rowDate(r, 'thuong');
+      if (!d || d < from || dayOnly(d) > dayOnly(base)) continue;
+      let names;
+      if (r.id === norm(src.id)) names = src.thuoc.map((x) => x.name);
+      else if (drugCache.has(r.id)) names = drugCache.get(r.id);
+      else {
+        checkStop();
+        const o = await openOrder(r.id);
+        names = o.thuoc.map((x) => x.name);
+        if (isDone(o)) drugCache.set(r.id, names);
+      }
+      history.push({ id: r.id, tg: r.tg, names });
+    }
+    return planTicks({ history, srcDate: base, srcThuoc: src.thuoc, deletions, catalog: items });
+  }
+
+  // Sắc thuốc thang run right after the usual one (0.5.0): times and doctor as the
+  // tab fills them in (sacDef in Patients.tsx). doctors = [{ id, name }].
+  function sacEdits(rows, src, N, doctors = []) {
+    const srcRow = rows.find((r) => r.id === norm(src.id));
+    const base = (srcRow && rowDate(srcRow, 'sac')) || parseTime(src.thoiGianThucHien || src.thoiGian);
+    const out = [];
+    const missing = [];
+    for (let k = 0; k < N; k++) {
+      if (!base) {
+        out.push(null);
+        continue;
+      }
+      const d = addDays(base, k + 1);
+      const same = usualOn(rows, d);
+      const prev = usualOn(rows, addDays(d, -1));
+      const e = {};
+      if (same && same.tgth) e.thucHien = same.tgth;
+      else missing.push(`thực hiện ngày ${ddmmOf(d)}`);
+      if (prev && prev.tg) e.chiDinh = prev.tg;
+      else missing.push(`chỉ định ngày ${ddmmOf(addDays(d, -1))}`);
+      const doc = prev && findDoctor(doctors, prev.bacSi);
+      if (doc) e.bacSi = doc;
+      else if (prev && prev.bacSi) log('warn', `Sắc thuốc thang ngày ${k + 1}: không tìm thấy bác sĩ "${prev.bacSi}" trong danh sách, giữ như bản sao`);
+      out.push(Object.keys(e).length ? e : null);
+    }
+    if (missing.length) log('warn', `Sắc thuốc thang: chưa thấy y lệnh thường cho ${missing.join(', ')}; ô đó giữ như bản sao`);
+    return out;
+  }
+
   // ---------- thao tác trên y lệnh đang mở ----------
   const isDone = (o) => /hoàn tất/i.test(o.status);
   const isNew = (o) => /mới/i.test(o.status) && !isDone(o);
@@ -1301,7 +1359,7 @@ function createDriver(host) {
     return { values: back.values, missing, kept, filled: todo.map((f) => f.id), diff, at: Date.now() };
   }
 
-  return { call, where, addThuoc, scanPatients, openPatient, listOrders, pickSource, loadPatient, scanDvCu, cleanDvCu, clsList, clsRead, clsCreate, openOrder, readOrder, run, gotoList, verify, deleteOrder, updateDay, loadLists, readBenhAn, saveBenhAn, fieldsFor };
+  return { call, where, addThuoc, autoTicks, sacEdits, scanPatients, openPatient, listOrders, pickSource, loadPatient, scanDvCu, cleanDvCu, clsList, clsRead, clsCreate, openOrder, readOrder, run, gotoList, verify, deleteOrder, updateDay, loadLists, readBenhAn, saveBenhAn, fieldsFor };
 }
 
 const SAC_RE = /sắc thuốc thang/i;
@@ -1315,6 +1373,54 @@ function rowDate(r, kind) {
   return kind === 'sac' ? parseTime(r.tgth) || parseTime(r.tg) : parseTime(r.tg);
 }
 const sameKind = (r, kind) => (kind === 'sac' ? isSac(r) : !isSac(r) && !isClsRow(r));
+
+const dayOnly = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const fold = (s) => norm(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+// The usual order of day d (not sắc thuốc thang, not Kết quả CLS), earliest first.
+function usualOn(rows, d) {
+  const want = dayStamp(d);
+  const t = (r) => parseTime(r.tgth) || parseTime(r.tg);
+  return rows
+    .filter((r) => !isSac(r) && !isClsRow(r) && t(r) && dayStamp(t(r)) === want)
+    .sort((a, b) => t(a) - t(b))[0];
+}
+function findDoctor(doctors, name) {
+  const n = fold(name);
+  if (!n) return null;
+  const bare = (s) => s.replace(/^bs\.?\s*/, '').trim();
+  const hit = doctors.find((x) => fold(x.name) === n) || doctors.find((x) => bare(fold(x.name)) === bare(n));
+  return hit ? { id: hit.id, text: hit.name } : null;
+}
+// Which copied day (1..N) gets which Thêm thuốc tick: a usual order on day D holding
+// a drug puts a tick on day D + tuTick. The copied days count too: a day keeps the
+// drug when the source has it and it is not deleted there, or when it is ticked.
+// history = [{ tg, names }], deletions = base or item keys per day.
+function planTicks({ history, srcDate, srcThuoc = [], deletions = [], catalog = [], N = 4 }) {
+  const has = (name, it) => norm(name) === norm(it.ten) || norm(name).startsWith(norm(it.ten));
+  const adds = Array.from({ length: N }, () => []);
+  const why = [];
+  const strip = (k) => String(k).replace(/#\d+$/, '');
+  for (const it of catalog) {
+    const n = parseInt(it.tuTick, 10);
+    if (!(n > 0)) continue;
+    const holds = new Set();
+    for (const h of history) {
+      const d = parseTime(h.tg);
+      if (d && h.names.some((x) => has(x, it))) holds.add(dayStamp(d));
+    }
+    const srcItems = srcThuoc.filter((x) => has(x.name, it));
+    for (let k = 0; k < N; k++) {
+      const from = addDays(srcDate, k + 1 - n);
+      if (holds.has(dayStamp(from))) {
+        adds[k].push(it.id);
+        why.push({ day: k + 1, id: it.id, from: ddmmOf(from) });
+      }
+      const del = ((deletions && deletions[k]) || []).map(strip);
+      if (adds[k].includes(it.id) || srcItems.some((x) => !del.includes(strip(x.key || baseKey(x))))) holds.add(dayStamp(addDays(srcDate, k + 1)));
+    }
+  }
+  return { adds, why };
+}
 
 // "Xét nghiệm huyết học" -> "Công thức máu", other groups lose "Xét nghiệm".
 function clsGroup(s) {
@@ -1474,4 +1580,4 @@ function keyName(key) {
   return String(key).split('|')[1] || key;
 }
 
-module.exports = { createDriver, clsInRange, clsText, resolveEdits, withKeys, baseKey, parseTime, fmtTime, norm, StopError, PageError, AGENT };
+module.exports = { createDriver, planTicks, isSac, clsInRange, clsText, resolveEdits, withKeys, baseKey, parseTime, fmtTime, norm, StopError, PageError, AGENT };

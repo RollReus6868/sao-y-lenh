@@ -5,7 +5,7 @@ const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, net } = re
 const fs = require('fs');
 const path = require('path');
 const { createStore } = require('./store');
-const { createDriver } = require('./driver');
+const { createDriver, isSac } = require('./driver');
 const { createUpdater } = require('./updater');
 const pkg = require('../package.json');
 const BENH_AN = require('./benh-an-schema.json');
@@ -256,6 +256,11 @@ const commands = {
   'patient:load': ({ patient, sourceId, kind }) =>
     task('Đọc y lệnh', async (d) => {
       const r = await d.loadPatient(patient, sourceId, kind);
+      // Thêm thuốc ticked for the user from the recent usual orders (0.5.0).
+      if (r.source && kind !== 'sac') {
+        const ch = store.get().choices[runKey(patient)];
+        r.auto = await ticksFor(d, patient, r, ch && ch.deletions);
+      }
       if (!r.source) log('warn', kind === 'sac' ? `${patient.hoTen}: không có y lệnh sắc thuốc thang nào đã Hoàn tất` : `${patient.hoTen}: không có y lệnh Hoàn tất nào đủ Diễn biến bệnh và Diễn biến PHCN`);
       // The Bác sĩ / Cấp độ chăm sóc choices are read once and kept.
       let lists = null;
@@ -303,12 +308,21 @@ const commands = {
             if (!r.source) throw new Error('Không có y lệnh nguồn phù hợp');
             p.sourceId = r.source.id;
             if (p.baseDeletions) p.deletions = resolveKeys(r.source, p.baseDeletions);
+            // Ticks saved for another source are stale: tick again from the recent orders.
+            if (p.kind !== 'sac' && p.addsFor !== r.source.id) {
+              const t = await ticksFor(d, p.patient, r, p.baseDeletions);
+              if (t) p.adds = t.adds.slice(0, p.days);
+            }
           }
           const r = await d.run(p);
           const check = await checkAfter(d, p.patient, r);
           store.setRun(key, { ok: true, message: `${p.days} ngày`, ...runRecord(r), check });
           forgetNotes(key);
-          out.push({ noitruid: p.patient.noitruid, ok: true, result: r, check });
+          const done = { noitruid: p.patient.noitruid, ok: true, result: r, check };
+          out.push(done);
+          if (stopFlag) break;
+          // The sắc thuốc thang copies follow the usual ones by themselves (0.5.0).
+          if (p.kind !== 'sac') done.sac = await sacAfter(d, p);
           if (stopFlag) break;
         } catch (e) {
           const msg = errMsg(e);
@@ -444,6 +458,68 @@ async function checkAfter(d, patient, r) {
 function keepDeleted(old, fresh) {
   const gone = ((old && old.days) || []).filter((x) => x.deleted && !fresh.days.some((y) => y.id === x.id));
   return { ...fresh, days: [...fresh.days, ...gone].sort((a, b) => a.day - b.day) };
+}
+
+// Thêm thuốc ticks from the recent usual orders; null when nothing could be read.
+async function ticksFor(d, patient, r, deletions) {
+  const catalog = (store.get().settings.themThuoc || []).filter((it) => +it.tuTick > 0);
+  if (!catalog.length) return null;
+  try {
+    const t = await d.autoTicks(r.rows, r.source, catalog, deletions || []);
+    for (const w of t.why) {
+      const it = catalog.find((x) => x.id === w.id);
+      log('info', `${patient.hoTen}: tick sẵn ${it ? it.label : w.id} ngày ${w.day} (ngày ${w.from} có, +${it ? it.tuTick : '?'} ngày)`);
+    }
+    return { ...t, for: r.source.id };
+  } catch (e) {
+    if (e.stopped) throw e;
+    log('warn', `${patient.hoTen}: không đọc được thuốc các ngày trước để tick sẵn (${errMsg(e)})`);
+    return null;
+  }
+}
+
+// After a usual copy succeeds: copy the sắc thuốc thang order for the same number of
+// days, with the times and doctor taken from the usual orders, as the Sắc tab does.
+async function sacAfter(d, p) {
+  const name = p.patient.hoTen;
+  const key = runKey(p.patient, 'sac');
+  let plan = null;
+  try {
+    const r = await d.loadPatient(p.patient, null, 'sac');
+    if (!r.source) {
+      if (r.rows.some(isSac)) {
+        log('warn', `${name}: có y lệnh sắc thuốc thang nhưng chưa Hoàn tất, không tự sao chép sắc`);
+        return { ok: false, skipped: true, message: 'Y lệnh sắc thuốc thang chưa Hoàn tất' };
+      }
+      log('info', `${name}: không có y lệnh sắc thuốc thang, bỏ qua`);
+      return { ok: true, skipped: true };
+    }
+    const s = store.get();
+    const ch = s.choices[key];
+    const doctors = [...(s.settings.bacSiFav || []), ...((s.lists && s.lists.bacSi) || [])];
+    plan = {
+      patient: p.patient,
+      kind: 'sac',
+      sourceId: r.source.id,
+      days: p.days,
+      deletions: ch && ch.deletions ? resolveKeys(r.source, ch.deletions) : [],
+      edits: d.sacEdits(r.rows, r.source, p.days, doctors),
+      adds: [],
+      ...pickSettings(),
+    };
+    log('info', `${name}: tự sao chép y lệnh sắc thuốc thang ${p.days} ngày`);
+    const res = await d.run(plan);
+    const check = await checkAfter(d, p.patient, res);
+    store.setRun(key, { ok: true, message: `${p.days} ngày`, ...runRecord(res), check, auto: true });
+    return { ok: true, days: p.days, check };
+  } catch (e) {
+    const msg = errMsg(e);
+    log(e.stopped ? 'warn' : 'error', `${name} (sắc thuốc thang): ${msg}`);
+    const part = e.partial && e.partial.days.length ? e.partial : null;
+    const check = part && !e.stopped ? await checkAfter(d, p.patient, part) : null;
+    if (plan) store.setRun(key, { ok: false, message: msg, ...(part ? runRecord(part) : {}), check, auto: true });
+    return { ok: false, message: msg, stopped: !!e.stopped };
+  }
 }
 
 function pickSettings() {

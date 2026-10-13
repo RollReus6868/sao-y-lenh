@@ -1,7 +1,7 @@
 // Full runs against the mock: copy, Sao y lệnh, per-day deletions, Hoàn tất.
 'use strict';
 const { startMock, launch, loggedInPage, hostFor, check, done } = require('./helpers');
-const { createDriver, fmtTime: fmt } = require('../src/driver');
+const { createDriver, planTicks, fmtTime: fmt } = require('../src/driver');
 
 const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
 
@@ -316,6 +316,45 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     before = ids(0);
     r = await d.run({ patient: pts[0], sourceId: lpT.source.id, days: 1, deletions: [[]] });
     check(r.ok && newOrders(0, before).length === 1, 'sắc: the usual copy still goes onto a day that has a sắc order');
+
+    // --- tick sẵn Cao thông mạch / Cồn xoa bóp từ các y lệnh thường trước (0.5.0) ---
+    console.log('tick sẵn');
+    m.mock.reset();
+    pts = await d.scanPatients();
+    const CAT = [{ ...ITEMS[0], tuTick: '5' }, { ...ITEMS[1], tuTick: '3' }];
+    const pa = m.mock.getState().patients[0];
+    const usualDay = (dd) => pa.orders.find((o) => o.date.getDate() === dd && !/sắc/i.test(o.khac));
+    const drugRow = (name) => ({ ...usualDay(12).thuoc[0], id: require('crypto').randomUUID(), name });
+    usualDay(9).thuoc.push(drugRow('CỒN XOA BÓP'));
+    usualDay(10).thuoc.push(drugRow('CAO THÔNG MẠCH'));
+    let lpA = await d.loadPatient(pts[0]);
+    let tk = await d.autoTicks(lpA.rows, lpA.source, CAT);
+    // Source 12/10: days 13–16. Cao 10/10 +3 → 13/10 (day 1), and day 1 then holds it → 16/10 (day 4).
+    // Cồn 9/10 +5 → 14/10 (day 2). The 11/10 order has no PHCN, so it is not a usual order.
+    check(JSON.stringify(tk.adds) === JSON.stringify([['cao'], ['con'], [], ['cao']]), 'tick sẵn: Cao day 1 and 4, Cồn day 2: ' + JSON.stringify(tk.adds));
+    check(tk.why.some((w) => w.id === 'cao' && w.day === 1 && w.from === '10/10') && tk.why.some((w) => w.id === 'con' && w.day === 2 && w.from === '9/10'), 'tick sẵn: reasons name the day holding the drug');
+    // The source itself holds Cao (kept on day 1 by the copy) unless it is deleted there.
+    usualDay(12).thuoc.push(drugRow('CAO THÔNG MẠCH'));
+    lpA = await d.loadPatient(pts[0]);
+    const caoKey = lpA.source.thuoc.find((x) => x.name === 'CAO THÔNG MẠCH').key;
+    tk = await d.autoTicks(lpA.rows, lpA.source, CAT);
+    check(tk.adds[2].includes('cao') && tk.adds[3].includes('cao'), 'tick sẵn: Cao in the source → day 3 (12+3) and day 4 (day 1 keeps it): ' + JSON.stringify(tk.adds));
+    tk = await d.autoTicks(lpA.rows, lpA.source, CAT, [[caoKey], [caoKey], [caoKey], [caoKey]]);
+    check(tk.adds[2].includes('cao') && tk.adds[3].includes('cao'), 'tick sẵn: deleting it from the copies keeps the ticks from the source day and day 1 tick: ' + JSON.stringify(tk.adds));
+    check(JSON.stringify((await d.autoTicks(lpA.rows, lpA.source, ITEMS)).adds) === '[[],[],[],[]]', 'tick sẵn: nothing without Tự tick sau');
+    const tkP = planTicks({ history: [], srcDate: new Date(2026, 9, 12, 7), srcThuoc: [], catalog: CAT });
+    check(tkP.adds.every((x) => !x.length), 'tick sẵn: no history, no tick');
+
+    // --- sắc thuốc thang tự chạy sau y lệnh thường: giờ và bác sĩ như tab Sắc (0.5.0) ---
+    console.log('sắc tự động');
+    const lpS2 = await d.loadPatient(pts[0], null, 'sac');
+    const se = d.sacEdits(lpS2.rows, lpS2.source, 2, [{ id: 'd1', name: 'BS. Nguyễn Văn Mẫu' }]);
+    check(se[0] && se[0].thucHien === '07:05 12/10/2026' && se[0].chiDinh === '07:04 11/10/2026' && se[0].bacSi && se[0].bacSi.id === 'd1', 'sắc tự động: day 1 thực hiện 12/10, chỉ định 11/10, doctor: ' + JSON.stringify(se[0]));
+    check(se[1] && !se[1].thucHien && se[1].chiDinh === '07:04 12/10/2026', 'sắc tự động: day 2 has no usual order yet on 13/10, chỉ định from 12/10: ' + JSON.stringify(se[1]));
+    before = ids(0);
+    r = await d.run({ patient: pts[0], sourceId: lpS2.source.id, kind: 'sac', days: 2, deletions: [], edits: se });
+    fresh = newOrders(0, before);
+    check(r.ok && fresh.length === 2 && fmt(fresh[0].dateTH) === '07:05 12/10/2026' && fmt(fresh[0].date) === '07:04 11/10/2026', 'sắc tự động: run with those edits');
 
     // --- cập nhật kết quả cận lâm sàng ---
     console.log('kết quả CLS');

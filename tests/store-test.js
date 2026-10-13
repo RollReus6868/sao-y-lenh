@@ -32,6 +32,13 @@ check(s.get().benhAnMaus.length === 1 && s.get().benhAnMauId === second, 'list s
 r = s.deleteMau(second);
 check(!r.benhAnMaus.length && r.benhAnMauId === null, 'delete last leaves none');
 
+// 0.5.0: Thêm thuốc lists saved before get the Tự tick sau numbers for the two defaults.
+const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'syl-store-'));
+fs.writeFileSync(path.join(dir2, 'data.json'), JSON.stringify({ settings: { themThuoc: [{ id: 'con-xoa-bop', label: 'Cồn' }, { id: 'cao-thong-mach', label: 'Cao' }, { id: 't1', label: 'Khác' }, { id: 't2', label: 'Đã đặt', tuTick: '7' }] } }));
+const t = createStore(dir2).get().settings.themThuoc;
+check(t.map((x) => x.tuTick).join() === '5,3,,7', 'themThuoc: tuTick filled for the defaults only: ' + t.map((x) => x.tuTick).join());
+check(createStore(fs.mkdtempSync(path.join(os.tmpdir(), 'syl-store-'))).get().settings.themThuoc.map((x) => x.tuTick).join() === '5,3', 'themThuoc: fresh defaults carry tuTick');
+fs.rmSync(dir2, { recursive: true, force: true });
 fs.rmSync(dir, { recursive: true, force: true });
 console.log(failed ? `${failed} failed` : 'all checks passed');
 process.exit(failed ? 1 : 0);
