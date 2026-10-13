@@ -171,7 +171,7 @@ export function ClsView({ patient }: { patient: Patient }) {
     const r = await call<ClsRead>('cls:read', { patient, dates: d.dates }).catch(() => null);
     if (!r) return;
     set({ read: r, text: r.text });
-    if (!r.text) toast('info', 'Các ngày đã chọn không có chỉ số bất thường');
+    if (!r.text) toast('info', 'Các ngày đã chọn không có kết quả nào');
   };
   const create = async () => {
     setAsk(false);
@@ -197,7 +197,7 @@ export function ClsView({ patient }: { patient: Patient }) {
           </Button>
         </>}
       >
-        Lịch sử XN và Lịch sử CĐHA trong Xem kết quả: chỉ số màu đỏ hoặc xanh dương được ghi lại, chỉ số bình thường bỏ qua.
+        Lịch sử XN và Lịch sử CĐHA trong Xem kết quả: chỉ số màu đỏ hoặc xanh dương nằm ngoài khoảng tham chiếu được ghi lại, còn lại bỏ qua.
       </TabBar>
       <div className="scroll-thin min-h-0 flex-1 overflow-auto px-3 py-3 sm:px-4" data-cls>
         {!d.list ? (
@@ -228,6 +228,11 @@ export function ClsView({ patient }: { patient: Patient }) {
                     <span className="text-muted-foreground">{r.date}</span>
                     <span className="ml-auto shrink-0 text-muted-foreground">
                       {r.kind === 'xn' ? (r.items?.length ? <span className="text-red-600 dark:text-red-400">{r.items.length}/{r.total} bất thường</span> : `${r.total} chỉ số bình thường`) : r.ketLuan ? 'có kết luận' : 'không có kết luận'}
+                      {r.wrong?.length ? (
+                        <span className="text-amber-600 dark:text-amber-400" data-cls-wrong title={r.wrong.map((x) => `${x.name} ${x.value} (tham chiếu ${x.ref})`).join('\n')}>
+                          {' '}· bỏ {r.wrong.length} chỉ số tô màu nhầm
+                        </span>
+                      ) : null}
                     </span>
                   </div>
                 ))}

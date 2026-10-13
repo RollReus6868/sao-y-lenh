@@ -97,6 +97,7 @@ const { chromium } = require('playwright-core');
       await page.click('[data-cls-date="10/10/2026"]');
       await page.click('[data-action=cls-read]');
       await page.waitForSelector('[data-cls-results]');
+      if (!(await page.locator('[data-cls-wrong]').count())) problems.push(`${mode} ${width} cls: dropped coloured value not shown`);
       await shot('cls');
       await page.click('[data-action=cls-create]');
       await shot('cls-confirm');

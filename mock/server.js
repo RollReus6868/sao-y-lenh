@@ -148,11 +148,17 @@ const KQ = {
       ['(H02) Số lượng hồng cầu (RBC)', '4.5', '3.8-5.5', 'T/L', ''],
       ['(H07) Huyết sắc tố (HGB)', '112', '120-170', 'g/L', 'blue'],
       ['(H14) Thể tích khối tiểu cầu (PCT)', '0.12', '0.16-0.33', '%', 'blue'],
+      // Coloured by the site although inside its range: the tool must drop it.
+      ['(H05) Thể tích khối hồng cầu (HCT)', '0.42', '0.36 - 0.50', 'L/L', 'blue'],
     ] },
     { id: 'xn2', tg: '07:30 10/10/2026', loai: 'Xét nghiệm hóa sinh', dv: 'Sinh hóa máu', items: [
       ['(S34) Định lượng Glucose [Máu]', '7.8', '3.9-6.4', 'mmol/L', 'red'],
       ['(S10) Định lượng Creatinin (máu)', '80', '62-120', 'µmol/L', ''],
       ['(S20) Định lượng Kali', '3.2', '3.5-5.0', 'mmol/L', 'blue'],
+    ] },
+    { id: 'xn4', tg: '07:00 08/10/2026', loai: 'Xét nghiệm hóa sinh', dv: 'Sinh hóa máu', items: [
+      ['(S10) Định lượng Creatinin (máu)', '78', '62-120', 'µmol/L', ''],
+      ['(S20) Định lượng Kali', '3,6', '3.5-5.0', 'mmol/L', 'red'],
     ] },
     { id: 'xn3', tg: '08:00 06/10/2026', loai: 'Xét nghiệm hóa sinh', dv: 'Sinh hóa máu', items: [
       ['(S36) Định lượng Cholesterol toàn phần (máu)', '6.1', '3.9-5.2', 'mmol/L', 'red'],

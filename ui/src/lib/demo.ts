@@ -232,7 +232,7 @@ export function demoApi() {
         case 'cls:read': {
           pushState({ busy: true, task: 'Đọc kết quả CLS' }); await sleep(900); pushState({ busy: false, task: '' });
           const r: ClsRead = { at: Date.now(), results: [
-            { kind: 'xn', date: '07:30 10/10/2026', name: 'Xét nghiệm huyết học', total: 18, items: [{ name: 'WBC', value: '11.2', unit: 'G/L', ref: '4-10', flag: 'red' }, { name: 'HGB', value: '112', unit: 'g/L', ref: '120-170', flag: 'blue' }] },
+            { kind: 'xn', date: '07:30 10/10/2026', name: 'Xét nghiệm huyết học', total: 18, items: [{ name: 'WBC', value: '11.2', unit: 'G/L', ref: '4-10', flag: 'red' }, { name: 'HGB', value: '112', unit: 'g/L', ref: '120-170', flag: 'blue' }], wrong: [{ name: 'HCT', value: '0.42', unit: 'L/L', ref: '0.36 - 0.50' }] },
             { kind: 'xn', date: '07:30 10/10/2026', name: 'Xét nghiệm hóa sinh', total: 6, items: [{ name: 'Glucose', value: '7.8', unit: 'mmol/L', ref: '3.9-6.4', flag: 'red' }] },
             { kind: 'cdha', date: '09:00 10/10/2026', name: 'Siêu âm ổ bụng tổng quát', ketLuan: 'Gan nhiễm mỡ độ I' },
           ], text: 'Kết quả CLS:\nCông thức máu: WBC: 11.2 G/L; HGB: 112 g/L\nHóa sinh máu: Glucose: 7.8 mmol/L\nSiêu âm ổ bụng tổng quát: Gan nhiễm mỡ độ I' };

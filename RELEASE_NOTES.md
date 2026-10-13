@@ -1,4 +1,9 @@
-# Sao Y Lệnh 0.4.3
+# Sao Y Lệnh 0.4.4
+
+- **Kết quả CLS kiểm tra lại khoảng tham chiếu**: OneMES đôi khi tô xanh/đỏ cả chỉ số vẫn nằm trong khoảng tham chiếu. Giờ tool so từng chỉ số tô màu với cột **Khoảng tham chiếu**: nằm ngoài khoảng mới ghi vào y lệnh, còn nằm trong khoảng thì bỏ qua. Danh sách kết quả ghi rõ "bỏ N chỉ số tô màu nhầm" (rê chuột vào để xem chỉ số nào). Khoảng tham chiếu không đọc được (ví dụ chỉ ghi chữ) thì vẫn theo màu của OneMES.
+- **Không có bất thường**: nếu các xét nghiệm đã quét không có chỉ số nào bất thường, nội dung ghi "Các chỉ số trong giới hạn bình thường" (có kết luận CĐHA thì ghi "Xét nghiệm: các chỉ số trong giới hạn bình thường" rồi đến kết luận).
+
+## 0.4.3
 
 - **Thu phóng trang OneMES** trong **Trình duyệt**: mặc định thu nhỏ còn 70% để thấy được nhiều hơn. Trên thanh trên cùng có nút **−** / **+** để chỉnh từng 10%; bấm vào số % để về 70%. Cũng dùng được Ctrl + lăn chuột, Ctrl + và Ctrl −. Tool nhớ mức đã chọn cho lần sau.
 - **Nhớ bệnh nhân đang làm**: chuyển sang Trình duyệt, Nhật ký, Cài đặt… rồi quay lại **Bệnh nhân** thì vẫn đang mở đúng bệnh nhân đó, đúng thẻ đang làm (Sao chép, Kết quả, Bệnh án, Dọn thủ thuật, Kết quả CLS) và những gì đã đọc, không phải bấm chọn lại.

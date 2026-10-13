@@ -1155,9 +1155,13 @@ function createDriver(host) {
             const x = await call('kqDetailXN');
             return x.ready && !x.busy ? x : null;
           });
-          const bad = d.items.filter((x) => x.flag);
-          out.push({ kind, date: r.date, name: r.name, loai: d.loai, items: bad, total: d.items.length });
-          log('info', `${name}: ${r.name} ${r.date}: ${bad.length}/${d.items.length} chỉ số bất thường`);
+          // OneMES sometimes colours a value that sits inside its own reference range:
+          // keep a coloured value only when it is outside (or the range can't be read).
+          const flagged = d.items.filter((x) => x.flag);
+          const bad = flagged.filter((x) => clsInRange(x.value, x.ref) !== true);
+          const wrong = flagged.filter((x) => !bad.includes(x)).map((x) => ({ name: clsName(x.name), value: x.value, ref: x.ref, unit: x.unit }));
+          out.push({ kind, date: r.date, name: r.name, loai: d.loai, items: bad, total: d.items.length, wrong });
+          log('info', `${name}: ${r.name} ${r.date}: ${bad.length}/${d.items.length} chỉ số bất thường` + (wrong.length ? `; bỏ ${wrong.length} chỉ số tô màu nhưng vẫn trong khoảng tham chiếu (${wrong.map((x) => `${x.name} ${x.value}, tham chiếu ${x.ref}`).join('; ')})` : ''));
         } else {
           const d = await waitFor(`kết quả ${r.name || 'CĐHA'}`, async () => {
             await failOnAlert();
@@ -1337,6 +1341,39 @@ function clsName(s) {
   if (code && /^[A-Z]{2,}$/i.test(code[1]) && t.length > 12) return code[1];
   return t;
 }
+const CLS_NORMAL = 'Các chỉ số trong giới hạn bình thường';
+const CLS_NUM = String.raw`-?\d+(?:[.,]\d+)?`;
+const clsNum = (s) => parseFloat(String(s).replace(',', '.'));
+// Is the value inside its reference range? true / false, or null when the range
+// can't be read (then the site's colour stands). "4-10", "4 – 10", "< 5", "≥ 60",
+// "Nam: 130-170; Nữ: 120-150" (inside every range = true, inside none = false),
+// "Âm tính" (the same words as the value = true).
+function clsInRange(value, ref) {
+  const v = String(value || '').trim();
+  const r = String(ref || '').trim();
+  if (!v || !r) return null;
+  const vm = new RegExp(`^[<>≤≥=\\s]*(${CLS_NUM})`).exec(v);
+  if (!vm) return norm(v) === norm(r) ? true : null;
+  const x = clsNum(vm[1]);
+  const checks = [];
+  const range = new RegExp(`(${CLS_NUM})\\s*(?:-|–|—|~|đến)\\s*(${CLS_NUM})`, 'gi');
+  let m;
+  const rest = r.replace(range, (_, a, b) => {
+    const lo = Math.min(clsNum(a), clsNum(b));
+    const hi = Math.max(clsNum(a), clsNum(b));
+    checks.push(x >= lo && x <= hi);
+    return ' ';
+  });
+  const one = new RegExp(`(<=|>=|≤|≥|<|>)\\s*(${CLS_NUM})`, 'g');
+  while ((m = one.exec(rest))) {
+    const n = clsNum(m[2]);
+    checks.push(m[1] === '<' ? x < n : m[1] === '>' ? x > n : m[1] === '<=' || m[1] === '≤' ? x <= n : x >= n);
+  }
+  if (!checks.length) return null;
+  if (checks.every(Boolean)) return true;
+  if (!checks.some(Boolean)) return false;
+  return null;
+}
 // The text of the new order: one line per test group, then one per CĐHA.
 function clsText(results) {
   const days = [...new Set(results.map((r) => (r.date.split(' ')[1] || '')))];
@@ -1356,6 +1393,8 @@ function clsText(results) {
     }
     for (const [g, vs] of groups) block.push(`${g}: ${vs.join('; ')}`);
     for (const r of rs.filter((x) => x.kind === 'cdha')) if (r.ketLuan) block.push(`${r.name}: ${r.ketLuan.replace(/\s*\n\s*/g, '; ')}`);
+    // Tests read but nothing abnormal in any of them.
+    if (rs.some((x) => x.kind === 'xn') && !groups.size) block.unshift(block.length ? 'Xét nghiệm: ' + CLS_NORMAL.toLowerCase() : CLS_NORMAL);
     if (!block.length) continue;
     if (many) lines.push(`Ngày ${day.slice(0, 5)}:`);
     lines.push(...block.map((b) => (many ? '- ' + b : b)));
@@ -1435,4 +1474,4 @@ function keyName(key) {
   return String(key).split('|')[1] || key;
 }
 
-module.exports = { createDriver, resolveEdits, withKeys, baseKey, parseTime, fmtTime, norm, StopError, PageError, AGENT };
+module.exports = { createDriver, clsInRange, clsText, resolveEdits, withKeys, baseKey, parseTime, fmtTime, norm, StopError, PageError, AGENT };
