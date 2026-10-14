@@ -97,6 +97,16 @@
     document.getElementById('txtThoigianThucHienThamKham').value = ylenh.tgth;
     document.getElementById('txtDienBienYLenhThamKham').value = ylenh.dienBien;
     document.getElementById('txtDienBienPHCNThamKham').value = ylenh.dienBienPHCN;
+    document.getElementById('txtYLenhKhacThamKham').value = ylenh.khac || '';
+    // Like OneMES on a new order: the bệnh chính check asks once the form is drawn.
+    if (ylenh.askBenhChinh) {
+      var askId = window._ylenh_ID;
+      setTimeout(function () {
+        swal({ title: 'Thông báo', text: 'Bệnh chính này không được khuyến khích. Bạn vẫn muốn chọn?', type: 'warning', showCancelButton: true,
+          confirmButtonClass: 'btn-danger', confirmButtonText: 'Có', cancelButtonText: 'Không', closeOnConfirm: true, closeOnCancel: true },
+          function (isConfirm) { call('benhChinh', { id: askId, co: !!isConfirm }); });
+      }, 700);
+    }
     document.getElementById('txtThoigianThamKham').setAttribute('data-value', ylenh.tg);
     // Like OneMES: the pickers hold just the chosen entry, appended as an option.
     var bs = document.getElementById('cboBacSiThamKham');
@@ -106,7 +116,7 @@
     cd.innerHTML = '';
     if (ylenh.capDo) cd.appendChild(new Option(ylenh.capDo.text, ylenh.capDo.id, true, true));
     var ro = done;
-    ['txtThoigianThamKham', 'txtThoigianThucHienThamKham', 'txtDienBienYLenhThamKham', 'txtDienBienPHCNThamKham'].forEach(function (k) { document.getElementById(k).readOnly = ro; });
+    ['txtThoigianThamKham', 'txtThoigianThucHienThamKham', 'txtDienBienYLenhThamKham', 'txtDienBienPHCNThamKham', 'txtYLenhKhacThamKham'].forEach(function (k) { document.getElementById(k).readOnly = ro; });
     show('btnSaveThamKhamDraw', !done);
     show('btnSaoChep', done); show('btnPopupTHUHOI', done); show('btnPopupHOANTAT', !done); show('btnPopupXOA', !done);
     // Like OneMES, the drug and service tables arrive a moment later (async callbacks).
@@ -319,7 +329,7 @@
     var bs = opt('cboBacSiThamKham');
     var r = call('luu', {
       id: window._ylenh_ID, thoiGian: v('txtThoigianThamKham'), thoiGianThucHien: v('txtThoigianThucHienThamKham'),
-      dienBien: v('txtDienBienYLenhThamKham'), dienBienPHCN: v('txtDienBienPHCNThamKham'),
+      dienBien: v('txtDienBienYLenhThamKham'), dienBienPHCN: v('txtDienBienPHCNThamKham'), khac: v('txtYLenhKhacThamKham'),
       bacSi: bs ? { id: bs.id, name: bs.text } : null, capDo: opt('cboCapDoChamSocThamKham'),
     }).value;
     if (r.Error) { window.callSweetAlert(r.InfoMessage); return; }

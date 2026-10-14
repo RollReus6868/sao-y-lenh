@@ -88,6 +88,7 @@ export interface DvCleanDay { id: string; tg: string; deleted: { id: string; nam
 
 // Kết quả cận lâm sàng.
 export interface ClsRow { kind: 'xn' | 'cdha'; idx: number; date: string; name: string; status: string }
-export interface ClsList { dates: string[]; rows: ClsRow[]; at: number }
+/** usual: 'dd/MM/yyyy' → 'HH:mm', thực hiện of that day's usual order (0.5.1). */
+export interface ClsList { dates: string[]; rows: ClsRow[]; usual?: Record<string, string>; at: number }
 export interface ClsResult { kind: 'xn' | 'cdha'; date: string; name: string; items?: { name: string; value: string; unit: string; ref: string; flag: 'red' | 'blue' | null }[]; total?: number; wrong?: { name: string; value: string; ref: string; unit: string }[]; ketLuan?: string }
 export interface ClsRead { results: ClsResult[]; text: string; at: number }

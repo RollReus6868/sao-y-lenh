@@ -148,23 +148,34 @@ const okDay = (s: string) => {
   return d.getDate() === +m[1] && d.getMonth() === +m[2] - 1 ? `${p2(+m[1])}/${p2(+m[2])}/${m[3]}` : '';
 };
 
-interface ClsDraft { list: ClsList | null; dates: string[]; read: ClsRead | null; text: string; gio: string; ngay: string }
+// What the user asked to put in Y lệnh khác of every CLS order (0.5.1).
+const CLS_KHAC = '* Giải thích kết quả CLS với người bệnh và người nhà.';
+// gioAuto: the time still follows the usual order of the chosen day (until typed by hand).
+interface ClsDraft { list: ClsList | null; dates: string[]; read: ClsRead | null; text: string; gio: string; ngay: string; gioAuto?: boolean; khac?: string }
 const drafts = new Map<string, ClsDraft>(); // kept while the app is open, per patient
 
 export function ClsView({ patient }: { patient: Patient }) {
   const { data, state, call, toast } = useApp();
-  const [d, setD] = useState<ClsDraft>(() => drafts.get(patient.noitruid) || { list: null, dates: [], read: null, text: '', ...nowParts() });
+  const [d, setD] = useState<ClsDraft>(() => drafts.get(patient.noitruid) || { list: null, dates: [], read: null, text: '', ...nowParts(), gioAuto: true, khac: CLS_KHAC });
   const [ask, setAsk] = useState(false);
   useEffect(() => { drafts.set(patient.noitruid, d); }, [d, patient.noitruid]);
   const set = (p: Partial<ClsDraft>) => setD((x) => ({ ...x, ...p }));
   const reading = state.busy && state.task === 'Đọc kết quả CLS';
   const creating = state.busy && state.task === 'Tạo y lệnh kết quả CLS';
   const ngay = okDay(d.ngay);
+  const khac = d.khac ?? CLS_KHAC;
+  // The time of the usual order of a day, when the list read it.
+  const usualAt = (day: string, l = d.list) => (day && l?.usual?.[day]) || '';
+  const setNgay = (v: string) => {
+    const g = d.gioAuto && usualAt(okDay(v));
+    set(g ? { ngay: v, gio: g } : { ngay: v });
+  };
 
   const list = async () => {
     const r = await call<ClsList>('cls:list', { patient }).catch(() => null);
     if (!r) return;
-    set({ list: r, dates: r.dates.filter((x) => d.dates.includes(x)) });
+    const g = d.gioAuto && usualAt(ngay, r);
+    set({ list: r, dates: r.dates.filter((x) => d.dates.includes(x)), ...(g ? { gio: g } : {}) });
     if (!r.dates.length) toast('info', 'Không thấy kết quả xét nghiệm hay CĐHA nào');
   };
   const read = async () => {
@@ -176,7 +187,7 @@ export function ClsView({ patient }: { patient: Patient }) {
   const create = async () => {
     setAsk(false);
     const thoiGian = `${d.gio} ${ngay}`;
-    const r = await call<{ id: string; thoiGian: string }>('cls:create', { patient, thoiGian, dienBien: d.text }).catch(() => null);
+    const r = await call<{ id: string; thoiGian: string }>('cls:create', { patient, thoiGian, dienBien: d.text, yLenhKhac: khac }).catch(() => null);
     if (r) toast('success', `Đã tạo y lệnh ${r.thoiGian} trên OneMES`);
   };
   const toggle = (x: string) => set({ dates: d.dates.includes(x) ? d.dates.filter((y) => y !== x) : [...d.dates, x] });
@@ -244,10 +255,15 @@ export function ClsView({ patient }: { patient: Patient }) {
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="font-bold">Thời gian thực hiện</span>
-              <div className="w-20"><TimeInput value={d.gio} onChange={(v) => set({ gio: v })} disabled={state.busy} /></div>
-              <Input value={d.ngay} onChange={(e) => set({ ngay: e.target.value })} onBlur={() => ngay && set({ ngay })} placeholder="ngày/tháng/năm" className={cn('h-8 w-32 tabular-nums', !ngay && 'border-red-500')} data-field="cls-ngay" />
-              <button type="button" className="font-semibold text-primary hover:underline" onClick={() => set(nowParts())}>Bây giờ</button>
-              <span className="text-muted-foreground">thời gian chỉ định sớm hơn 1 phút</span>
+              <div className="w-20"><TimeInput value={d.gio} onChange={(v) => set({ gio: v, gioAuto: false })} disabled={state.busy} /></div>
+              <Input value={d.ngay} onChange={(e) => setNgay(e.target.value)} onBlur={() => ngay && set({ ngay })} placeholder="ngày/tháng/năm" className={cn('h-8 w-32 tabular-nums', !ngay && 'border-red-500')} data-field="cls-ngay" />
+              <button type="button" className="font-semibold text-primary hover:underline" onClick={() => set({ ...nowParts(), gioAuto: false })}>Bây giờ</button>
+              {usualAt(ngay) && <button type="button" className="font-semibold text-primary hover:underline" onClick={() => set({ gio: usualAt(ngay), gioAuto: true })} data-action="cls-usual-time">Giờ y lệnh thường ({usualAt(ngay)})</button>}
+              <span className="text-muted-foreground" data-cls-time-note>{d.gioAuto && usualAt(ngay) === d.gio ? `giờ như y lệnh thường ngày ${ngay.slice(0, 5)}; ` : ''}thời gian chỉ định sớm hơn 1 phút</span>
+            </div>
+            <div>
+              <div className="mb-1 flex items-center gap-2 text-xs font-bold">Y lệnh khác<span className="font-normal text-muted-foreground">thêm vào dưới nội dung đang có trên OneMES</span></div>
+              <Input value={khac} onChange={(e) => set({ khac: e.target.value })} className="h-8 text-xs" data-field="cls-khac" />
             </div>
           </div>
         )}
@@ -258,7 +274,7 @@ export function ClsView({ patient }: { patient: Patient }) {
         title="Tạo y lệnh mới trên OneMES?"
         footer={<><Button variant="outline" size="lg" onClick={() => setAsk(false)}>Hủy</Button><Button size="lg" className="flex-1" onClick={create} data-action="cls-confirm"><FilePlus2 /> Tạo y lệnh</Button></>}
       >
-        <p className="text-sm">Tool bấm <b>Thêm y lệnh mới</b>, đặt giờ thực hiện <b>{d.gio} {ngay}</b>, ghi nội dung dưới đây vào Diễn biến bệnh rồi bấm <b>Lưu</b>.{data?.settings.autoComplete ? ' Sau đó Hoàn tất (đang bật Tự Hoàn tất).' : ' Y lệnh để ở trạng thái Mới cho anh/chị kiểm tra.'}</p>
+        <p className="text-sm">Tool bấm <b>Thêm y lệnh mới</b>, đặt giờ thực hiện <b>{d.gio} {ngay}</b>, ghi nội dung dưới đây vào Diễn biến bệnh{khac.trim() ? <>, thêm "{khac.trim()}" vào Y lệnh khác</> : ''} rồi bấm <b>Lưu</b>. OneMES hỏi "Bệnh chính này không được khuyến khích" thì tool bấm Có.{data?.settings.autoComplete ? ' Sau đó Hoàn tất (đang bật Tự Hoàn tất).' : ' Y lệnh để ở trạng thái Mới cho anh/chị kiểm tra.'}</p>
         <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-muted/40 p-2 text-xs">{d.text}</pre>
       </Sheet>
     </>

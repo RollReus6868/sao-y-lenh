@@ -360,6 +360,7 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     console.log('kết quả CLS');
     const cl = await d.clsList(pts[1]);
     check(cl.dates.join() === '10/10/2026,08/10/2026,06/10/2026', 'CLS: dates found, newest first: ' + cl.dates.join());
+    check(cl.usual && cl.usual['12/10/2026'] === '07:05' && cl.usual['10/10/2026'] === '07:05', 'CLS: thực hiện time of each day\'s usual order: ' + JSON.stringify(cl.usual));
     let rd = await d.clsRead(pts[1], ['10/10/2026']);
     check(rd.results.length === 3 && rd.results[0].total === 5, 'CLS: two tests and one imaging read for 10/10');
     check(rd.results[0].wrong.map((x) => x.name).join() === 'HCT', 'CLS: a coloured value inside its range is dropped: ' + JSON.stringify(rd.results[0].wrong));
@@ -374,11 +375,17 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     for (const [v, ref, want] of R) check(clsInRange(v, ref) === want, `CLS: ${v} in "${ref}" -> ${want}`);
     before = ids(1);
     m.mock.getState().log.length = 0;
-    const cr = await d.clsCreate(pts[1], { thoiGian: '14:20 13/10/2026', dienBien: WANT }, false);
+    const KHAC = '* Giải thích kết quả CLS với người bệnh và người nhà.';
+    const cr = await d.clsCreate(pts[1], { thoiGian: '14:20 13/10/2026', dienBien: WANT, yLenhKhac: KHAC }, false);
     fresh = newOrders(1, before);
     check(fresh.length === 1 && cr.id === fresh[0].id && fresh[0].status === 'Mới' && fresh[0].dienBien === WANT, 'CLS: new order holds the text, left Mới');
     check(fresh[0].dateTH.getDate() === 13 && hm(fresh[0].dateTH) === '14:20' && hm(fresh[0].date) === '14:19', 'CLS: chosen date and time set');
-    check(m.mock.getState().log.map((x) => x[0]).join() === 'themYLenh,luu', 'CLS: only Thêm y lệnh mới and Lưu');
+    check(m.mock.getState().log.map((x) => x[0]).join() === 'themYLenh,benhChinhCo,luu', 'CLS: Thêm y lệnh mới, Có to the bệnh chính question, Lưu: ' + m.mock.getState().log.map((x) => x[0]).join());
+    check(fresh[0].khac === KHAC, 'CLS: Y lệnh khác filled: ' + JSON.stringify(fresh[0].khac));
+    // Words take no unit; numbers keep theirs.
+    const { clsText } = require('../src/driver');
+    const tx = clsText([{ kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm nước tiểu', items: [{ name: 'Nitrit (NIT)', value: 'Positive ', unit: 'mg/dL', ref: 'Negative' }, { name: 'Protein (PRO)', value: 'Trace', unit: 'g/L', ref: 'Negative' }, { name: 'Tỷ trọng (SG)', value: '1.035', unit: '', ref: '1.01-1.025' }] }, { kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm hóa sinh', items: [{ name: 'Glucose', value: '12.06', unit: 'mmol/L', ref: '3.9-6.4' }] }]);
+    check(tx === 'Kết quả CLS:\nNước tiểu: NIT: Positive; PRO: Trace; Tỷ trọng (SG): 1.035\nHóa sinh máu: Glucose: 12.06 mmol/L', 'CLS: Positive / Trace without unit: ' + JSON.stringify(tx));
     // The CLS order on 13/10 does not block copying the usual order onto that day.
     ({ source } = await d.loadPatient(pts[1]));
     before = ids(1);

@@ -240,6 +240,10 @@ async function waitFor(what, fn, ms = 30000) {
     await ui.waitForSelector('[data-cls-results]', { timeout: 60000 });
     const clsText = await ui.inputValue('[data-field=cls-text]');
     check(/^Kết quả CLS:\nCông thức máu: WBC: 11.2 G\/L/.test(clsText) && /Gan nhiễm mỡ độ I/.test(clsText), 'CLS: abnormal values read: ' + JSON.stringify(clsText));
+    // A day with a usual order: the time follows it until typed by hand.
+    await ui.fill('[data-field=cls-ngay]', '12/10/2026');
+    await waitFor('usual time', async () => (await ui.inputValue('[data-cls] [data-field=gio]')) === '07:05', 5000).catch(() => null);
+    check((await ui.inputValue('[data-cls] [data-field=gio]')) === '07:05', 'CLS: time set like the usual order of 12/10: ' + (await ui.inputValue('[data-cls] [data-field=gio]')));
     await ui.fill('[data-cls] [data-field=gio]', '14:20');
     await ui.press('[data-cls] [data-field=gio]', 'Enter');
     await ui.fill('[data-field=cls-ngay]', '11/10/2026');
@@ -249,7 +253,8 @@ async function waitFor(what, fn, ms = 30000) {
     await ui.waitForSelector('[data-runbar]', { timeout: 10000 });
     await waitFor('CLS order created', async () => !(await ui.$('[data-runbar]')), 120000);
     const cls = m.mock.getState().patients[1].orders.filter((o) => !before2.includes(o.id));
-    check(cls.length === 1 && cls[0].dienBien === clsText && hm(cls[0].dateTH) === '14:20' && cls[0].dateTH.getDate() === 11 && cls[0].status === 'Hoàn tất', 'CLS: new order with the text at 14:20 11/10, completed');
+    check(cls.length === 1 && cls[0].dienBien === clsText && hm(cls[0].dateTH) === '14:20' && cls[0].dateTH.getDate() === 11 && cls[0].status === 'Hoàn tất', 'CLS: new order with the text at 14:20 11/10 (typed time kept), completed');
+    check(cls[0] && cls[0].khac === '* Giải thích kết quả CLS với người bệnh và người nhà.' && m.mock.getState().log.some((x) => x[0] === 'benhChinhCo'), 'CLS: Y lệnh khác filled, bệnh chính question answered Có');
 
     // Choice is remembered and shown in the list.
     await ui.click('[data-action=back]');

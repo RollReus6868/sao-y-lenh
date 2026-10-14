@@ -287,10 +287,10 @@ const commands = {
     }),
   'cls:list': ({ patient }) => task('Đọc kết quả CLS', (d) => d.clsList(patient)),
   'cls:read': ({ patient, dates }) => task('Đọc kết quả CLS', (d) => d.clsRead(patient, dates || [])),
-  'cls:create': ({ patient, thoiGian, dienBien }) =>
+  'cls:create': ({ patient, thoiGian, dienBien, yLenhKhac }) =>
     task('Tạo y lệnh kết quả CLS', async (d) => {
       log('info', `${patient.hoTen}: tạo y lệnh mới cho kết quả CLS (${thoiGian})`);
-      const r = await d.clsCreate(patient, { thoiGian, dienBien }, store.get().settings.autoComplete);
+      const r = await d.clsCreate(patient, { thoiGian, dienBien, yLenhKhac }, store.get().settings.autoComplete);
       log('ok', `${patient.hoTen}: đã tạo y lệnh kết quả CLS ${r.thoiGian}`);
       return r;
     }),

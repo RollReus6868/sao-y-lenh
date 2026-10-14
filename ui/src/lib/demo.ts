@@ -230,7 +230,7 @@ export function demoApi() {
           return { dates: ['10/10/2026', '06/10/2026'], rows: [
             { kind: 'xn', idx: 0, date: '07:30 10/10/2026', name: 'Xét nghiệm huyết học', status: 'Hoàn tất' }, { kind: 'xn', idx: 1, date: '07:30 10/10/2026', name: 'Xét nghiệm hóa sinh', status: 'Hoàn tất' },
             { kind: 'xn', idx: 2, date: '08:00 06/10/2026', name: 'Xét nghiệm hóa sinh', status: 'Hoàn tất' }, { kind: 'cdha', idx: 0, date: '09:00 10/10/2026', name: 'Siêu âm ổ bụng tổng quát', status: '' },
-          ], at: Date.now() } as T;
+          ], usual: Object.fromEntries([0, 1, 2, 3].map((i) => { const x = new Date(Date.now() - i * 864e5); return [`${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`, '07:08']; })), at: Date.now() } as T;
         case 'cls:read': {
           pushState({ busy: true, task: 'Đọc kết quả CLS' }); await sleep(900); pushState({ busy: false, task: '' });
           const r: ClsRead = { at: Date.now(), results: [

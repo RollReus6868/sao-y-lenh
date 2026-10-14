@@ -287,11 +287,18 @@ const api = {
     return { Error: true, InfoMessage: 'Không tìm thấy dịch vụ' };
   },
   // Thêm y lệnh mới: an empty Mới order at the current time of the (mock) day.
+  // The answer to "Bệnh chính này không được khuyến khích. Bạn vẫn muốn chọn?".
+  benhChinh({ id, co }) {
+    const f = findOrder(id);
+    if (f) f.o.askBenhChinh = false;
+    state.log.push([co ? 'benhChinhCo' : 'benhChinhKhong', id]);
+    return { Error: false };
+  },
   themYLenh({ noitruid }) {
     const p = state.patients.find((x) => x.noitruid === noitruid);
     if (!p) return { Error: true, InfoMessage: 'Không tìm thấy bệnh nhân' };
     const d = new Date(2026, 9, 12, 9, 30);
-    const o = { id: uid(), date: d, dateTH: d, bacSi: { id: 'd1', name: 'BS. Nguyễn Văn Mẫu' }, capDo: { id: 'c3', text: '(III-C) III-C' }, dienBien: '', dienBienPHCN: '', khac: '', status: 'Mới', thuoc: [], dvkt: [] };
+    const o = { id: uid(), date: d, dateTH: d, bacSi: { id: 'd1', name: 'BS. Nguyễn Văn Mẫu' }, capDo: { id: 'c3', text: '(III-C) III-C' }, dienBien: '', dienBienPHCN: '', khac: '', status: 'Mới', thuoc: [], dvkt: [], askBenhChinh: true };
     p.orders.push(o);
     state.log.push(['themYLenh', o.id]);
     return { Error: false, RetExtraParam1: o.id };
@@ -300,7 +307,7 @@ const api = {
     return { Error: false, RetObject: KQ };
   },
   // Lưu on the order form (ServerSideUpdateYLenh).
-  luu({ id, thoiGian, thoiGianThucHien, dienBien, dienBienPHCN, bacSi, capDo }) {
+  luu({ id, thoiGian, thoiGianThucHien, dienBien, dienBienPHCN, khac, bacSi, capDo }) {
     const f = findOrder(id);
     if (!f) return { Error: true, InfoMessage: 'Không tìm thấy y lệnh' };
     if (f.o.status !== 'Mới') return { Error: false }; // OneMES ignores Lưu on a completed order
@@ -309,7 +316,7 @@ const api = {
     if (!cd || !th) return { Error: true, InfoMessage: 'Thời gian không đúng định dạng' };
     if (cd > th) return { Error: true, InfoMessage: 'Thời gian thực hiện y lệnh không được nhỏ hơn thời gian chỉ định!' };
     if (!bacSi || !bacSi.id) return { Error: true, InfoMessage: 'Chưa chọn bác sỹ' };
-    Object.assign(f.o, { date: cd, dateTH: th, dienBien, dienBienPHCN, bacSi, capDo: capDo && capDo.id ? capDo : null });
+    Object.assign(f.o, { date: cd, dateTH: th, dienBien, dienBienPHCN, khac: khac ?? f.o.khac, bacSi, capDo: capDo && capDo.id ? capDo : null });
     state.log.push(['luu', id]);
     return { Error: false };
   },
@@ -385,6 +392,7 @@ function orderView(p, o) {
     dienBien: o.dienBien,
     dienBienPHCN: o.dienBienPHCN,
     khac: o.khac,
+    askBenhChinh: !!o.askBenhChinh,
     dv: o.dvkt.some((x) => x.trangThai !== 'Hoàn tất'),
     status: o.status,
     thuoc: o.thuoc,
@@ -447,6 +455,7 @@ function page(wpid, query, host) {
   <label>Cấp độ chăm sóc <select id="cboCapDoChamSocThamKham" class="form-control"></select></label></div>
   <label>Diễn biến bệnh<textarea id="txtDienBienYLenhThamKham"></textarea></label>
   <label>Diễn biến PHCN<textarea id="txtDienBienPHCNThamKham"></textarea></label>
+  <label>Y lệnh khác<textarea rows="2" id="txtYLenhKhacThamKham" class="form-control"></textarea></label>
   <label>Sao y lệnh (ngày) <select id="cboSaoYLenh" class="form-control"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
   <label>Hình thức sao y lệnh <select id="cboHinhThucSao"><option value="" selected>Chọn hình thức sao</option><option value="1">Sao thuốc dự trù và dịch vụ</option><option value="0">Sao thuốc dự trù</option><option value="2">Sao dịch vụ</option><option value="3">Sao đông y</option><option value="4">Sao tây y</option><option value="5">Sao tây y và dịch vụ</option></select></label>
   <div><button id="btnKeDon" class="btn btn-xs btn-success btn-ylenh" onclick="javascript:showKeDon();">Kê Tây y/VTYT</button>

@@ -2,7 +2,7 @@
 // calls OneMES's own functions; it never calls the server directly.
 // Every function returns plain data so it survives structured clone.
 (function () {
-  if (window.__SYL && window.__SYL.version === 11) return;
+  if (window.__SYL && window.__SYL.version === 12) return;
 
   const txt = (el) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
   const norm = (s) =>
@@ -429,6 +429,7 @@
       thoiGianThucHien: val('txtThoigianThucHienThamKham'),
       dienBien: val('txtDienBienYLenhThamKham'),
       dienBienPHCN: val('txtDienBienPHCNThamKham'),
+      yLenhKhac: val('txtYLenhKhacThamKham'),
       bacSi: picked('cboBacSiThamKham'),
       capDo: picked('cboCapDoChamSocThamKham'),
       buttons: buttons(),
@@ -506,6 +507,7 @@
     const t = (id, v, name) => v !== undefined && v !== null && !setText(id, String(v), false) && bad.push(name);
     t('txtDienBienYLenhThamKham', f.dienBien, 'Diễn biến bệnh');
     t('txtDienBienPHCNThamKham', f.dienBienPHCN, 'Diễn biến PHCN');
+    t('txtYLenhKhacThamKham', f.yLenhKhac, 'Y lệnh khác');
     if (f.bacSi && f.bacSi.id && !setPicked('cboBacSiThamKham', f.bacSi.id, f.bacSi.text)) bad.push('Bác sĩ');
     if (f.capDo && f.capDo.id && !setPicked('cboCapDoChamSocThamKham', f.capDo.id, f.capDo.text)) bad.push('Cấp độ chăm sóc');
     return bad.length ? { ok: false, reason: 'Không điền được: ' + bad.join(', ') } : { ok: true };
@@ -1223,7 +1225,7 @@
   }
 
   window.__SYL = {
-    version: 11,
+    version: 12,
     where,
     readPatients,
     listLink,

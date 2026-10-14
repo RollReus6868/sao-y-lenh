@@ -64,7 +64,7 @@ function createDriver(host) {
 
   async function call(fn, ...args) {
     const a = args.map((x) => JSON.stringify(x)).join(',');
-    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==11){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
+    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==12){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
   }
 
   function checkStop() {
@@ -93,6 +93,15 @@ function createDriver(host) {
 
   async function failOnAlert() {
     const s = await call('swal');
+    // Choosing an order's bệnh chính may ask "Bệnh chính này không được khuyến khích. Bạn
+    // vẫn muốn chọn?" (Có/Không); the user answers Có and carries on (0.5.1).
+    if (s.visible && s.cancelText && BENH_CHINH_RE.test(s.text || '')) {
+      if (s.ready) {
+        await call('swalClick', 'confirm');
+        log('info', 'OneMES hỏi "Bệnh chính này không được khuyến khích", đã bấm Có');
+      }
+      return { visible: true, ready: false };
+    }
     if (isError(s)) {
       if (!s.ready) return { visible: true, ready: false }; // let it settle, then close it
       await call('swalClick', 'confirm');
@@ -479,6 +488,7 @@ function createDriver(host) {
     const same = (a, b) => String(a || '').replace(/\r\n/g, '\n').trim() === String(b || '').replace(/\r\n/g, '\n').trim();
     if (typeof edit.dienBien === 'string' && !same(edit.dienBien, o.dienBien)) f.dienBien = edit.dienBien;
     if (typeof edit.dienBienPHCN === 'string' && !same(edit.dienBienPHCN, o.dienBienPHCN)) f.dienBienPHCN = edit.dienBienPHCN;
+    if (typeof edit.yLenhKhac === 'string' && !same(edit.yLenhKhac, o.yLenhKhac)) f.yLenhKhac = edit.yLenhKhac;
     if (edit.bacSi && edit.bacSi.id && norm(edit.bacSi.id) !== norm(o.bacSi && o.bacSi.id)) f.bacSi = { id: edit.bacSi.id, text: edit.bacSi.text || edit.bacSi.name || '' };
     if (edit.capDo && edit.capDo.id && norm(edit.capDo.id) !== norm(o.capDo && o.capDo.id)) f.capDo = { id: edit.capDo.id, text: edit.capDo.text || '' };
     return f;
@@ -491,6 +501,7 @@ function createDriver(host) {
     if (f.thoiGianThucHien) out.push(twoDays ? `thời gian thực hiện ${f.thoiGianThucHien}` : `giờ thực hiện ${f.thoiGianThucHien.slice(0, 5)}`);
     if (f.dienBien !== undefined) out.push('diễn biến bệnh');
     if (f.dienBienPHCN !== undefined) out.push('diễn biến PHCN');
+    if (f.yLenhKhac !== undefined) out.push('y lệnh khác');
     if (f.bacSi) out.push(`bác sĩ ${f.bacSi.text}`);
     if (f.capDo) out.push(`cấp độ ${f.capDo.text}`);
     return out.join(', ');
@@ -525,6 +536,7 @@ function createDriver(host) {
       chiDinh: f.thoiGian,
       dienBien: f.dienBien,
       dienBienPHCN: f.dienBienPHCN,
+      yLenhKhac: f.yLenhKhac,
       bacSi: f.bacSi,
       capDo: f.capDo,
     });
@@ -1181,6 +1193,21 @@ function createDriver(host) {
     const name = patient.hoTen || patient.maBN;
     const l = await kqOpen(patient);
     await call('kqClose');
+    // Thời gian thực hiện of each day's usual order: the new CLS order takes the same time.
+    const usual = {};
+    try {
+      const orders = await listOrders();
+      for (const r of orders) {
+        const t = parseTime(r.tgth) || parseTime(r.tg);
+        if (!t) continue;
+        const day = fmtTime(t).slice(6);
+        const u = usualOn(orders, t);
+        if (u && !usual[day]) usual[day] = (u.tgth || u.tg).slice(0, 5);
+      }
+    } catch (e) {
+      if (e.stopped) throw e;
+      log('warn', `${name}: không đọc được giờ y lệnh thường (${e.message})`);
+    }
     const rows = [...l.xn.map((x) => ({ ...x, kind: 'xn' })), ...l.cdha.map((x) => ({ ...x, kind: 'cdha' }))];
     const dates = [...new Set(rows.map((r) => (r.date.split(' ')[1] || '')).filter(Boolean))];
     dates.sort((a, b) => parseTime('00:00 ' + b) - parseTime('00:00 ' + a));
@@ -1190,7 +1217,7 @@ function createDriver(host) {
     if (!l.cdha.length) log('info', `${name}: Lịch sử CĐHA trống (${l.cdhaShape || '?'})`);
     const noDate = rows.filter((r) => !r.date).length;
     if (noDate) log('warn', `${name}: ${noDate} dòng kết quả không đọc được ngày`);
-    return { dates, rows, at: Date.now() };
+    return { dates, rows, usual, at: Date.now() };
   }
 
   // Reads every XN and CĐHA of the chosen dates (top to bottom) and keeps the values
@@ -1239,7 +1266,7 @@ function createDriver(host) {
    * Thêm y lệnh mới, then writes time and diễn biến bệnh into it and saves.
    * thoiGian = 'HH:mm dd/MM/yyyy' (thời gian thực hiện; chỉ định one minute earlier).
    */
-  async function clsCreate(patient, { thoiGian, dienBien }, autoComplete = false) {
+  async function clsCreate(patient, { thoiGian, dienBien, yLenhKhac }, autoComplete = false) {
     const name = patient.hoTen || patient.maBN;
     const th = parseTime(thoiGian);
     if (!th) throw new PageError(`Thời gian "${thoiGian}" không đúng dạng giờ:phút ngày/tháng/năm`);
@@ -1262,7 +1289,23 @@ function createDriver(host) {
     const id = norm(o.id);
     const label = `${name}, y lệnh mới`;
     log('ok', `${label}: đã tạo (${o.thoiGian})`);
+    // OneMES may ask about the bệnh chính a moment after the order opens (failOnAlert
+    // answers Có); give it time to show before typing into the form.
+    const askEnd = Date.now() + 2500;
+    while (Date.now() < askEnd) {
+      const s = await failOnAlert();
+      if (s.visible) await sleep(300);
+      else await sleep(250);
+    }
+    await settle();
     const f = { thoiGianThucHien: fmtTime(th), thoiGian: fmtTime(new Date(th.getTime() - 60000)), dienBien };
+    // Y lệnh khác: the given line is added under whatever the order already holds.
+    const add = String(yLenhKhac || '').trim();
+    if (add) {
+      const cur = await call('readOrder');
+      const old = String((cur && cur.yLenhKhac) || '').trim();
+      if (!norm(old).includes(norm(add))) f.yLenhKhac = old ? `${old}\n${add}` : add;
+    }
     if (o.thoiGianThucHien === f.thoiGianThucHien) delete f.thoiGianThucHien;
     if (o.thoiGian === f.thoiGian) delete f.thoiGian;
     await applyFields(id, label, f);
@@ -1363,6 +1406,7 @@ function createDriver(host) {
 }
 
 const SAC_RE = /sắc thuốc thang/i;
+const BENH_CHINH_RE = /không được khuyến khích/i;
 const isSac = (r) => SAC_RE.test(String((r && r.khac) || ''));
 // Orders written by Cập nhật kết quả CLS start with this line.
 const CLS_HEAD = 'Kết quả CLS:';
@@ -1493,7 +1537,9 @@ function clsText(results) {
       for (const it of r.items) {
         const g = clsGroup(r.name || r.loai || it.group);
         if (!groups.has(g)) groups.set(g, []);
-        const v = `${clsName(it.name)}: ${it.value}${it.unit ? (it.unit === '%' ? '' : ' ') + it.unit : ''}`;
+        // A word result (Positive, Trace, Âm tính…) takes no unit.
+        const unit = it.unit && /\d/.test(it.value) ? (it.unit === '%' ? '' : ' ') + it.unit : '';
+        const v = `${clsName(it.name)}: ${String(it.value).trim()}${unit}`;
         if (!groups.get(g).includes(v)) groups.get(g).push(v);
       }
     }

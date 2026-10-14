@@ -1,4 +1,12 @@
-# Sao Y Lệnh 0.5.0
+# Sao Y Lệnh 0.5.1
+
+Thẻ **Kết quả CLS**, khi **Tạo y lệnh mới**:
+- **Tự bấm "Có"**: nếu OneMES hỏi "Bệnh chính này không được khuyến khích. Bạn vẫn muốn chọn?" thì tool bấm **Có** rồi làm tiếp như bình thường (Nhật ký có ghi lại).
+- **Giờ mặc định theo y lệnh thường**: sau khi bấm **Đọc Xem kết quả**, giờ thực hiện tự lấy bằng giờ của y lệnh thường cùng ngày (đổi ngày thì giờ đổi theo). Anh/chị tự gõ giờ thì tool giữ giờ đã gõ; nút **Giờ y lệnh thường** để lấy lại.
+- **Y lệnh khác điền sẵn** "* Giải thích kết quả CLS với người bệnh và người nhà." (sửa hoặc xóa được trước khi tạo). Nếu ô đó trên OneMES đã có chữ thì dòng này được thêm xuống dưới.
+- **Kết quả dạng chữ không kèm đơn vị**: Positive, Trace, Âm tính… ghi không có đơn vị (ví dụ "Nước tiểu: Nitrit: Positive; Protein: Trace"); kết quả là số vẫn giữ đơn vị.
+
+## 0.5.0
 
 - **Tự sao chép sắc thuốc thang**: sao chép y lệnh thường của một bệnh nhân xong (và không lỗi), nếu bệnh nhân đó có y lệnh sắc thuốc thang thì tool tự sao chép tiếp sắc thuốc thang với **cùng số ngày**, không cần chuyển sang chế độ Sắc thuốc thang và bấm Sao chép nữa. Cách điền giữ như cũ: giờ thực hiện theo y lệnh thường cùng ngày, giờ chỉ định và bác sĩ theo y lệnh thường ngày hôm trước; mục DVKT đã chọn xóa ở chế độ Sắc thuốc thang vẫn được dùng. Bệnh nhân không có sắc thuốc thang thì bỏ qua; y lệnh thường lỗi thì không chạy sắc. Chạy nhiều bệnh nhân (nút **Chạy**) cũng vậy. Kết quả sắc xem ở thẻ **Kết quả** khi chọn **Sắc thuốc thang**.
 - **Tick sẵn Cao thông mạch và Cồn xoa bóp**: khi mở bệnh nhân, tool đọc các y lệnh thường (có cả Diễn biến bệnh và Diễn biến PHCN) gần đây. Ngày nào có **Cao thông mạch** thì tick sẵn ô **+** ở ngày đó **+ 3 ngày**; có **Cồn xoa bóp** thì **+ 5 ngày** (ví dụ ngày 13 có Cao thông mạch thì ngày 16 được tick). Dưới tên thuốc ghi rõ "Tự tick N… (vì ngày … có)". Anh/chị vẫn bỏ tick hoặc tick thêm được trước khi bấm Sao chép. Số ngày này đổi ở **Cài đặt → Thêm thuốc khi sao chép → Tự tick sau (ngày)**; để trống là không tự tick.
