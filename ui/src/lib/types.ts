@@ -19,8 +19,10 @@ export interface Lists { at: number; bacSi: { id: string; name: string; login: s
 export interface LoadResult { rows: OrderRow[]; source: Order | null; skipped: { id: string; tg: string; status: string }[]; lists?: Lists | null; auto?: AutoTicks | null }
 export interface Settings {
   baseUrl: string; autoComplete: boolean; stepMode: boolean; hinhThuc: string; defaultDays: number;
-  bacSiFav: { id: string; name: string }[]; esBase: string; gpuOff: boolean; themThuoc: AddItem[];
+  bacSiFav: { id: string; name: string }[]; esBase: string; gpuOff: boolean; themThuoc: AddItem[]; autoLogin?: boolean;
 }
+/** The saved OneMES account as the UI sees it (never the password). */
+export interface LoginInfo { user: string; saved: boolean; failed: string }
 /** A drug the user can tick to add on a day, through Kê Tây y/VTYT. */
 export interface AddItem { id: string; label: string; kho: string; ten: string; tim: string; sl: string; cachDung: string; loai: string; tuTick?: string }
 export interface Template { id: string; name: string; keys: string[] }
@@ -33,7 +35,7 @@ export interface DayEdit {
 /** addsFor: the source the Thêm thuốc ticks were made for; another source ticks again. */
 export interface Choice { days: number; deletions: string[][]; edits?: (DayEdit | null)[]; adds?: string[][]; addsFor?: string; savedAt?: number }
 /** Thêm thuốc ticks the tool made from the recent usual orders. */
-export interface AutoTicks { adds: string[][]; why: { day: number; id: string; from: string }[]; for: string }
+export interface AutoTicks { adds: string[][]; why: { day: number; id: string; from: string }[]; for: string; dels?: string[][] }
 export interface CheckItem {
   kind: 'thuoc' | 'dvkt'; id: string; base: string; group: string; name: string; hamLuong?: string; dvt?: string; duongDung?: string;
   sl: string; cachDung?: string; moTa?: string; thoiGian?: string; noiThucHien?: string; doiTuong: string; trangThai: string;
@@ -54,7 +56,7 @@ export interface BaSchema { source: string; groups: BaGroup[] }
 export interface Data {
   settings: Settings; templates: Template[]; choices: Record<string, Choice>; runs: Record<string, RunInfo>;
   lists: Lists | null; benhAn: Record<string, BenhAnDraft>; benhAnMaus: BenhAnMau[]; benhAnMauId: string | null;
-  dvScans?: Record<string, DvScan>;
+  dvScans?: Record<string, DvScan>; login?: LoginInfo;
 }
 export interface BenhAnMau { id: string; name: string; values: BaValues; at: number }
 export interface MauList { benhAnMaus: BenhAnMau[]; benhAnMauId: string | null; id?: string }
@@ -62,7 +64,7 @@ export interface UpdateInfo { version: string; kind: string; url: string; downlo
 export interface AppState {
   busy: boolean; task: string; stepWaiting: string | null;
   progress: { patient: string; index: number; total: number } | null;
-  viewUrl: string; canGoBack?: boolean; viewZoom?: number; update: UpdateInfo | null;
+  viewUrl: string; canGoBack?: boolean; viewZoom?: number; update: UpdateInfo | null; login?: LoginInfo;
 }
 export interface LogEntry { at: number; level: 'info' | 'ok' | 'warn' | 'error'; msg: string }
 export interface Plan { patient: Patient; kind?: Kind; sourceId?: string; days: number; deletions?: string[][]; baseDeletions?: string[][]; edits?: (DayEdit | null)[]; adds?: string[][]; addsFor?: string }

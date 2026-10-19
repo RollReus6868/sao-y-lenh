@@ -2,7 +2,7 @@
 // calls OneMES's own functions; it never calls the server directly.
 // Every function returns plain data so it survives structured clone.
 (function () {
-  if (window.__SYL && window.__SYL.version === 12) return;
+  if (window.__SYL && window.__SYL.version === 13) return;
 
   const txt = (el) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
   const norm = (s) =>
@@ -18,6 +18,14 @@
     return el.offsetParent !== null || cs.position === 'fixed';
   };
   const byId = (id) => document.getElementById(id);
+  // Text drawn in red (OneMES marks some Cho thuốc/VTYT rows of a new copy that way).
+  const isRedText = (el) => {
+    if (!el) return false;
+    const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(el).color || '');
+    if (!m) return false;
+    const [r, g, b] = [+m[1], +m[2], +m[3]];
+    return r >= 170 && g <= 120 && b <= 120 && r - Math.max(g, b) >= 80;
+  };
   // Column positions from the first header row, honouring colspan.
   const headerCols = (tbl) => {
     const cols = [];
@@ -64,6 +72,61 @@
       noitruid: typeof window.noitruid === 'string' ? window.noitruid : '',
       busy: isBusy(),
     };
+  }
+
+  // ---------- đăng nhập (0.6.0) ----------
+  // The login page: a visible password box, the account box before it and the button
+  // that sends them. Nothing here reads a password back.
+  function loginParts() {
+    const pw = [...document.querySelectorAll('input[type=password]')].find(isShown);
+    if (!pw) return null;
+    const scope = pw.form || document;
+    const before = (x) => !!(x.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const texts = [...scope.querySelectorAll('input')].filter((x) => /^(text|email|tel|)$/i.test(x.getAttribute('type') || '') && isShown(x) && !x.readOnly && !x.disabled);
+    const user = texts.filter(before).pop() || texts[0] || null;
+    const btns = [...scope.querySelectorAll('button, input[type=submit], input[type=button], input[type=image], a')].filter(isShown);
+    const label = (b) => norm(b.value || b.textContent || b.getAttribute('title') || b.getAttribute('alt') || '');
+    const btn =
+      btns.find((b) => /đăng nhập|dang nhap|login|log in|sign in/.test(label(b))) ||
+      btns.find((b) => b.tagName === 'BUTTON' ? (b.getAttribute('type') || 'submit') === 'submit' : b.type === 'submit') ||
+      null;
+    return { pw, user, btn, form: pw.form || null };
+  }
+  function loginMessage() {
+    const sel = '.validation-summary-errors, .field-validation-error, .alert, .error, .text-danger, [id*="lblError" i], [id*="lblMsg" i], [id*="lblThongBao" i], [class*="error" i]';
+    const out = [];
+    for (const el of document.querySelectorAll(sel)) {
+      const t = txt(el);
+      if (t && isShown(el) && !out.includes(t)) out.push(t);
+    }
+    const sw = document.querySelector('.sweet-alert.visible, .swal2-popup');
+    if (sw && isShown(sw)) out.push(txt(sw.querySelector('p, .swal2-html-container') || sw));
+    return out.join(' · ').slice(0, 200);
+  }
+  function loginForm() {
+    const p = loginParts();
+    return { ok: !!p, user: !!(p && p.user), button: !!(p && p.btn), message: loginMessage() };
+  }
+  function doLogin(user, pass) {
+    const p = loginParts();
+    if (!p || !p.user) return { ok: false, error: 'Không thấy ô tài khoản / mật khẩu' };
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    for (const [el, v] of [[p.user, user], [p.pw, pass]]) {
+      el.focus();
+      setter.call(el, v);
+      ['input', 'change', 'keyup', 'blur'].forEach((t) => el.dispatchEvent(new Event(t, { bubbles: true })));
+    }
+    if (p.btn) {
+      p.btn.click();
+      return { ok: true, how: 'button' };
+    }
+    if (p.form) {
+      if (p.form.requestSubmit) p.form.requestSubmit();
+      else p.form.submit();
+      return { ok: true, how: 'form' };
+    }
+    p.pw.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+    return { ok: true, how: 'enter' };
   }
 
   function isBusy() {
@@ -368,6 +431,8 @@
         cachDung: g('cachDung'),
         doiTuong: g('doiTuong'),
         trangThai: g('trangThai'),
+        // The whole row in red, not a red note inside a cell (0.6.0).
+        red: tc.ten >= 0 && isRedText(tds[tc.ten]) && (tc.kho < 0 || isRedText(tds[tc.kho])),
       });
     }
 
@@ -1225,7 +1290,9 @@
   }
 
   window.__SYL = {
-    version: 12,
+    version: 13,
+    loginForm,
+    doLogin,
     where,
     readPatients,
     listLink,

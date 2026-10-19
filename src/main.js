@@ -1,7 +1,7 @@
 // Electron main process: the window, the embedded OneMES view, and the commands the
 // UI calls. Automation lives in driver.js; this file only wires it up.
 'use strict';
-const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, net } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, net, safeStorage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { createStore } = require('./store');
@@ -94,6 +94,8 @@ function setupView() {
   wc.on('did-navigate', upd);
   wc.on('did-navigate-in-page', upd);
   wc.on('did-finish-load', upd);
+  wc.on('did-finish-load', () => setTimeout(checkLoginPage, 400));
+  keepSessionCookie(ses);
   // Zoom: kept in the settings and applied again on every page, since Chromium keeps it per site.
   wc.on('did-navigate', () => applyZoom());
   wc.on('dom-ready', () => applyZoom());
@@ -130,6 +132,112 @@ function setZoom(z) {
   applyZoom();
   push({ viewZoom: v });
   return v;
+}
+
+// ---------- đăng nhập OneMES (0.6.0) ----------
+// The account is kept in data.json with the password encrypted by the system
+// (safeStorage); the UI only ever sees the account name.
+let loginP = null;
+let loginFailed = ''; // why the last automatic login failed; no new try until it changes
+let typed = null; // { user, pass, at } typed by the user into the login page, saved once it works
+let wasLogin = false;
+
+function saveLogin(user, pass) {
+  user = String(user || '').trim();
+  if (!user || !pass) throw new Error('Cần cả tài khoản và mật khẩu');
+  let secret = '';
+  let enc = 'b64';
+  if (safeStorage.isEncryptionAvailable()) {
+    secret = safeStorage.encryptString(String(pass)).toString('base64');
+    enc = 'safe';
+  } else secret = Buffer.from(String(pass), 'utf8').toString('base64');
+  store.set('login', { user, secret, enc, at: Date.now() });
+  loginFailed = '';
+  push({ login: publicLogin() });
+}
+function readLogin() {
+  const l = store.get().login;
+  if (!l || !l.user || !l.secret) return null;
+  try {
+    const pass = l.enc === 'safe' ? safeStorage.decryptString(Buffer.from(l.secret, 'base64')) : Buffer.from(l.secret, 'base64').toString('utf8');
+    return { user: l.user, pass };
+  } catch {
+    return null;
+  }
+}
+function publicLogin() {
+  const l = store.get().login;
+  return { user: (l && l.user) || '', saved: !!(l && l.secret), failed: loginFailed };
+}
+function publicData() {
+  const { login, ...rest } = store.get();
+  return { ...rest, login: publicLogin() };
+}
+const autoLoginOn = () => store.get().settings.autoLogin !== false;
+
+// One login at a time, whoever asks (the page watcher or a running job).
+function ensureLoggedIn() {
+  if (loginP) return loginP;
+  const c = readLogin();
+  if (!c || !autoLoginOn() || loginFailed) return Promise.resolve(false);
+  loginP = (async () => {
+    log('info', `Tự đăng nhập OneMES (${c.user})`);
+    const d = createDriver({ exec: (code) => view.webContents.executeJavaScript(code, true), loadURL, log, timeout: 20000 });
+    const r = await d.login(c.user, c.pass).catch((e) => ({ ok: false, error: errMsg(e) }));
+    if (r.ok) {
+      if (!r.already) log('ok', 'Đã tự đăng nhập OneMES');
+      return true;
+    }
+    loginFailed = r.error || 'không rõ lý do';
+    log('warn', `Tự đăng nhập không được: ${loginFailed}. Hãy kiểm tra tài khoản trong Cài đặt hoặc đăng nhập tay một lần`);
+    push({ login: publicLogin() });
+    return false;
+  })().finally(() => (loginP = null));
+  return loginP;
+}
+
+// After each page: the login page is answered with the saved account; a page past it
+// right after the user typed an account keeps that account for next time.
+async function checkLoginPage() {
+  if (!view || view.webContents.isDestroyed()) return;
+  const d = createDriver({ exec: (code) => view.webContents.executeJavaScript(code, true), loadURL, log });
+  const w = await d.where().catch(() => null);
+  if (!w) return;
+  if (w.page === 'login') {
+    wasLogin = true;
+    if (typed && Date.now() - typed.at > 1500) typed = null; // the typed account did not get in
+    if (!loginP && readLogin() && autoLoginOn() && !loginFailed) ensureLoggedIn();
+    return;
+  }
+  if (wasLogin) {
+    wasLogin = false;
+    if (loginFailed) {
+      loginFailed = '';
+      push({ login: publicLogin() });
+    }
+    if (typed && autoLoginOn()) {
+      const c = readLogin();
+      if (!c || c.user !== typed.user || c.pass !== typed.pass) {
+        try {
+          saveLogin(typed.user, typed.pass);
+          log('ok', `Đã nhớ tài khoản OneMES ${typed.user}, lần sau tool tự đăng nhập`);
+        } catch {}
+      }
+    }
+  }
+  typed = null;
+}
+
+// OneMES keeps its session in a cookie that lives only while the app is open. Keep it
+// for 12 hours so closing and opening the tool does not ask for the login again.
+function keepSessionCookie(ses) {
+  ses.cookies.on('changed', (_e, c, _cause, removed) => {
+    if (removed || !c.session || !/session/i.test(c.name)) return;
+    const url = `http${c.secure ? 's' : ''}://${String(c.domain || '').replace(/^\./, '')}${c.path || '/'}`;
+    ses.cookies
+      .set({ url, name: c.name, value: c.value, path: c.path, secure: c.secure, httpOnly: c.httpOnly, expirationDate: Math.floor(Date.now() / 1000) + 12 * 3600 })
+      .catch(() => {});
+  });
 }
 
 function goHome() {
@@ -172,6 +280,7 @@ function makeDriver() {
   return createDriver({
     exec: (code) => view.webContents.executeJavaScript(code, true),
     loadURL,
+    login: () => ensureLoggedIn(),
     listUrl: () => lastListUrl,
     listRole: () => store.get().settings.listRole || '',
     log,
@@ -205,8 +314,8 @@ const commands = {
   init: () => ({
     version: pkg.version,
     platform: process.platform,
-    data: store.get(),
-    state,
+    data: publicData(),
+    state: { ...state, login: publicLogin() },
     log: logBuf.slice(-300),
     logDir: store.logDir,
     gpuOff,
@@ -223,6 +332,29 @@ const commands = {
     return r;
   },
   'templates:set': (t) => store.setTemplates(t),
+  'login:set': ({ user, pass }) => {
+    saveLogin(user, pass);
+    log('ok', `Đã lưu tài khoản OneMES ${String(user).trim()}`);
+    return publicLogin();
+  },
+  'login:clear': () => {
+    store.set('login', null);
+    loginFailed = '';
+    push({ login: publicLogin() });
+    log('info', 'Đã xóa tài khoản OneMES đã lưu');
+    return publicLogin();
+  },
+  'login:now': async () => {
+    loginFailed = '';
+    if (!readLogin()) throw new Error('Chưa lưu tài khoản OneMES');
+    const w = await makeDriver().where().catch(() => null);
+    if (!w || w.page !== 'login') {
+      push({ login: publicLogin() });
+      return { ok: true, already: true, login: publicLogin() };
+    }
+    const ok = await ensureLoggedIn();
+    return { ok, login: publicLogin() };
+  },
   'choice:set': ({ id, choice }) => store.setChoice(id, choice),
   'view:bounds': (b) => applyBounds(b),
   'view:visible': (v) => {
@@ -311,7 +443,10 @@ const commands = {
             // Ticks saved for another source are stale: tick again from the recent orders.
             if (p.kind !== 'sac' && p.addsFor !== r.source.id) {
               const t = await ticksFor(d, p.patient, r, p.baseDeletions);
-              if (t) p.adds = t.adds.slice(0, p.days);
+              if (t) {
+                p.adds = t.adds.slice(0, p.days);
+                p.deletions = mergeAutoDels(r.source, p.deletions || [], t.dels, store.get().settings.themThuoc || [], p.days);
+              }
             }
           }
           const r = await d.run(p);
@@ -462,7 +597,7 @@ function keepDeleted(old, fresh) {
 
 // Thêm thuốc ticks from the recent usual orders; null when nothing could be read.
 async function ticksFor(d, patient, r, deletions) {
-  const catalog = (store.get().settings.themThuoc || []).filter((it) => +it.tuTick > 0);
+  const catalog = store.get().settings.themThuoc || [];
   if (!catalog.length) return null;
   try {
     const t = await d.autoTicks(r.rows, r.source, catalog, deletions || []);
@@ -470,6 +605,8 @@ async function ticksFor(d, patient, r, deletions) {
       const it = catalog.find((x) => x.id === w.id);
       log('info', `${patient.hoTen}: tick sẵn ${it ? it.label : w.id} ngày ${w.day} (ngày ${w.from} có, +${it ? it.tuTick : '?'} ngày)`);
     }
+    const delNames = [...new Set(t.dels.flat())].map((k) => (r.source.thuoc.find((x) => x.key === k) || {}).name).filter(Boolean);
+    if (delNames.length) log('info', `${patient.hoTen}: y lệnh nguồn đã có ${delNames.join(', ')}, tick xóa ở các ngày sao chép (trừ ngày đến hạn dùng lại)`);
     return { ...t, for: r.source.id };
   } catch (e) {
     if (e.stopped) throw e;
@@ -520,6 +657,16 @@ async function sacAfter(d, p) {
     if (plan) store.setRun(key, { ok: false, message: msg, ...(part ? runRecord(part) : {}), check, auto: true });
     return { ok: false, message: msg, stopped: !!e.stopped };
   }
+}
+
+// Deletions for a new source (0.6.0): the user's saved ones, where the Thêm thuốc drugs
+// follow the tool's plan (deleted from the copies unless due again that day).
+function mergeAutoDels(source, dels, auto, catalog, days) {
+  const isCat = (key) => {
+    const it = source.thuoc.find((x) => x.key === key);
+    return !!it && catalog.some((c) => String(it.name).toLowerCase().startsWith(String(c.ten).toLowerCase()));
+  };
+  return Array.from({ length: days }, (_, i) => [...new Set([...(dels[i] || []).filter((k) => !isCat(k)), ...((auto && auto[i]) || [])])]);
 }
 
 function pickSettings() {
@@ -609,6 +756,10 @@ app.whenReady().then(() => {
     downloadDir: path.join(app.getPath('temp'), 'SaoYLenh-update'),
     quit: () => setTimeout(() => app.quit(), 300),
     log,
+  });
+  ipcMain.on('syl:login-typed', (e, v) => {
+    if (!view || e.sender !== view.webContents || !v || !v.user || !v.pass) return;
+    typed = { user: String(v.user).trim(), pass: String(v.pass), at: Date.now() };
   });
   ipcMain.handle('call', async (_e, cmd, payload) => {
     const fn = commands[cmd];

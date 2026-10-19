@@ -191,6 +191,8 @@ const api = {
     const f = findOrder(id);
     if (!f) return { Error: true, InfoMessage: 'Không tìm thấy y lệnh' };
     const n = copyOrder(f.o, 1);
+    // Rows OneMES draws in red on the new copy (0.6.0): names starting with these.
+    for (const x of n.thuoc) if ((state.redOnCopy || []).some((r) => x.name.startsWith(r))) x.red = true;
     f.p.orders.push(n);
     state.log.push(['saoChep', id, n.id]);
     return { Error: false, RetExtraParam1: n.id };
@@ -415,8 +417,9 @@ function page(wpid, query, host) {
 <script src="/vendor/jquery.min.js"></script><script src="/vendor/sweetalert.min.js"></script><script src="/vendor/toastr.min.js"></script>
 <script src="/vendor/select2.full.min.js"></script>
 </head><body>`;
+  const us = query.get('usid') ? '&usid=' + encodeURIComponent(query.get('usid')) : '';
   if (wpid === 'danhsachdieutrinoitrudraw') {
-    return `${head}<div id="divHeader"><a href="/home.aspx?scope=sys&wpid=danhsachdieutrinoitrudraw">Ds Điều trị nội trú</a></div>
+    return `${head}<div id="divHeader"><a href="/home.aspx?scope=sys&wpid=danhsachdieutrinoitrudraw${us}">Ds Điều trị nội trú</a></div>
 <div id="divFilter"><select id="drpSelectKhoaPhong"><option value="k1">Khoa Nội B</option></select>
 <input id="txtTimKiem" placeholder="Tìm kiếm"><button id="btnTimKiem" onclick="FilterChange()">Tìm kiếm</button></div>
 <div id="divWebPartContent"><div id="divListForm"><div id="divToaThuocDanhSachContent"></div></div></div>
@@ -426,7 +429,7 @@ function page(wpid, query, host) {
     const nt = query.get('noitruid') || '';
     return `${head}<div id="divHeader" class="mock-head">HỒ SƠ ĐIỀU TRỊ: KHOA NỘI B
  <a id="showDsYLenh" onclick="onshowDsYLenh(this);" href="javascript:void(0)">Lịch sử y lệnh</a>
- <a href="/home.aspx?scope=sys&wpid=danhsachdieutrinoitrudraw">Về danh sách</a>
+ <a href="/home.aspx?scope=sys&wpid=danhsachdieutrinoitrudraw${us}">Về danh sách</a>
  <a id="showThamKham" onclick="onshowThamKham(this)" href="javascript:void(0)">Thêm y lệnh mới</a>
  <a onclick="onShowLichSuChung(this)" href="javascript:void(0)">Xem kết quả</a>
  <span class="mock-menu">Tổng kết: <a onclick="onShowTtBenhAn('${(state.patients.find((x) => x.noitruid === nt) || {}).benhAnId || ''}', 'divNoiTruContent');">Lập bìa bệnh án</a></span></div>
@@ -476,7 +479,7 @@ function CallInitSelect2ESOW() {}
   // The real start page has a dashboard widget whose table is also called tblNoiTru
   // (Mã BN, Tên bệnh nhân, Giường...), which must not be taken for the patient list.
   return `${head}<div id="divHeader">Trang chủ OneMES (mô phỏng)
-<a href="/home.aspx?scope=sys&wpid=danhsachdieutrinoitrudraw">Điều trị nội trú · Ds Điều trị nội trú</a></div>
+<a href="/home.aspx?scope=sys&wpid=danhsachdieutrinoitrudraw${us}">Điều trị nội trú · Ds Điều trị nội trú</a></div>
 <div id="divDanhSachContent"><table id="tblNoiTru"><thead><tr><th>Mã BN</th><th>Tên bệnh nhân</th><th>Giường</th><th>Chẩn đoán</th><th>Mức độ</th><th>Ghi chú</th></tr></thead>
 <tbody><tr><td>BN001</td><td>Nguyễn Văn A</td><td>01</td><td>Đau lưng</td><td></td><td></td></tr></tbody></table></div></body></html>`;
 }
@@ -496,12 +499,21 @@ function readBody(req) {
 
 const DELAY = Number(process.env.MOCK_DELAY || 60);
 
+// Sessions (0.6.0). Each login gets ASP.NET_SessionId=mock<n> and usid 10.0.0.1_s<n>.
+// In strict mode (/api/__session {strict:true}, like the real site as the tool sees it)
+// only the newest session counts and an address carrying another usid lands on the login page.
+const sess = { n: 0, strict: false, logins: 0, badPass: '' };
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
-  const authed = /(?:^|;\s*)ASP\.NET_SessionId=mock/.test(req.headers.cookie || '');
+  const sidm = /(?:^|;\s*)ASP\.NET_SessionId=mock(\d*)/.exec(req.headers.cookie || '');
+  const authed = !!sidm && (!sess.strict || Number(sidm[1] || 0) === sess.n);
   if (u.pathname === '/login.aspx') {
     if (req.method === 'POST') {
-      return send(res, 302, '', 'text/plain', { 'Set-Cookie': 'ASP.NET_SessionId=mock; Path=/', Location: '/home.aspx?scope=sys&lang=vi' });
+      const f = new URLSearchParams(await readBody(req));
+      if (!f.get('u') || (sess.badPass && f.get('p') === sess.badPass)) return send(res, 200, LOGIN_PAGE.replace('<h3>', '<div class="text-danger">Sai tên tài khoản hoặc mật khẩu</div><h3>'));
+      sess.n++;
+      sess.logins++;
+      return send(res, 302, '', 'text/plain', { 'Set-Cookie': `ASP.NET_SessionId=mock${sess.n}; Path=/`, Location: `/home.aspx?scope=sys&lang=vi&usid=10.0.0.1_s${sess.n}` });
     }
     return send(res, 200, LOGIN_PAGE);
   }
@@ -517,6 +529,8 @@ const server = http.createServer(async (req, res) => {
   }
   if (u.pathname === '/home.aspx') {
     if (!authed) return send(res, 302, '', 'text/plain', { Location: '/login.aspx' });
+    const usid = u.searchParams.get('usid');
+    if (sess.strict && usid && usid !== '10.0.0.1_s' + sess.n) return send(res, 302, '', 'text/plain', { Location: '/login.aspx' });
     return send(res, 200, page(u.searchParams.get('wpid'), u.searchParams, req.headers.host));
   }
   if (u.pathname.startsWith('/es/') && req.method === 'POST') {
@@ -544,8 +558,17 @@ const server = http.createServer(async (req, res) => {
   }
   if (u.pathname.startsWith('/api/')) {
     const name = u.pathname.slice(5);
+    if (name === '__session') {
+      const b = req.method === 'POST' ? JSON.parse((await readBody(req)) || '{}') : {};
+      if ('strict' in b) sess.strict = !!b.strict;
+      if ('badPass' in b) sess.badPass = b.badPass || '';
+      if (b.expire) sess.n++; // the server forgets the open session
+      return send(res, 200, JSON.stringify(sess), 'application/json');
+    }
     if (name === '__reset') {
       state = freshState();
+      sess.strict = false;
+      sess.badPass = '';
       return send(res, 200, '{}', 'application/json');
     }
     if (name === '__state') return send(res, 200, JSON.stringify(state), 'application/json');

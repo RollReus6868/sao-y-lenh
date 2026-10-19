@@ -339,6 +339,10 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     const caoKey = lpA.source.thuoc.find((x) => x.name === 'CAO THÔNG MẠCH').key;
     tk = await d.autoTicks(lpA.rows, lpA.source, CAT);
     check(tk.adds[2].includes('cao') && tk.adds[3].includes('cao'), 'tick sẵn: Cao in the source → day 3 (12+3) and day 4 (day 1 keeps it): ' + JSON.stringify(tk.adds));
+    // 0.6.0: the copies drop the Cao the source has, except on the days it is due again.
+    check(JSON.stringify(tk.dels) === JSON.stringify([[], [caoKey], [], []]), 'tick xóa: Cao from the source deleted on day 2 only (days 1, 3, 4 are due): ' + JSON.stringify(tk.dels));
+    const tkD = planTicks({ history: [], srcDate: new Date(2026, 9, 12, 7), srcThuoc: [{ name: 'CỒN XOA BÓP', key: 't|CỒN XOA BÓP|x#1' }], catalog: [{ ...ITEMS[0], tuTick: '' }] });
+    check(tkD.dels.every((x) => x.length === 1 && x[0] === 't|CỒN XOA BÓP|x#1') && tkD.adds.every((x) => !x.length), 'tick xóa: a drug with no Tự tick sau is deleted from every copy');
     tk = await d.autoTicks(lpA.rows, lpA.source, CAT, [[caoKey], [caoKey], [caoKey], [caoKey]]);
     check(tk.adds[2].includes('cao') && tk.adds[3].includes('cao'), 'tick sẵn: deleting it from the copies keeps the ticks from the source day and day 1 tick: ' + JSON.stringify(tk.adds));
     check(JSON.stringify((await d.autoTicks(lpA.rows, lpA.source, ITEMS)).adds) === '[[],[],[],[]]', 'tick sẵn: nothing without Tự tick sau');
@@ -369,7 +373,7 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     rd = await d.clsRead(pts[1], ['10/10/2026', '06/10/2026']);
     check(/^Kết quả CLS:\nNgày 10\/10:\n- Công thức máu/.test(rd.text) && /\nNgày 06\/10:\n- Hóa sinh máu: Cholesterol toàn phần: 6.1 mmol\/L\n- Chụp X-quang/.test(rd.text), 'CLS: several days get a heading each: ' + JSON.stringify(rd.text));
     rd = await d.clsRead(pts[1], ['08/10/2026']);
-    check(rd.text === 'Kết quả CLS:\nCác chỉ số trong giới hạn bình thường' && rd.results[0].items.length === 0, 'CLS: nothing abnormal says so: ' + JSON.stringify(rd.text));
+    check(/^Kết quả CLS:\n[^\n:]+: Các chỉ số trong giới hạn bình thường\.$/.test(rd.text) && rd.text.includes(rd.results[0].name + ': Các chỉ số') && rd.results[0].items.length === 0, 'CLS: nothing abnormal names the test: ' + JSON.stringify(rd.text));
     const { clsInRange } = require('../src/driver');
     const R = [['11.2', '4-10', false], ['0,42', '0.36 - 0.50', true], ['10', '4-10', true], ['5', '< 5', false], ['70', '≥ 60', true], ['-3', '-2 - 2', false], ['100', 'Nam: 130-170; Nữ: 120-150', false], ['160', 'Nam: 130-170; Nữ: 120-150', null], ['Âm tính', 'Âm tính', true], ['12', '', null]];
     for (const [v, ref, want] of R) check(clsInRange(v, ref) === want, `CLS: ${v} in "${ref}" -> ${want}`);
@@ -386,11 +390,31 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     const { clsText } = require('../src/driver');
     const tx = clsText([{ kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm nước tiểu', items: [{ name: 'Nitrit (NIT)', value: 'Positive ', unit: 'mg/dL', ref: 'Negative' }, { name: 'Protein (PRO)', value: 'Trace', unit: 'g/L', ref: 'Negative' }, { name: 'Tỷ trọng (SG)', value: '1.035', unit: '', ref: '1.01-1.025' }] }, { kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm hóa sinh', items: [{ name: 'Glucose', value: '12.06', unit: 'mmol/L', ref: '3.9-6.4' }] }]);
     check(tx === 'Kết quả CLS:\nNước tiểu: NIT: Positive; PRO: Trace; Tỷ trọng (SG): 1.035\nHóa sinh máu: Glucose: 12.06 mmol/L', 'CLS: Positive / Trace without unit: ' + JSON.stringify(tx));
+    const tn = clsText([{ kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm huyết học', items: [{ name: 'WBC', value: '12', unit: 'G/L' }], total: 20 }, { kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm hóa sinh', items: [], total: 8 }, { kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm huyết học', items: [], total: 3 }, { kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm nước tiểu', items: [], total: 0 }]);
+    check(tn === 'Kết quả CLS:\nCông thức máu: WBC: 12 G/L\nXét nghiệm hóa sinh: Các chỉ số trong giới hạn bình thường.', 'CLS: a normal test gets its own line, not when its group has values or nothing was read: ' + JSON.stringify(tn));
     // The CLS order on 13/10 does not block copying the usual order onto that day.
     ({ source } = await d.loadPatient(pts[1]));
     before = ids(1);
     r = await d.run({ patient: pts[1], sourceId: source.id, days: 1, deletions: [[]] });
     check(r.ok && newOrders(1, before).length === 1 && source.dienBienPHCN, 'CLS: usual copy still allowed on the CLS day');
+
+    // --- dòng thuốc/VTYT màu đỏ trên bản sao: tự xóa ở mọi ngày (0.6.0) ---
+    console.log('dòng đỏ');
+    m.mock.reset();
+    pts = await d.scanPatients();
+    m.mock.getState().redOnCopy = ['Kim châm'];
+    ({ source } = await d.loadPatient(pts[1]));
+    before = ids(1);
+    r = await d.run({ patient: pts[1], sourceId: source.id, days: 3, deletions: [[], [], []] });
+    fresh = newOrders(1, before);
+    check(r.ok && fresh.length === 3 && fresh.every((o) => !names(o).some((n) => n.startsWith('Kim châm'))), 'red rows: Kim châm deleted from every day: ' + fresh.map((o) => names(o).length).join());
+    check(fresh.every((o) => names(o).length === source.thuoc.length + source.dvkt.length - 1), 'red rows: nothing else deleted');
+    check((r.redDeleted || []).some((n) => /Kim châm/.test(n)) && logs.some((l) => /màu đỏ/.test(l)), 'red rows: reported in the result and the log: ' + JSON.stringify(r.redDeleted) + logs.filter((l) => /đỏ|Ngày 1/.test(l)).slice(-5).join(' | '));
+    const vr = await d.verify(pts[1], r.expect, r.days.map((x) => ({ day: x.day, id: x.id })));
+    check(vr.days.every((x) => !x.problems.length && !x.warnings.length), 'red rows: the check finds no problem: ' + JSON.stringify(vr.days.map((x) => [x.problems, x.warnings])));
+    m.mock.getState().redOnCopy = [];
+    const oN = await d.openOrder(fresh[0].id);
+    check(oN.thuoc.length && oN.thuoc.every((x) => !x.red), 'red rows: a normal row is not red');
 
     // --- Ds Điều trị nội trú from start pages without the link ---
     console.log('nút Ds');

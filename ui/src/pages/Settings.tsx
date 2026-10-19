@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, FileText, Globe, Pencil, Monitor, Palette, Pill as PillIcon, Play, Plus, RefreshCw, RotateCcw, Settings as Cog, Star, Stethoscope, Trash2, Upload, X } from 'lucide-react';
+import { Download, FileText, Globe, KeyRound, LogIn, Pencil, Monitor, Palette, Pill as PillIcon, Play, Plus, RefreshCw, RotateCcw, Settings as Cog, Star, Stethoscope, Trash2, Upload, X } from 'lucide-react';
 import { cn } from '@/kit/cn';
 import { Button, Input, PageHeader, Segmented, Select, SettingsRow, SettingsSection, Switch } from '@/kit/ui';
 import { themes, useTheme } from '@/kit/theme';
 import { useApp } from '@/lib/useApp';
-import type { AddItem, Data, MauList, Settings } from '@/lib/types';
+import type { AddItem, Data, LoginInfo, MauList, Settings } from '@/lib/types';
 import { DEFAULT_THUOC } from '@/lib/thuoc';
 import { filledCount, templateFromFile } from '@/lib/benhAn';
 
@@ -43,6 +43,8 @@ export function SettingsPage() {
           </div>
           <p className="text-xs text-muted-foreground">Chỉ đổi khi bệnh viện đổi địa chỉ máy chủ.</p>
         </SettingsSection>
+
+        <LoginSection autoLogin={s.autoLogin !== false} onAuto={(v) => put({ autoLogin: v })} />
 
         <SettingsSection icon={<Play />} title="Khi chạy" color="emerald">
           <SettingsRow title="Tự bấm Hoàn tất" text="Tắt để các ngày 2+ ở trạng thái Mới cho anh/chị tự xem">
@@ -286,6 +288,57 @@ function MauSection({ data, setData }: { data: Data; setData: React.Dispatch<Rea
       <div>
         <Button variant="outline" size="sm" onClick={() => file.current?.click()}><Upload /> Thêm mẫu từ file HTML</Button>
       </div>
+    </SettingsSection>
+  );
+}
+
+// The OneMES account the tool logs in with whenever OneMES shows its login page (0.6.0).
+function LoginSection({ autoLogin, onAuto }: { autoLogin: boolean; onAuto: (v: boolean) => void }) {
+  const { data, state, call, toast } = useApp();
+  const info: LoginInfo = state.login || data?.login || { user: '', saved: false, failed: '' };
+  const [user, setUser] = useState(info.user);
+  const [pass, setPass] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setUser(info.user), [info.user]);
+  const save = async () => {
+    setBusy(true);
+    const r = await call<LoginInfo>('login:set', { user: user.trim(), pass }).catch(() => null);
+    setBusy(false);
+    if (r) {
+      setPass('');
+      toast('success', `Đã lưu tài khoản ${r.user}`);
+    }
+  };
+  const now = async () => {
+    setBusy(true);
+    const r = await call<{ ok: boolean; already?: boolean }>('login:now').catch(() => null);
+    setBusy(false);
+    if (r) toast(r.ok ? 'success' : 'warning', r.already ? 'OneMES đang đăng nhập sẵn' : r.ok ? 'Đã đăng nhập OneMES' : 'Chưa đăng nhập được, xem Nhật ký');
+  };
+  const clear = async () => {
+    await call('login:clear').catch(() => null);
+    setUser('');
+    setPass('');
+  };
+  return (
+    <SettingsSection icon={<KeyRound />} title="Tài khoản OneMES" color="emerald">
+      <SettingsRow title="Tự đăng nhập" text="Khi OneMES hiện trang đăng nhập (mở tool, hết phiên, chuyển mục), tool tự điền tài khoản đã lưu và đăng nhập rồi làm tiếp">
+        <Switch checked={autoLogin} onChange={onAuto} label="Tự đăng nhập" />
+      </SettingsRow>
+      <div className="text-sm" data-login-status>
+        {info.saved ? <>Đã lưu tài khoản <b>{info.user}</b>. Mật khẩu được mã hóa trên máy này.</> : 'Chưa lưu tài khoản.'}
+        {info.failed && <div className="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">Lần tự đăng nhập trước không được: {info.failed}</div>}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input value={user} onChange={(e) => setUser(e.target.value)} placeholder="Tên tài khoản" autoComplete="off" data-field="login-user" />
+        <Input type="password" value={pass} onChange={(e) => setPass(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && user.trim() && pass && save()} placeholder={info.saved ? 'Mật khẩu mới (nếu đổi)' : 'Mật khẩu'} autoComplete="new-password" data-field="login-pass" />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" disabled={busy || !user.trim() || !pass} onClick={save} data-action="login-save"><KeyRound /> Lưu tài khoản</Button>
+        {info.saved && <Button variant="outline" size="sm" disabled={busy || state.busy} onClick={now} data-action="login-now"><LogIn /> Đăng nhập ngay</Button>}
+        {info.saved && <Button variant="ghost" size="sm" onClick={clear} data-action="login-clear"><Trash2 /> Xóa tài khoản đã lưu</Button>}
+      </div>
+      <p className="text-xs text-muted-foreground">Cũng có thể đăng nhập một lần trong trang Trình duyệt: khi đăng nhập được, tool nhớ tài khoản đó (khi Tự đăng nhập đang bật).</p>
     </SettingsSection>
   );
 }

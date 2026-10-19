@@ -64,7 +64,7 @@ function createDriver(host) {
 
   async function call(fn, ...args) {
     const a = args.map((x) => JSON.stringify(x)).join(',');
-    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==12){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
+    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==13){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
   }
 
   function checkStop() {
@@ -137,14 +137,55 @@ function createDriver(host) {
     return call('where');
   }
 
+  // ---------- đăng nhập (0.6.0) ----------
+  // Fills OneMES's login form and waits for a page past it. Returns { ok, error }.
+  async function login(user, pass) {
+    const w = await waitFor('trang OneMES', () => where());
+    if (w.page !== 'login') return { ok: true, already: true };
+    const f = await call('loginForm');
+    if (!f.ok || !f.user) return { ok: false, error: 'Trang đăng nhập không có ô tài khoản' };
+    const r = await call('doLogin', user, pass);
+    if (!r.ok) return r;
+    await sleep(800);
+    const end = Date.now() + 20000;
+    let msg = '';
+    while (Date.now() < end) {
+      const x = await where().catch(() => null);
+      if (x && x.page !== 'login' && !x.busy) return { ok: true, url: x.url };
+      if (x && x.page === 'login') {
+        const m = await call('loginForm').catch(() => null);
+        if (m && m.message) msg = m.message;
+      }
+      await sleep(300);
+    }
+    return { ok: false, error: msg || 'Vẫn ở trang đăng nhập' };
+  }
+
+  // OneMES showed its login page in the middle of a job: log in again with the saved
+  // account (host.login) or stop with "Chưa đăng nhập".
+  async function relogin() {
+    if (host.login && (await host.login())) return true;
+    throw new PageError('Chưa đăng nhập OneMES');
+  }
+
+  // The session id (usid) of the page now open, else of the last list address.
+  async function currentUsid() {
+    const w = await where().catch(() => null);
+    return usidOf(w && w.url) || usidOf(listUrl) || usidOf(host.listUrl ? host.listUrl() : '');
+  }
+
   // ---------- danh sách bệnh nhân ----------
   let listUrl = '';
-  async function gotoList(force = false) {
-    const w = await waitFor('trang OneMES', () => where());
-    if (w.page === 'login') throw new PageError('Chưa đăng nhập OneMES');
+  async function gotoList(force = false, again = false) {
+    let w = await waitFor('trang OneMES', () => where());
+    if (w.page === 'login') {
+      await relogin();
+      w = await waitFor('trang OneMES', () => where());
+    }
     if (w.page !== 'list' || force) {
       const role = host.listRole ? host.listRole() : '';
-      const link = (w.page === 'list' ? w.url.replace(/#.*$/, '') : '') || (await call('listLink', role)) || listUrl || (host.listUrl ? host.listUrl() : '');
+      const usid = usidOf(w.url);
+      const link = (w.page === 'list' ? w.url.replace(/#.*$/, '') : '') || (await call('listLink', role)) || sessionUrl(listUrl || (host.listUrl ? host.listUrl() : ''), usid);
       if (link) await loadURL(link);
       else {
         // No address to open: try the page's own menu entry before giving up.
@@ -158,7 +199,11 @@ function createDriver(host) {
       const x = await where();
       return x.page === 'list' || x.page === 'login' ? x : null;
     });
-    if (w2.page === 'login') throw new PageError('Chưa đăng nhập OneMES');
+    if (w2.page === 'login') {
+      if (again) throw new PageError('Chưa đăng nhập OneMES');
+      await relogin();
+      return gotoList(true, true);
+    }
     listUrl = w2.url.replace(/#.*$/, '');
   }
 
@@ -209,16 +254,29 @@ function createDriver(host) {
     return listOrders();
   }
 
-  async function gotoPatient(p) {
+  // A patient's address keeps the usid of the session it was read in; a later session
+  // has another one, and OneMES answers an old one with its login page (0.6.0).
+  async function gotoPatient(p, again = false) {
     const w = await where().catch(() => ({}));
     if (!(w.page === 'bacsi' && norm(w.noitruid) === norm(p.noitruid))) {
-      await loadURL(p.url);
+      if (w.page === 'login') {
+        if (again) throw new PageError('Chưa đăng nhập OneMES');
+        await relogin();
+        return gotoPatient(p, true);
+      }
+      await loadURL(sessionUrl(p.url, await currentUsid()));
     }
+    let login = false;
     await waitFor('hồ sơ bệnh nhân', async () => {
       const x = await where();
-      if (x.page === 'login') throw new PageError('Chưa đăng nhập OneMES');
+      if (x.page === 'login') return (login = true);
       return x.page === 'bacsi' && norm(x.noitruid) === norm(p.noitruid) ? x : null;
     });
+    if (login) {
+      if (again) throw new PageError('Chưa đăng nhập OneMES');
+      await relogin();
+      return gotoPatient(p, true);
+    }
   }
 
   async function listOrders(all = false) {
@@ -300,7 +358,8 @@ function createDriver(host) {
     const items = (catalog || []).filter((it) => +it.tuTick > 0);
     const srcRow = rows.find((r) => r.id === norm(src.id));
     const base = (srcRow && rowDate(srcRow, 'thuong')) || parseTime(src.thoiGian);
-    if (!items.length || !base) return { adds: [[], [], [], []], why: [] };
+    if (!base || !(catalog || []).length) return { adds: [[], [], [], []], why: [], dels: [[], [], [], []] };
+    if (!items.length) return planTicks({ history: [], srcDate: base, srcThuoc: src.thuoc, deletions, catalog });
     const from = addDays(dayOnly(base), 1 - Math.max(...items.map((it) => +it.tuTick)));
     const history = [];
     for (const r of rows.filter((x) => canSource(x, 'thuong'))) {
@@ -317,7 +376,7 @@ function createDriver(host) {
       }
       history.push({ id: r.id, tg: r.tg, names });
     }
-    return planTicks({ history, srcDate: base, srcThuoc: src.thuoc, deletions, catalog: items });
+    return planTicks({ history, srcDate: base, srcThuoc: src.thuoc, deletions, catalog });
   }
 
   // Sắc thuốc thang run right after the usual one (0.5.0): times and doctor as the
@@ -457,6 +516,10 @@ function createDriver(host) {
     }, 60000);
     log('ok', `${label}: đã Thu hồi`);
   }
+
+  // Red Cho thuốc/VTYT rows of an order not already in keys.
+  const redKeys = (o, keys = []) => o.thuoc.filter((x) => x.red && !keys.includes(x.key)).map((x) => x.key);
+  const namesOf = (o, keys) => keys.map((k) => (o.thuoc.find((x) => x.key === k) || {}).name || keyName(k));
 
   const present = (o, keys) => {
     const have = new Set([...o.thuoc, ...o.dvkt].map((x) => x.key));
@@ -760,6 +823,18 @@ function createDriver(host) {
     if (!isNew(day1)) throw new PageError(`Y lệnh mới có trạng thái "${day1.status}", dừng`);
     result.days.push({ day: 1, id: d1, time: day1.thoiGian });
 
+    // Rows OneMES draws in red on the copy are deleted on every day (user, 0.6.0).
+    if (kind !== 'sac') {
+      const o1r = await readStable(d1);
+      const red = redKeys(o1r, del[0]);
+      if (red.length) {
+        log('warn', `Ngày 1: tự xóa ${red.length} dòng thuốc/VTYT màu đỏ (${namesOf(o1r, red).join(', ')})`);
+        for (const d of del) d.push(...red.filter((k) => !d.includes(k)));
+        result.redDeleted = namesOf(o1r, red);
+        result.expect = { ...expectations(src, del, srcDate, autoComplete, edits, add), kind };
+      }
+    }
+
     // Day 1's own changes go in before Sao y lệnh, which copies them to the next days.
     const f1 = fieldsFor(day1, edits[0]);
     if (Object.keys(f1).length) await applyFields(d1, 'Ngày 1', f1);
@@ -825,6 +900,13 @@ function createDriver(host) {
       const row = byDay[k - 1];
       const o = await openOrder(row.id);
       log('info', `${label}: mở y lệnh ${row.tg} (${o.status})`);
+      const redK = kind === 'sac' ? [] : redKeys(o, del[k]);
+      if (redK.length) {
+        log('warn', `${label}: tự xóa ${redK.length} dòng thuốc/VTYT màu đỏ (${namesOf(o, redK).join(', ')})`);
+        result.redDeleted = [...new Set([...(result.redDeleted || []), ...namesOf(o, redK)])];
+        del[k].push(...redK);
+        result.expect = { ...expectations(src, del, srcDate, autoComplete, edits, add), kind };
+      }
       const keys = present(o, del[k]);
       const gone = del[k].filter((x) => !keys.includes(x));
       const f = fieldsFor(o, edits[k]);
@@ -1319,7 +1401,7 @@ function createDriver(host) {
   // ---------- danh sách bác sĩ, cấp độ chăm sóc ----------
   async function loadLists(esBase) {
     const w = await waitFor('trang OneMES', () => where());
-    if (w.page === 'login') throw new PageError('Chưa đăng nhập OneMES');
+    if (w.page === 'login') await relogin();
     const r = await call('esLists', esBase || '');
     if (!r.ok) throw new PageError(`Không đọc được danh sách bác sĩ / cấp độ chăm sóc (${r.reason})`);
     log('info', `Đọc được ${r.bacSi.length} bác sĩ, ${r.capDo.length} cấp độ chăm sóc`);
@@ -1402,7 +1484,7 @@ function createDriver(host) {
     return { values: back.values, missing, kept, filled: todo.map((f) => f.id), diff, at: Date.now() };
   }
 
-  return { call, where, addThuoc, autoTicks, sacEdits, scanPatients, openPatient, listOrders, pickSource, loadPatient, scanDvCu, cleanDvCu, clsList, clsRead, clsCreate, openOrder, readOrder, run, gotoList, verify, deleteOrder, updateDay, loadLists, readBenhAn, saveBenhAn, fieldsFor };
+  return { call, where, login, addThuoc, autoTicks, sacEdits, scanPatients, openPatient, listOrders, pickSource, loadPatient, scanDvCu, cleanDvCu, clsList, clsRead, clsCreate, openOrder, readOrder, run, gotoList, verify, deleteOrder, updateDay, loadLists, readBenhAn, saveBenhAn, fieldsFor };
 }
 
 const SAC_RE = /sắc thuốc thang/i;
@@ -1439,31 +1521,36 @@ function findDoctor(doctors, name) {
 // a drug puts a tick on day D + tuTick. The copied days count too: a day keeps the
 // drug when the source has it and it is not deleted there, or when it is ticked.
 // history = [{ tg, names }], deletions = base or item keys per day.
+// adds[k]: Thêm thuốc ids ticked on copied day k+1 (a usual order tuTick days before
+// held the drug). dels[k]: source keys of those drugs deleted from day k+1 (0.6.0, user
+// rule: the copies do not repeat a drug the source already has), except on a day where
+// the drug is due again, where the copied one is kept. `deletions` is no longer used.
 function planTicks({ history, srcDate, srcThuoc = [], deletions = [], catalog = [], N = 4 }) {
   const has = (name, it) => norm(name) === norm(it.ten) || norm(name).startsWith(norm(it.ten));
   const adds = Array.from({ length: N }, () => []);
+  const dels = Array.from({ length: N }, () => []);
   const why = [];
-  const strip = (k) => String(k).replace(/#\d+$/, '');
+  void deletions;
   for (const it of catalog) {
     const n = parseInt(it.tuTick, 10);
-    if (!(n > 0)) continue;
     const holds = new Set();
-    for (const h of history) {
-      const d = parseTime(h.tg);
-      if (d && h.names.some((x) => has(x, it))) holds.add(dayStamp(d));
+    if (n > 0) {
+      for (const h of history) {
+        const d = parseTime(h.tg);
+        if (d && h.names.some((x) => has(x, it))) holds.add(dayStamp(d));
+      }
     }
-    const srcItems = srcThuoc.filter((x) => has(x.name, it));
+    const srcKeys = srcThuoc.filter((x) => has(x.name, it)).map((x) => x.key || baseKey(x));
     for (let k = 0; k < N; k++) {
-      const from = addDays(srcDate, k + 1 - n);
-      if (holds.has(dayStamp(from))) {
+      const from = n > 0 ? addDays(srcDate, k + 1 - n) : null;
+      if (from && holds.has(dayStamp(from))) {
         adds[k].push(it.id);
         why.push({ day: k + 1, id: it.id, from: ddmmOf(from) });
-      }
-      const del = ((deletions && deletions[k]) || []).map(strip);
-      if (adds[k].includes(it.id) || srcItems.some((x) => !del.includes(strip(x.key || baseKey(x))))) holds.add(dayStamp(addDays(srcDate, k + 1)));
+        holds.add(dayStamp(addDays(srcDate, k + 1)));
+      } else dels[k].push(...srcKeys);
     }
   }
-  return { adds, why };
+  return { adds, why, dels };
 }
 
 // "Xét nghiệm huyết học" -> "Công thức máu", other groups lose "Xét nghiệm".
@@ -1544,9 +1631,17 @@ function clsText(results) {
       }
     }
     for (const [g, vs] of groups) block.push(`${g}: ${vs.join('; ')}`);
+    // A test read with nothing abnormal gets its own line under its name (0.6.0, user:
+    // "Xét nghiệm hóa sinh: Các chỉ số trong giới hạn bình thường."), unless another test
+    // of the same group already lists values.
+    const normal = [];
+    for (const r of rs.filter((x) => x.kind === 'xn' && !x.items.length && x.total !== 0)) {
+      const label = String(r.name || r.loai || 'Xét nghiệm').replace(/\s+/g, ' ').trim();
+      const l = `${label.charAt(0).toUpperCase()}${label.slice(1)}: ${CLS_NORMAL}.`;
+      if (!groups.has(clsGroup(label)) && !normal.includes(l)) normal.push(l);
+    }
+    block.push(...normal);
     for (const r of rs.filter((x) => x.kind === 'cdha')) if (r.ketLuan) block.push(`${r.name}: ${r.ketLuan.replace(/\s*\n\s*/g, '; ')}`);
-    // Tests read but nothing abnormal in any of them.
-    if (rs.some((x) => x.kind === 'xn') && !groups.size) block.unshift(block.length ? 'Xét nghiệm: ' + CLS_NORMAL.toLowerCase() : CLS_NORMAL);
     if (!block.length) continue;
     if (many) lines.push(`Ngày ${day.slice(0, 5)}:`);
     lines.push(...block.map((b) => (many ? '- ' + b : b)));
@@ -1622,8 +1717,20 @@ function mergeRes(a, b) {
   return { deleted: [...a.deleted, ...b.deleted], missing: [...a.missing, ...b.missing], failed: [...a.failed, ...b.failed] };
 }
 
+// usid=<ip>_<session> in an OneMES address.
+function usidOf(url) {
+  return (/[?&]usid=([^&#]+)/i.exec(String(url || '')) || [])[1] || '';
+}
+// The same address with the session id of the page open now.
+function sessionUrl(url, usid) {
+  if (!url || !usid) return url || '';
+  const old = usidOf(url);
+  if (!old || old === usid) return url;
+  return url.replace(/([?&]usid=)[^&#]+/i, '$1' + usid);
+}
+
 function keyName(key) {
   return String(key).split('|')[1] || key;
 }
 
-module.exports = { createDriver, planTicks, isSac, clsInRange, clsText, resolveEdits, withKeys, baseKey, parseTime, fmtTime, norm, StopError, PageError, AGENT };
+module.exports = { createDriver, usidOf, sessionUrl, planTicks, isSac, clsInRange, clsText, resolveEdits, withKeys, baseKey, parseTime, fmtTime, norm, StopError, PageError, AGENT };

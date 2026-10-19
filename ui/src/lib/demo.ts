@@ -167,6 +167,9 @@ export function demoApi() {
           return { ...r } as T;
         }
         case 'settings:set': data.settings = { ...data.settings, ...payload }; return data.settings as T;
+        case 'login:set': data.login = { user: payload.user, saved: true, failed: '' }; pushState({ login: data.login }); return data.login as T;
+        case 'login:clear': data.login = { user: '', saved: false, failed: '' }; pushState({ login: data.login }); return data.login as T;
+        case 'login:now': return { ok: true, already: true } as T;
         case 'templates:set': data.templates = payload; return data.templates as T;
         case 'choice:set': if (payload.choice) data.choices[payload.id] = payload.choice; else delete data.choices[payload.id]; return undefined as T;
         case 'scan': pushState({ busy: true, task: 'Quét danh sách' }); await sleep(500); pushState({ busy: false, task: '' }); addLog('info', `Quét được ${patients.length} bệnh nhân`); return patients as T;

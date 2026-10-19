@@ -14,6 +14,7 @@ const DEFAULTS = {
     bacSiFav: [], // [{ id, name }] shown first in the per-day Bác sĩ dropdown
     esBase: 'http://192.168.30.88:9200', // fallback when the page does not name its search service
     gpuOff: process.platform === 'win32', // software rendering: stops the window flicker on some PCs
+    autoLogin: true, // 0.6.0: log in to OneMES with the saved account whenever its login page shows
     viewZoom: 0.7, // zoom of the OneMES page in Trình duyệt (the user found 100% too close)
     // Drugs the user can tick to add per day (Kê Tây y/VTYT). Defaults as the user enters them by hand.
     // tuTick: the tool ticks the drug that many days after a usual order holding it.
@@ -29,6 +30,7 @@ const DEFAULTS = {
   benhAn: {}, // noitruid -> { values, savedAt, readAt, sentAt } Thông tin bệnh án being prepared
   benhAnMaus: [], // [{ id, name, values, at }] filled-in Thông tin bệnh án examples
   benhAnMauId: null, // the example new patients start from
+  login: null, // { user, secret, enc, at } OneMES account; secret = password encrypted by main (safeStorage)
   dvScans: {}, // noitruid -> { days: [{ id, tg, items: [{ id, name, trangThai, action }] }], at } old services to clean
 };
 

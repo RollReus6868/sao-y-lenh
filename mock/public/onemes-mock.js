@@ -25,13 +25,14 @@
       '<table class="table table-striped table-bordered sticky" id="tblNoiTru"><tr>' +
       ['T/G vào', 'ĐD', 'KQ', 'B-G', 'Mã BN', 'Họ tên', 'Tuổi', 'GT', 'Đối tượng', 'Tạm ứng', 'Phải trả', 'Trạng thái', 'Bác sĩ', 'Chẩn đoán', 'Khoa']
         .map(function (t) { return '<th>' + t + '</th>'; }).join('') + '</tr>';
+    var USID = new URL(location.href).searchParams.get('usid') || '';
     var lastBuong = '';
     rows.forEach(function (p) {
       if (p.buong !== lastBuong) {
         h += '<tr> <td colspan="11" style="font-weight:bolder;">' + esc(p.buong) + '</td> </tr>';
         lastBuong = p.buong;
       }
-      var url = location.origin + '/home.aspx?scope=sys&lang=vi&wpid=bacsidraw&noitruid=' + p.noitruid + '&kp=k1&tt=1&wpre=danhsachdieutrinoitrudraw';
+      var url = location.origin + '/home.aspx?scope=sys&lang=vi&wpid=bacsidraw&noitruid=' + p.noitruid + '&kp=k1&tt=1&wpre=danhsachdieutrinoitrudraw' + (USID ? '&usid=' + USID : '');
       var a = function (t) { return '<a href="' + url + '" target="">' + t + '</a>'; };
       h += '<tr>' +
         '<td>' + a(esc(p.tgVao)) + '</td>' +
@@ -139,7 +140,7 @@
       groups[g].forEach(function (x, i) {
         var actions = done ? '<td></td><td></td>' :
           '<td><a href="javascript:EditThuocInThamKham(\'' + x.id + '\',\'k\');">✎</a></td><td><a href="javascript:DeleteThuocInThamKham(\'' + x.id + '\');">⊗</a></td>';
-        t += '<tr id="td' + x.id + '" data-stt="' + (i + 1) + '" class="isthuocdutru groupthuoc collapse in td' + x.id + '">' + actions +
+        t += '<tr id="td' + x.id + '" data-stt="' + (i + 1) + '" class="isthuocdutru groupthuoc collapse in td' + x.id + '"' + (x.red ? ' style="color:#e74c3c"' : '') + '>' + actions +
           '<td class="tdSTT">' + (i + 1) + '</td><td>' + esc(x.loaiKe) + '</td><td>' + esc(x.kho) + '</td><td>' + esc(x.name) + '</td><td>' + esc(x.hamLuong) +
           '</td><td>' + esc(x.dvt) + '</td><td>' + esc(x.duongDung) + '</td><td>' + esc(x.sl) + '</td><td>' + esc(x.cachDung) + '</td><td>' + esc(x.doiTuong) + '</td><td>' + esc(x.trangThai) + '</td></tr>';
       });

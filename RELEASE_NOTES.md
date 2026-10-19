@@ -1,4 +1,13 @@
-# Sao Y Lệnh 0.5.1
+# Sao Y Lệnh 0.6.0
+
+- **Tự đăng nhập OneMES**: vào **Cài đặt → Tài khoản OneMES** nhập tài khoản và mật khẩu rồi bấm **Lưu tài khoản**, hoặc chỉ cần đăng nhập tay một lần trong trang **Trình duyệt** (đăng nhập được thì tool tự nhớ). Từ đó, mỗi khi OneMES hiện trang đăng nhập (mới mở tool, hết phiên, đang làm thì bị đăng xuất), tool tự điền và đăng nhập rồi làm tiếp việc đang làm. Mật khẩu được mã hóa trên máy, không hiện ra ở đâu. Tắt được bằng công tắc **Tự đăng nhập**. Nếu đăng nhập không được (ví dụ sai mật khẩu), tool không thử lại liên tục mà ghi lý do vào Cài đặt và Nhật ký.
+- **Sửa lỗi bắt đăng nhập lại khi chuyển mục**: một nguyên nhân là danh sách bệnh nhân đã quét giữ địa chỉ kèm mã phiên cũ, nên sau khi đăng nhập lại, mở bệnh nhân bằng địa chỉ cũ bị OneMES đưa về trang đăng nhập. Giờ tool luôn mở bằng mã phiên đang dùng. Phiên đăng nhập cũng được giữ khi tắt mở lại tool (nếu máy chủ còn giữ phiên).
+- **Tự tick xóa Cồn xoa bóp và Cao thông mạch đã có trong y lệnh nguồn**: các ngày sao lên không lặp lại thuốc đó nữa (dưới tên thuốc ghi "Tự tick xóa N1, N2… (nguồn đã có)"). Riêng ngày đến hạn dùng lại (Cao thông mạch +3 ngày, Cồn xoa bóp +5 ngày) thì giữ lại. Anh/chị vẫn bỏ tick được trước khi sao chép.
+- **Tự xóa dòng thuốc/VTYT màu đỏ**: khi sao chép, dòng nào trong Cho thuốc/VTYT của y lệnh mới bị OneMES tô chữ đỏ thì tool tự xóa ở mọi ngày rồi sao chép tiếp bình thường (Nhật ký ghi tên dòng đã xóa; thẻ Kết quả liệt kê trong "Đã bỏ").
+- **Thẻ Kết quả gọn hơn**: mỗi ngày một dòng (ngày, giờ, Đúng / số lỗi, số mục bỏ/thêm, nút Sửa, Xóa). Bấm vào ngày nào thì mới mở chi tiết ngày đó để xem và sửa.
+- **Kết quả CLS**: xét nghiệm nào không có chỉ số bất thường thì ghi riêng một dòng theo tên mục, ví dụ "Xét nghiệm hóa sinh: Các chỉ số trong giới hạn bình thường."
+
+## 0.5.1
 
 Thẻ **Kết quả CLS**, khi **Tạo y lệnh mới**:
 - **Tự bấm "Có"**: nếu OneMES hỏi "Bệnh chính này không được khuyến khích. Bạn vẫn muốn chọn?" thì tool bấm **Có** rồi làm tiếp như bình thường (Nhật ký có ghi lại).

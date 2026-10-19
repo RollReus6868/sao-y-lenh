@@ -73,6 +73,24 @@ async function waitFor(what, fn, ms = 30000) {
     await waitFor('list page', async () => /danhsachdieutrinoitrudraw/.test(view.url()) && !(await ui.$('[data-action=goto-list][disabled]')), 30000);
     check(/danhsachdieutrinoitrudraw/.test(view.url()), 'Ds Điều trị nội trú button opens the list');
 
+    // 0.6.0: the account typed into the login page is kept, and used when OneMES asks again.
+    await ui.click('[data-nav=settings]');
+    await waitFor('account kept', async () => /Đã lưu tài khoản\s*bs/.test(await ui.textContent('[data-login-status]')), 10000);
+    check(true, 'login typed in the browser page is remembered');
+    const sess = (b) => fetch(m.base + '/api/__session', { method: 'POST', body: JSON.stringify(b) }).then((r) => r.json());
+    const n0 = (await sess({ strict: true, expire: true })).logins;
+    await ui.click('[data-nav=browser]');
+    await ui.click('[data-action=goto-list]');
+    await waitFor('list after the tool logged in again', async () => /danhsachdieutrinoitrudraw/.test(view.url()) && !(await ui.$('[data-action=goto-list][disabled]')), 30000);
+    check((await sess({})).logins === n0 + 1, 'session gone: Ds button logs in by itself and opens the list');
+    await sess({ expire: true });
+    await view.goto(m.base + '/home.aspx?scope=sys&lang=vi').catch(() => {});
+    await waitFor('login page answered', async () => (await sess({})).logins === n0 + 2 && /usid=/.test(view.url()), 20000);
+    check(true, 'login page shown in the browser is answered by itself');
+    const savedLogin = JSON.parse(fs.readFileSync(path.join(dataDir, 'data.json'), 'utf8')).login;
+    check(savedLogin && savedLogin.user === 'bs' && savedLogin.secret && !JSON.stringify(savedLogin).includes('"x"'), 'password not kept in plain text field');
+    await sess({ strict: false });
+
     // Zoom buttons change the page and are remembered.
     await ui.click('[data-action=zoom-in]');
     await waitFor('zoom 80%', async () => Math.abs((await view.evaluate(() => devicePixelRatio)) - 0.8) < 0.01, 5000);
@@ -152,6 +170,11 @@ async function waitFor(what, fn, ms = 30000) {
     // The result tab shows what was read back from OneMES.
     await ui.waitForSelector('[data-result] [data-day="3"]', { timeout: 30000 });
     check(/Đúng như đã chọn/.test(await ui.textContent('[data-summary]')), 'result: all days as chosen');
+    // One line per day; a click opens the day (0.6.0).
+    check(!(await ui.$('[data-day="3"] [data-day-detail]')) && /Đúng/.test(await ui.textContent('[data-day="3"] [data-day-summary]')), 'result: days collapsed to one line');
+    await ui.click('[data-day="3"] [data-action=toggle-day]');
+    await ui.click('[data-day="2"] [data-action=toggle-day]');
+    await ui.waitForSelector('[data-day="3"] [data-day-detail]');
     check((await ui.textContent('[data-day="3"]')).includes('Lirystad 150') === true, 'result: day 3 lists removed Lirystad');
     check(/Đã thêm:\s*Cồn xoa bóp/.test(await ui.textContent('[data-day="2"]')), 'result: day 2 shows the added drug');
 
@@ -271,10 +294,14 @@ async function waitFor(what, fn, ms = 30000) {
     const pA = m.mock.getState().patients[0];
     const o10 = pA.orders.find((o) => o.date.getDate() === 10 && !/sắc/i.test(o.khac));
     o10.thuoc.push({ ...o10.thuoc[0], id: require('crypto').randomUUID(), name: 'CAO THÔNG MẠCH', hamLuong: '12000mg+10000mg+8000mg', dvt: 'Chai' });
+    // The source (12/10) has Cồn xoa bóp: the copies drop it (0.6.0).
+    const o12 = pA.orders.filter((o) => o.date.getDate() === 12 && !/sắc/i.test(o.khac) && o.status === 'Hoàn tất').pop();
+    o12.thuoc.push({ ...o12.thuoc[0], id: require('crypto').randomUUID(), name: 'CỒN XOA BÓP', hamLuong: '1000mg+1000mg+1', dvt: 'Lọ' });
     await ui.click('[data-patient="2400000001"] >> button >> nth=1');
     await ui.waitForSelector('[data-grid]', { timeout: 30000 });
     await waitFor('auto tick', async () => !!(await ui.$('[aria-label="Thêm Cao thông mạch ngày 1"][aria-pressed=true]')), 15000);
     check(!(await ui.$('[aria-label="Thêm Cao thông mạch ngày 2"][aria-pressed=true]')) && !(await ui.$('[aria-label="Thêm Cồn xoa bóp ngày 1"][aria-pressed=true]')) && /Tự tick N1 \(vì 10\/10 có\)/.test(await ui.textContent('[data-add="cao-thong-mach"]')), 'tick sẵn: Cao thông mạch on day 1 only, with the reason');
+    check(/Tự tick xóa N1, N2, N3/.test(await ui.textContent('[data-item="CỒN XOA BÓP"]')) && !!(await ui.$('[aria-label="Xóa CỒN XOA BÓP ngày 3"][aria-pressed=true]')), 'tick xóa: Cồn xoa bóp from the source ticked for deletion on every day');
     const beforeA = pA.orders.map((o) => o.id);
     await ui.click('[data-action=run]');
     check(!!(await ui.$('[data-auto-sac]')), 'confirm sheet says sắc thuốc thang follows');
@@ -285,6 +312,7 @@ async function waitFor(what, fn, ms = 30000) {
     const usualA = newA.filter((o) => !/sắc/i.test(o.khac)).sort((a, b) => a.date - b.date);
     const sacA = newA.filter((o) => /sắc/i.test(o.khac)).sort((a, b) => a.dateTH - b.dateTH);
     check(usualA.length === 3 && usualA.map((o) => o.thuoc.filter((x) => x.name === 'CAO THÔNG MẠCH').length).join() === '1,0,0', 'tick sẵn: Cao thông mạch added on day 1 only: ' + usualA.map((o) => o.thuoc.map((x) => x.name).join('/')).join(' | '));
+    check(usualA.every((o) => !o.thuoc.some((x) => x.name === 'CỒN XOA BÓP')), 'tick xóa: no copy repeats Cồn xoa bóp');
     check(sacA.length === 3 && sacA.map((o) => o.dateTH.getDate()).join() === '12,13,14' && sacA.every((o) => o.status === 'Hoàn tất'), 'sắc: copied by itself for 3 days (thực hiện 12–14/10): ' + sacA.map((o) => o.dateTH.toString()).join(' | '));
     check(sacA[1] && hm(sacA[1].dateTH) === hm(usualA[0].dateTH) && sacA[1].date.getDate() === 12, 'sắc: day 2 thực hiện as the new usual order of 13/10, chỉ định on 12/10');
     const savedA = JSON.parse(fs.readFileSync(path.join(dataDir, 'data.json'), 'utf8'));

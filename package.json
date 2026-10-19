@@ -1,7 +1,7 @@
 {
   "name": "sao-y-lenh",
   "productName": "SaoYLenh",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Sao chép và sửa y lệnh nội trú trên OneMES",
   "main": "src/main.js",
   "author": "Xuan Dai",
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "mock": "node mock/server.js 2026",
-    "test": "node tests/store-test.js && node tests/agent-test.js && node tests/driver-test.js && node tests/updater-test.js",
+    "test": "node tests/store-test.js && node tests/agent-test.js && node tests/driver-test.js && node tests/login-test.js && node tests/updater-test.js",
     "ui:build": "cd ui && npm run build",
     "dist:win": "electron-builder --win --x64",
     "dist:mac": "electron-builder --mac",

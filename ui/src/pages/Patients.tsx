@@ -240,12 +240,17 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
       // again from the recent usual orders (Cao thông mạch +3 ngày, Cồn xoa bóp +5).
       const keepAdds = ch?.adds && (ch.addsFor === r.source.id || !r.auto);
       const auto = r.auto ? r.auto.adds : EMPTY;
+      // For a new source the Thêm thuốc drugs the source already has are ticked for
+      // deletion from the copies (0.6.0), in place of what was saved for them.
+      const autoDels = !keepAdds && r.auto?.dels ? r.auto.dels : null;
+      const catKeys = new Set(items.filter((it) => it.kind === 'thuoc' && (data?.settings.themThuoc || []).some((c) => hasDrug([it], c))).map((it) => it.key));
+      const withAuto = (i: number, saved: string[]) => (autoDels ? [...new Set([...saved.filter((k) => !catKeys.has(k)), ...(autoDels[i] || [])])] : saved);
       if (ch) {
         setDays(ch.days);
-        setSel([0, 1, 2, 3].map((i) => items.filter((it) => (ch.deletions[i] || []).includes(baseKey(it.key))).map((it) => it.key)));
+        setSel([0, 1, 2, 3].map((i) => withAuto(i, items.filter((it) => (ch.deletions[i] || []).includes(baseKey(it.key))).map((it) => it.key))));
         setEdits([0, 1, 2, 3].map((i) => (ch.edits && ch.edits[i]) || null));
       } else {
-        setSel(EMPTY);
+        setSel([0, 1, 2, 3].map((i) => withAuto(i, [])));
         setEdits(NO_EDITS);
       }
       setAdds([0, 1, 2, 3].map((i) => (keepAdds ? (ch!.adds![i] || []) : auto[i] || [])));
@@ -398,6 +403,9 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const total = Array.from({ length: days }, (_, k) => shown(k).length).reduce((a, b) => a + b, 0);
   const cols = `minmax(0,1fr) repeat(${days}, 56px)`;
 
+  const autoDelDays = (key: string) =>
+    auto && auto.for === src?.id && auto.dels ? auto.dels.slice(0, days).flatMap((d, i) => (d.includes(key) ? [i + 1] : [])) : [];
+
   const section = (title: string, icon: React.ReactNode, list: Item[]) => (
     <>
       <div key={title} className="col-span-full mt-2 flex items-center gap-2 px-1 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-primary [&_svg]:size-3.5">{icon}{title} <span className="font-semibold text-muted-foreground">({list.length})</span></div>
@@ -419,6 +427,9 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
                   <div className="truncate text-[11px] text-muted-foreground">
                     {it.kind === 'thuoc' ? [it.hamLuong, `${it.sl} ${it.dvt || ''}`.trim(), it.cachDung].filter(Boolean).join(' · ') : it.moTa}
                   </div>
+                  {autoDelDays(it.key).length > 0 && (
+                    <div className="truncate text-[11px] font-semibold text-red-600 dark:text-red-400" data-auto-del>Tự tick xóa {autoDelDays(it.key).map((d) => `N${d}`).join(', ')} (nguồn đã có)</div>
+                  )}
                 </button>
                 {Array.from({ length: days }, (_, k) => {
                   const on = sel[k].includes(it.key);
@@ -647,6 +658,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
               {confirmEdits[k] && <div className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">Sửa: {editSummary(confirmEdits[k])}</div>}
             </li>
           ))}
+          {kind !== 'sac' && <li className="text-xs text-muted-foreground" data-auto-red>Dòng Cho thuốc/VTYT nào OneMES tô <b className="text-red-600 dark:text-red-400">màu đỏ</b> trên bản sao sẽ được tự xóa ở mọi ngày.</li>}
           {kind !== 'sac' && <li className="rounded-lg bg-primary/10 px-3 py-2 text-xs" data-auto-sac>Sao chép xong, nếu bệnh nhân có y lệnh sắc thuốc thang, tool tự sao chép tiếp sắc thuốc thang {days} ngày (giờ chỉ định, thực hiện và bác sĩ lấy theo y lệnh thường như ở chế độ Sắc thuốc thang).</li>}
           <li className="text-xs text-muted-foreground">{data?.settings.autoComplete ? 'Mỗi ngày sửa xong sẽ được Hoàn tất.' : 'Các ngày 2+ để ở trạng thái Mới cho anh/chị tự xem và Hoàn tất.'}{data?.settings.stepMode ? ' Chạy từng bước: tool dừng trước mỗi thao tác.' : ''}</li>
         </ol>
