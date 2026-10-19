@@ -94,7 +94,10 @@ function setupView() {
   wc.on('did-navigate', upd);
   wc.on('did-navigate-in-page', upd);
   wc.on('did-finish-load', upd);
-  wc.on('did-finish-load', () => setTimeout(checkLoginPage, 400));
+  wc.on('did-finish-load', () => {
+    const at = Date.now();
+    setTimeout(() => checkLoginPage(at), 400);
+  });
   keepSessionCookie(ses);
   // Zoom: kept in the settings and applied again on every page, since Chromium keeps it per site.
   wc.on('did-navigate', () => applyZoom());
@@ -198,14 +201,16 @@ function ensureLoggedIn() {
 
 // After each page: the login page is answered with the saved account; a page past it
 // right after the user typed an account keeps that account for next time.
-async function checkLoginPage() {
+// loadedAt: when this page finished loading. An account typed before a login page
+// loaded did not get in; one typed before any other page did.
+async function checkLoginPage(loadedAt = Date.now()) {
   if (!view || view.webContents.isDestroyed()) return;
   const d = createDriver({ exec: (code) => view.webContents.executeJavaScript(code, true), loadURL, log });
   const w = await d.where().catch(() => null);
   if (!w) return;
   if (w.page === 'login') {
     wasLogin = true;
-    if (typed && Date.now() - typed.at > 1500) typed = null; // the typed account did not get in
+    if (typed && typed.at < loadedAt) typed = null;
     if (!loginP && readLogin() && autoLoginOn() && !loginFailed) ensureLoggedIn();
     return;
   }
@@ -215,17 +220,17 @@ async function checkLoginPage() {
       loginFailed = '';
       push({ login: publicLogin() });
     }
-    if (typed && autoLoginOn()) {
-      const c = readLogin();
-      if (!c || c.user !== typed.user || c.pass !== typed.pass) {
-        try {
-          saveLogin(typed.user, typed.pass);
-          log('ok', `Đã nhớ tài khoản OneMES ${typed.user}, lần sau tool tự đăng nhập`);
-        } catch {}
-      }
+  }
+  if (typed && typed.at < loadedAt && Date.now() - typed.at < 120000 && autoLoginOn()) {
+    const c = readLogin();
+    if (!c || c.user !== typed.user || c.pass !== typed.pass) {
+      try {
+        saveLogin(typed.user, typed.pass);
+        log('ok', `Đã nhớ tài khoản OneMES ${typed.user}, lần sau tool tự đăng nhập`);
+      } catch {}
     }
   }
-  typed = null;
+  if (typed && typed.at < loadedAt) typed = null;
 }
 
 // OneMES keeps its session in a cookie that lives only while the app is open. Keep it
