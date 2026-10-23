@@ -373,7 +373,7 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     rd = await d.clsRead(pts[1], ['10/10/2026', '06/10/2026']);
     check(/^Kết quả CLS:\nNgày 10\/10:\n- Công thức máu/.test(rd.text) && /\nNgày 06\/10:\n- Hóa sinh máu: Cholesterol toàn phần: 6.1 mmol\/L\n- Chụp X-quang/.test(rd.text), 'CLS: several days get a heading each: ' + JSON.stringify(rd.text));
     rd = await d.clsRead(pts[1], ['08/10/2026']);
-    check(/^Kết quả CLS:\n[^\n:]+: Các chỉ số trong giới hạn bình thường\.$/.test(rd.text) && rd.text.includes(rd.results[0].name + ': Các chỉ số') && rd.results[0].items.length === 0, 'CLS: nothing abnormal names the test: ' + JSON.stringify(rd.text));
+    check(/^Kết quả CLS:\n[^\n:]+: Các chỉ số trong giới hạn bình thường$/.test(rd.text) && !/^Kết quả CLS:\nXét nghiệm/.test(rd.text) && rd.results[0].items.length === 0, 'CLS: nothing abnormal, the heading as abnormal values use: ' + JSON.stringify(rd.text));
     const { clsInRange } = require('../src/driver');
     const R = [['11.2', '4-10', false], ['0,42', '0.36 - 0.50', true], ['10', '4-10', true], ['5', '< 5', false], ['70', '≥ 60', true], ['-3', '-2 - 2', false], ['100', 'Nam: 130-170; Nữ: 120-150', false], ['160', 'Nam: 130-170; Nữ: 120-150', null], ['Âm tính', 'Âm tính', true], ['12', '', null]];
     for (const [v, ref, want] of R) check(clsInRange(v, ref) === want, `CLS: ${v} in "${ref}" -> ${want}`);
@@ -391,7 +391,7 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     const tx = clsText([{ kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm nước tiểu', items: [{ name: 'Nitrit (NIT)', value: 'Positive ', unit: 'mg/dL', ref: 'Negative' }, { name: 'Protein (PRO)', value: 'Trace', unit: 'g/L', ref: 'Negative' }, { name: 'Tỷ trọng (SG)', value: '1.035', unit: '', ref: '1.01-1.025' }] }, { kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm hóa sinh', items: [{ name: 'Glucose', value: '12.06', unit: 'mmol/L', ref: '3.9-6.4' }] }]);
     check(tx === 'Kết quả CLS:\nNước tiểu: NIT: Positive; PRO: Trace; Tỷ trọng (SG): 1.035\nHóa sinh máu: Glucose: 12.06 mmol/L', 'CLS: Positive / Trace without unit: ' + JSON.stringify(tx));
     const tn = clsText([{ kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm huyết học', items: [{ name: 'WBC', value: '12', unit: 'G/L' }], total: 20 }, { kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm hóa sinh', items: [], total: 8 }, { kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm huyết học', items: [], total: 3 }, { kind: 'xn', date: '07:00 14/10/2026', name: 'Xét nghiệm nước tiểu', items: [], total: 0 }]);
-    check(tn === 'Kết quả CLS:\nCông thức máu: WBC: 12 G/L\nXét nghiệm hóa sinh: Các chỉ số trong giới hạn bình thường.', 'CLS: a normal test gets its own line, not when its group has values or nothing was read: ' + JSON.stringify(tn));
+    check(tn === 'Kết quả CLS:\nCông thức máu: WBC: 12 G/L\nHóa sinh máu: Các chỉ số trong giới hạn bình thường', 'CLS: a normal test gets its own line, not when its group has values or nothing was read: ' + JSON.stringify(tn));
     // The CLS order on 13/10 does not block copying the usual order onto that day.
     ({ source } = await d.loadPatient(pts[1]));
     before = ids(1);

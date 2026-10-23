@@ -67,7 +67,7 @@ function PatientList({ onOpen, selected, onBrowser, showRun }: { onOpen: (p: Pat
     setConfirm(false);
     const plans: Plan[] = patients
       .filter((p) => picked.has(p.noitruid) && choices[p.noitruid])
-      .map((p) => ({ patient: p, days: choices[p.noitruid].days, baseDeletions: choices[p.noitruid].deletions, edits: choices[p.noitruid].edits, adds: choices[p.noitruid].adds, addsFor: choices[p.noitruid].addsFor }));
+      .map((p) => ({ patient: p, days: choices[p.noitruid].days, baseDeletions: choices[p.noitruid].deletions, edits: choices[p.noitruid].edits, adds: choices[p.noitruid].adds, addsMine: choices[p.noitruid].addsMine }));
     const r = await call<RunResult[]>('run', { plans }).catch(() => null);
     await refresh();
     if (r) {
@@ -224,6 +224,9 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const [auto, setAuto] = useState<AutoTicks | null>(null);
   const [eday, setEday] = useState<number | null>(null);
   const loaded = useRef(false);
+  // The user changed the Thêm thuốc ticks (or deletions of those drugs) for this source;
+  // until then the tool's own ticks are worked out again on every load.
+  const touched = useRef(false);
 
   const load = async (sourceId?: string, k: Kind = kind) => {
     setLoading(true);
@@ -238,7 +241,10 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
       const ch = data?.choices[runKey(patient, k)];
       // Ticks the user left for this very source stay; for a new source the tool ticks
       // again from the recent usual orders (Cao thông mạch +3 ngày, Cồn xoa bóp +5).
-      const keepAdds = ch?.adds && (ch.addsFor === r.source.id || !r.auto);
+      // (0.6.1: only ticks the user changed are kept; 0.6.0 also kept untouched ones, so
+      // a load that found nothing to tick kept the ticks off for that source.)
+      const keepAdds = !!ch?.adds && (ch.addsMine === r.source.id || !r.auto);
+      touched.current = !!ch?.adds && ch.addsMine === r.source.id;
       const auto = r.auto ? r.auto.adds : EMPTY;
       // For a new source the Thêm thuốc drugs the source already has are ticked for
       // deletion from the copies (0.6.0), in place of what was saved for them.
@@ -265,7 +271,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   useEffect(() => {
     if (!loaded.current || !data) return;
     const t = setTimeout(() => {
-      const choice: Choice = { days, deletions: sel.slice(0, days).map((d) => d.map(baseKey)), edits: edits.slice(0, days), adds: adds.slice(0, days), addsFor: res?.source?.id };
+      const choice: Choice = { days, deletions: sel.slice(0, days).map((d) => d.map(baseKey)), edits: edits.slice(0, days), adds: adds.slice(0, days), addsMine: touched.current ? res?.source?.id : undefined };
       call('choice:set', { id: ck, choice }).catch(() => {});
       setData((x) => x && { ...x, choices: { ...x.choices, [ck]: choice } });
     }, 400);
@@ -323,7 +329,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
       const keys = [...new Set([...Object.keys(old), ...Object.keys(nw)])].filter((f) => !same(old[f], nw[f]) && f !== 'chiDinh' && f !== 'thucHien');
       return x.map((y, i) => {
         if (i === k) return e;
-        if (i < k || i >= days) return y;
+        if (i < k) return y;
         const cur = { ...(y || {}) } as Record<string, unknown>;
         for (const f of keys) {
           if (!same(cur[f], old[f])) continue;
@@ -333,10 +339,23 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
         return Object.keys(cur).length ? (cur as DayEdit) : null;
       });
     });
+  // More days later on: the new days take what the last day had (times excepted).
+  const changeDays = (n: number) => {
+    setEdits((x) =>
+      x.map((y, i) => {
+        if (i < days || i >= n || y || !x[days - 1]) return y;
+        const { chiDinh, thucHien, ...rest } = x[days - 1] as DayEdit; // eslint-disable-line @typescript-eslint/no-unused-vars
+        return Object.keys(rest).length ? (rest as DayEdit) : null;
+      }),
+    );
+    setDays(n);
+  };
   const catalog: AddItem[] = sac ? [] : data?.settings.themThuoc || [];
-  const toggleAdd = (k: number, id: string) => setAdds((s) => s.map((d, i) => (i !== k ? d : d.includes(id) ? d.filter((x) => x !== id) : [...d, id])));
+  const isCatKey = (key: string) => !sac && items.some((it) => it.key === key && it.kind === 'thuoc' && catalog.some((c) => hasDrug([it], c)));
+  const toggleAdd = (k: number, id: string) => (touched.current = true) && setAdds((s) => s.map((d, i) => (i !== k ? d : d.includes(id) ? d.filter((x) => x !== id) : [...d, id])));
   const toggleAddRow = (id: string) => {
     const all = adds.slice(0, days).every((d) => d.includes(id));
+    touched.current = true;
     setAdds((s) => s.map((d, i) => (i >= days ? d : all ? d.filter((x) => x !== id) : d.includes(id) ? d : [...d, id])));
   };
   const addCount = adds.slice(0, days).reduce((a, d) => a + d.filter((id) => catalog.some((c) => c.id === id)).length, 0);
@@ -344,12 +363,13 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const editCount = edits.slice(0, days).filter(Boolean).length;
   const templates = data?.templates || [];
 
-  const toggle = (k: number, key: string) => setSel((s) => s.map((d, i) => (i !== k ? d : d.includes(key) ? d.filter((x) => x !== key) : [...d, key])));
+  const toggle = (k: number, key: string) => (isCatKey(key) && (touched.current = true), setSel((s) => s.map((d, i) => (i !== k ? d : d.includes(key) ? d.filter((x) => x !== key) : [...d, key]))));
   const toggleRow = (key: string) => {
     const all = sel.slice(0, days).every((d) => d.includes(key));
+    if (isCatKey(key)) touched.current = true;
     setSel((s) => s.map((d, i) => (i >= days ? d : all ? d.filter((x) => x !== key) : d.includes(key) ? d : [...d, key])));
   };
-  const setCol = (k: number, keys: string[]) => setSel((s) => s.map((d, i) => (i === k ? keys : d)));
+  const setCol = (k: number, keys: string[]) => (touched.current = true, setSel((s) => s.map((d, i) => (i === k ? keys : d))));
   const applyTpl = (k: number, t: Template) => setCol(k, items.filter((it) => t.keys.includes(baseKey(it.key))).map((it) => it.key));
   const saveTemplate = async () => {
     if (saveTpl === null || !tplName.trim() || !data) return;
@@ -544,7 +564,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
       <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-border/40 px-3 pb-2 sm:px-4" data-pick-bar>
         <Segmented value={kind} onChange={changeKind} disabled={state.busy} options={[{ value: 'thuong' as Kind, label: 'Y lệnh thường', title: 'Y lệnh có Diễn biến bệnh và Diễn biến PHCN' }, { value: 'sac' as Kind, label: 'Sắc thuốc thang', title: 'Y lệnh có Y lệnh khác: Chỉ định sắc thuốc thang' }]} />
         <span className="ml-1 text-[11px] font-semibold text-muted-foreground">Số ngày</span>
-        <Segmented value={days} onChange={setDays} disabled={state.busy || !src} options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n), title: n === 1 ? 'Chỉ Sao chép' : `Sao chép + Sao y lệnh ${n - 1} ngày` }))} />
+        <Segmented value={days} onChange={changeDays} disabled={state.busy || !src} options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n), title: n === 1 ? 'Chỉ Sao chép' : `Sao chép + Sao y lệnh ${n - 1} ngày` }))} />
         <span className="ml-auto text-[11px] text-muted-foreground">xóa {total}{addCount ? ` · thêm ${addCount}` : ''}</span>
         <Button variant="gradient" size="sm" disabled={!src || state.busy} onClick={() => setConfirm(true)} data-action="run">
           <Copy /> Sao chép {days} ngày

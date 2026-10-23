@@ -32,8 +32,8 @@ export interface DayEdit {
   /** Sắc thuốc thang: full "HH:mm dd/MM/yyyy" times, each with its own date. */
   chiDinh?: string; thucHien?: string;
 }
-/** addsFor: the source the Thêm thuốc ticks were made for; another source ticks again. */
-export interface Choice { days: number; deletions: string[][]; edits?: (DayEdit | null)[]; adds?: string[][]; addsFor?: string; savedAt?: number }
+/** addsMine: the source the user changed the Thêm thuốc ticks for; otherwise the tool ticks again. */
+export interface Choice { days: number; deletions: string[][]; edits?: (DayEdit | null)[]; adds?: string[][]; addsMine?: string; savedAt?: number }
 /** Thêm thuốc ticks the tool made from the recent usual orders. */
 export interface AutoTicks { adds: string[][]; why: { day: number; id: string; from: string }[]; for: string; dels?: string[][] }
 export interface CheckItem {
@@ -67,7 +67,7 @@ export interface AppState {
   viewUrl: string; canGoBack?: boolean; viewZoom?: number; update: UpdateInfo | null; login?: LoginInfo;
 }
 export interface LogEntry { at: number; level: 'info' | 'ok' | 'warn' | 'error'; msg: string }
-export interface Plan { patient: Patient; kind?: Kind; sourceId?: string; days: number; deletions?: string[][]; baseDeletions?: string[][]; edits?: (DayEdit | null)[]; adds?: string[][]; addsFor?: string }
+export interface Plan { patient: Patient; kind?: Kind; sourceId?: string; days: number; deletions?: string[][]; baseDeletions?: string[][]; edits?: (DayEdit | null)[]; adds?: string[][]; addsMine?: string }
 /** sac: the sắc thuốc thang copy run right after a usual one. */
 export interface RunResult { noitruid: string; ok: boolean; message?: string; stopped?: boolean; check?: Check | null; sac?: { ok: boolean; skipped?: boolean; message?: string; days?: number; stopped?: boolean } }
 

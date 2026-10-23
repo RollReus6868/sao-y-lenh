@@ -34,7 +34,7 @@ async function waitFor(what, fn, ms = 30000) {
   args.push(`--remote-debugging-port=${PORT}`);
   const app = spawn(exe || electronBin, args, {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, SYL_DATA_DIR: dataDir, SYL_ONEMES_URL: m.base + '/login.aspx', SYL_NO_UPDATE_CHECK: '1', SYL_TODAY: '00:00 12/10/2026' },
+    env: { ...process.env, SYL_DATA_DIR: dataDir, SYL_ONEMES_URL: m.base + '/login.aspx', SYL_NO_UPDATE_CHECK: '1', SYL_TEST_MENU: '1', SYL_TODAY: '00:00 12/10/2026' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let appOut = '';
@@ -135,14 +135,21 @@ async function waitFor(what, fn, ms = 30000) {
     await ui.click('[data-item="Lirystad 150"] button >> nth=0'); // whole row: every day
     await ui.click('[aria-label="Xóa Điều trị bằng siêu âm ngày 3"]');
     check(/\(Hao phí\)/.test(await ui.textContent('[data-item="Kim châm cứu tiệt trùng dùng một lần"]')), 'VTYT shows (Hao phí)');
-    // Day 1: other time and doctor (the doctor list was read from OneMES on opening).
+    // Day 1: other time and doctor (the doctor list was read from OneMES on opening),
+    // set while only 2 days are chosen; day 3 takes them too once a third day is added (0.6.1).
+    await ui.click('button[title="Sao chép + Sao y lệnh 1 ngày"]');
     await ui.click('[data-eday="1"]');
     await ui.fill('[data-order-fields] [data-field=gio]', '7h40');
     await ui.press('[data-order-fields] [data-field=gio]', 'Enter');
     await waitFor('doctor list', async () => (await ui.$$('[data-order-fields] [data-field=bacSi] option')).length >= 4, 20000);
     await ui.selectOption('[data-order-fields] [data-field=bacSi]', 'd2');
+    // Right click in a text box offers Cắt / Sao chép / Dán (0.6.1).
+    await ui.click('[data-order-fields] [data-field=dienBien]', { button: 'right' });
+    const menu = await waitFor('edit menu', () => ui.evaluate(() => window.app.call('menu:last')), 5000).catch(() => null);
+    check(menu && ['Cắt', 'Sao chép', 'Dán', 'Chọn tất cả'].every((x) => menu.includes(x)), 'right click in a text box shows Cắt / Sao chép / Dán: ' + JSON.stringify(menu));
+    await ui.click('button[title="Sao chép + Sao y lệnh 2 ngày"]');
     // A change on day 1 carries to the days after it; day 3 then gets its own doctor back.
-    check((await ui.$$('[data-eday] .bg-amber-500')).length === 3, 'edit on day 1 marks days 2 and 3 too');
+    check((await ui.$$('[data-eday] .bg-amber-500')).length === 3, 'edit on day 1 marks days 2 and 3 too (day 3 added afterwards)');
     await ui.click('[data-eday="3"]');
     await ui.selectOption('[data-order-fields] [data-field=bacSi]', 'd1');
     // Add Cồn xoa bóp on day 2 only.
@@ -293,6 +300,17 @@ async function waitFor(what, fn, ms = 30000) {
     // usual copy the sắc thuốc thang order is copied by itself for the same number of days.
     const pA = m.mock.getState().patients[0];
     const o10 = pA.orders.find((o) => o.date.getDate() === 10 && !/sắc/i.test(o.khac));
+    // First a look while nothing is due (10/10 not finished yet, so not remembered):
+    // 0.6.0 then kept "no tick" for this source on every later visit (user, 2026-10-23).
+    const st10 = o10.status;
+    o10.status = 'Mới';
+    await ui.click('[data-patient="2400000001"] >> button >> nth=1');
+    await ui.waitForSelector('[data-grid]', { timeout: 30000 });
+    await sleep(1500);
+    check(!(await ui.$('[aria-label="Thêm Cao thông mạch ngày 1"][aria-pressed=true]')), 'tick sẵn: nothing due on the first look');
+    await ui.click('[data-action=back]');
+    await ui.waitForSelector('[data-patient="2400000001"]');
+    o10.status = st10;
     o10.thuoc.push({ ...o10.thuoc[0], id: require('crypto').randomUUID(), name: 'CAO THÔNG MẠCH', hamLuong: '12000mg+10000mg+8000mg', dvt: 'Chai' });
     // The source (12/10) has Cồn xoa bóp: the copies drop it (0.6.0).
     const o12 = pA.orders.filter((o) => o.date.getDate() === 12 && !/sắc/i.test(o.khac) && o.status === 'Hoàn tất').pop();

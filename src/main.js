@@ -1,7 +1,7 @@
 // Electron main process: the window, the embedded OneMES view, and the commands the
 // UI calls. Automation lives in driver.js; this file only wires it up.
 'use strict';
-const { app, BrowserWindow, WebContentsView, ipcMain, session, shell, net, safeStorage } = require('electron');
+const { app, BrowserWindow, WebContentsView, Menu, ipcMain, session, shell, net, safeStorage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { createStore } = require('./store');
@@ -82,6 +82,7 @@ function setupView() {
   // Not in the window until the Trình duyệt page shows it; it keeps its size so OneMES lays out normally.
   placeView();
   const wc = view.webContents;
+  editMenu(wc);
   const upd = () => {
     const u = wc.getURL();
     if (/wpid=danhsachdieutrinoitrudraw/i.test(u) && !/bacsidraw/i.test(u)) {
@@ -367,6 +368,7 @@ const commands = {
     placeView();
   },
   'view:zoom': ({ zoom }) => setZoom(zoom),
+  'menu:last': () => lastMenu,
   'view:state': () => ({ shown: viewShown, visible: view.getVisible(), attached: win.contentView.children.includes(view), bounds: view.getBounds() }),
   'view:nav': async ({ action }) => {
     const wc = view.webContents;
@@ -445,8 +447,8 @@ const commands = {
             if (!r.source) throw new Error('Không có y lệnh nguồn phù hợp');
             p.sourceId = r.source.id;
             if (p.baseDeletions) p.deletions = resolveKeys(r.source, p.baseDeletions);
-            // Ticks saved for another source are stale: tick again from the recent orders.
-            if (p.kind !== 'sac' && p.addsFor !== r.source.id) {
+            // Ticks the user did not set for this very source: tick again from the recent orders.
+            if (p.kind !== 'sac' && p.addsMine !== r.source.id) {
               const t = await ticksFor(d, p.patient, r, p.baseDeletions);
               if (t) {
                 p.adds = t.adds.slice(0, p.days);
@@ -717,6 +719,35 @@ async function installUpdate() {
   }
 }
 
+// Right click: Cắt / Sao chép / Dán / Chọn tất cả in text boxes, Sao chép on selected text
+// (0.6.1, user request). Electron shows no menu of its own.
+function editMenu(wc) {
+  wc.on('context-menu', (_e, p) => {
+    const f = p.editFlags || {};
+    const items = [];
+    if (p.isEditable) {
+      items.push(
+        { label: 'Hoàn tác', role: 'undo', enabled: f.canUndo },
+        { label: 'Làm lại', role: 'redo', enabled: f.canRedo },
+        { type: 'separator' },
+        { label: 'Cắt', role: 'cut', enabled: f.canCut },
+        { label: 'Sao chép', role: 'copy', enabled: f.canCopy },
+        { label: 'Dán', role: 'paste', enabled: f.canPaste },
+        { label: 'Xóa', role: 'delete', enabled: f.canDelete },
+        { type: 'separator' },
+        { label: 'Chọn tất cả', role: 'selectAll', enabled: f.canSelectAll },
+      );
+    } else if (p.selectionText && p.selectionText.trim()) {
+      items.push({ label: 'Sao chép', role: 'copy' }, { label: 'Chọn tất cả', role: 'selectAll' });
+    }
+    if (!items.length) return;
+    lastMenu = items.filter((x) => x.label).map((x) => x.label);
+    if (process.env.SYL_TEST_MENU) return; // tests read lastMenu instead of opening it
+    Menu.buildFromTemplate(items).popup({ window: win || undefined });
+  });
+}
+let lastMenu = null;
+
 // ---------- app ----------
 function createWindow() {
   win = new BrowserWindow({
@@ -732,6 +763,7 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: false, spellcheck: false },
   });
   win.once('ready-to-show', () => win.show());
+  editMenu(win.webContents);
   win.loadFile(path.join(__dirname, '..', 'ui_dist', 'index.html'));
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) shell.openExternal(url);

@@ -352,8 +352,10 @@ function createDriver(host) {
   // Thêm thuốc ticks made for the user (0.5.0): reads the drugs of the usual orders
   // (both progress notes) of the last `tuTick` days before the source, then ticks
   // each drug on the copied day that falls `tuTick` days after a day holding it.
-  // Completed orders are read once and remembered.
+  // Completed orders are remembered for a short while only (0.6.1): the user may change
+  // a day on OneMES by hand, and a stale list left the ticks off.
   const drugCache = new Map();
+  const DRUG_CACHE_MS = 2 * 60 * 1000;
   async function autoTicks(rows, src, catalog, deletions = []) {
     const items = (catalog || []).filter((it) => +it.tuTick > 0);
     const srcRow = rows.find((r) => r.id === norm(src.id));
@@ -367,12 +369,12 @@ function createDriver(host) {
       if (!d || d < from || dayOnly(d) > dayOnly(base)) continue;
       let names;
       if (r.id === norm(src.id)) names = src.thuoc.map((x) => x.name);
-      else if (drugCache.has(r.id)) names = drugCache.get(r.id);
+      else if (drugCache.has(r.id) && Date.now() - drugCache.get(r.id).at < DRUG_CACHE_MS) names = drugCache.get(r.id).names;
       else {
         checkStop();
         const o = await openOrder(r.id);
         names = o.thuoc.map((x) => x.name);
-        if (isDone(o)) drugCache.set(r.id, names);
+        if (isDone(o)) drugCache.set(r.id, { names, at: Date.now() });
       }
       history.push({ id: r.id, tg: r.tg, names });
     }
@@ -761,6 +763,7 @@ function createDriver(host) {
    * Day 1 is the copy made by Sao chép; days 2..N come from Sao y lệnh (ngày) = N-1.
    */
   async function run(plan) {
+    drugCache.clear(); // the tool changes orders; read their drugs afresh
     const result = { days: [], ok: false };
     try {
       return await runInner(plan, result);
@@ -1026,6 +1029,7 @@ function createDriver(host) {
   // OneMES only offers Xóa on a Mới order, and asks no question, so the caller
   // must have confirmed with the user. Hoàn tất orders are recalled first.
   async function deleteOrder(patient, id) {
+    drugCache.clear(); // the tool changes orders; read their drugs afresh
     const rows = await openPatient(patient);
     const row = rows.find((r) => r.id === norm(id));
     if (!row) throw new PageError('Không thấy y lệnh này trong Lịch sử y lệnh (có thể đã xóa)');
@@ -1067,6 +1071,7 @@ function createDriver(host) {
    * A Hoàn tất order is recalled first and completed again afterwards.
    */
   async function updateDay(patient, id, edit, remove = [], autoComplete = true) {
+    drugCache.clear(); // the tool changes orders; read their drugs afresh
     const rows = await openPatient(patient);
     const row = rows.find((r) => r.id === norm(id));
     if (!row) throw new PageError('Không thấy y lệnh này trong Lịch sử y lệnh (có thể đã xóa)');
@@ -1631,14 +1636,15 @@ function clsText(results) {
       }
     }
     for (const [g, vs] of groups) block.push(`${g}: ${vs.join('; ')}`);
-    // A test read with nothing abnormal gets its own line under its name (0.6.0, user:
-    // "Xét nghiệm hóa sinh: Các chỉ số trong giới hạn bình thường."), unless another test
-    // of the same group already lists values.
+    // A test read with nothing abnormal gets its own line under the same heading the
+    // abnormal values use (0.6.1, user: "tên mục xét nghiệm: Các chỉ số trong giới hạn
+    // bình thường", e.g. "Hóa sinh máu: …", not "Xét nghiệm hóa sinh: …"), unless another
+    // test of the same group already lists values.
     const normal = [];
     for (const r of rs.filter((x) => x.kind === 'xn' && !x.items.length && x.total !== 0)) {
-      const label = String(r.name || r.loai || 'Xét nghiệm').replace(/\s+/g, ' ').trim();
-      const l = `${label.charAt(0).toUpperCase()}${label.slice(1)}: ${CLS_NORMAL}.`;
-      if (!groups.has(clsGroup(label)) && !normal.includes(l)) normal.push(l);
+      const g = clsGroup(r.name || r.loai || 'Xét nghiệm');
+      const l = `${g}: ${CLS_NORMAL}`;
+      if (!groups.has(g) && !normal.includes(l)) normal.push(l);
     }
     block.push(...normal);
     for (const r of rs.filter((x) => x.kind === 'cdha')) if (r.ketLuan) block.push(`${r.name}: ${r.ketLuan.replace(/\s*\n\s*/g, '; ')}`);

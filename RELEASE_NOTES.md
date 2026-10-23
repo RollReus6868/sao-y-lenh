@@ -1,4 +1,11 @@
-# Sao Y Lệnh 0.6.0
+# Sao Y Lệnh 0.6.1
+
+- **Sửa từng ngày áp dụng cho cả ngày 3, ngày 4**: trước đây nếu sửa ngày 1 khi đang chọn 2 ngày rồi mới tăng lên 3 hoặc 4 ngày, ngày thêm vào không nhận phần sửa ("Ô không sửa giữ như y lệnh nguồn"). Giờ ngày thêm vào nhận đúng phần sửa của ngày trước nó (giờ, bác sĩ, cấp độ, diễn biến), giống ngày 1 và ngày 2. Vẫn sửa riêng từng ngày được.
+- **Tự tick Cồn xoa bóp / Cao thông mạch ổn định hơn**: trước đây nếu lần mở bệnh nhân đầu tiên chưa có gì để tick, tool nhớ luôn "không tick" cho y lệnh nguồn đó, nên lần sau mở lại không tự tick nữa; tool cũng nhớ thuốc của các ngày cũ suốt buổi, nên ngày nào anh/chị thêm thuốc trực tiếp trên OneMES thì tool không biết. Giờ mỗi lần mở bệnh nhân tool đều tính lại (thuốc ngày cũ chỉ nhớ 2 phút). Chỉ khi anh/chị tự bấm đổi tick của 2 thuốc này thì tool mới giữ nguyên lựa chọn của anh/chị.
+- **Kết quả CLS**: xét nghiệm không có chỉ số bất thường ghi theo tên mục giống các dòng khác, ví dụ "Hóa sinh máu: Các chỉ số trong giới hạn bình thường", "Công thức máu: Các chỉ số trong giới hạn bình thường".
+- **Menu chuột phải**: trong các ô sửa diễn biến, nội dung… bấm chuột phải có Cắt, Sao chép, Dán, Xóa, Chọn tất cả, Hoàn tác. Bôi đen chữ ở chỗ khác rồi chuột phải để Sao chép. Dùng được cả trong trang OneMES ở **Trình duyệt**.
+
+## 0.6.0
 
 - **Tự đăng nhập OneMES**: vào **Cài đặt → Tài khoản OneMES** nhập tài khoản và mật khẩu rồi bấm **Lưu tài khoản**, hoặc chỉ cần đăng nhập tay một lần trong trang **Trình duyệt** (đăng nhập được thì tool tự nhớ). Từ đó, mỗi khi OneMES hiện trang đăng nhập (mới mở tool, hết phiên, đang làm thì bị đăng xuất), tool tự điền và đăng nhập rồi làm tiếp việc đang làm. Mật khẩu được mã hóa trên máy, không hiện ra ở đâu. Tắt được bằng công tắc **Tự đăng nhập**. Nếu đăng nhập không được (ví dụ sai mật khẩu), tool không thử lại liên tục mà ghi lý do vào Cài đặt và Nhật ký.
 - **Sửa lỗi bắt đăng nhập lại khi chuyển mục**: một nguyên nhân là danh sách bệnh nhân đã quét giữ địa chỉ kèm mã phiên cũ, nên sau khi đăng nhập lại, mở bệnh nhân bằng địa chỉ cũ bị OneMES đưa về trang đăng nhập. Giờ tool luôn mở bằng mã phiên đang dùng. Phiên đăng nhập cũng được giữ khi tắt mở lại tool (nếu máy chủ còn giữ phiên).
