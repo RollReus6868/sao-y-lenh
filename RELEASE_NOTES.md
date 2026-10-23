@@ -1,4 +1,8 @@
-# Sao Y Lệnh 0.6.1
+# Sao Y Lệnh 0.6.2
+
+- **Sửa dòng chữ gây hiểu nhầm ở ngày cuối**: trong **Sửa từng ngày**, ngày cuối (ngày 3 khi chọn 3 ngày, ngày 4 khi chọn 4 ngày) trước ghi "Ô không sửa giữ như y lệnh nguồn" nên trông như ngày đó không được sửa. Thực ra ngày cuối vẫn nhận phần sửa của các ngày trước (có chấm cam và chữ "đã sửa"). Giờ dòng chữ ghi rõ: "Ngày cuối: đã nhận phần sửa của các ngày trước, sửa ở đây chỉ đổi ngày này".
+
+## 0.6.1
 
 - **Sửa từng ngày áp dụng cho cả ngày 3, ngày 4**: trước đây nếu sửa ngày 1 khi đang chọn 2 ngày rồi mới tăng lên 3 hoặc 4 ngày, ngày thêm vào không nhận phần sửa ("Ô không sửa giữ như y lệnh nguồn"). Giờ ngày thêm vào nhận đúng phần sửa của ngày trước nó (giờ, bác sĩ, cấp độ, diễn biến), giống ngày 1 và ngày 2. Vẫn sửa riêng từng ngày được.
 - **Tự tick Cồn xoa bóp / Cao thông mạch ổn định hơn**: trước đây nếu lần mở bệnh nhân đầu tiên chưa có gì để tick, tool nhớ luôn "không tick" cho y lệnh nguồn đó, nên lần sau mở lại không tự tick nữa; tool cũng nhớ thuốc của các ngày cũ suốt buổi, nên ngày nào anh/chị thêm thuốc trực tiếp trên OneMES thì tool không biết. Giờ mỗi lần mở bệnh nhân tool đều tính lại (thuốc ngày cũ chỉ nhớ 2 phút). Chỉ khi anh/chị tự bấm đổi tick của 2 thuốc này thì tool mới giữ nguyên lựa chọn của anh/chị.

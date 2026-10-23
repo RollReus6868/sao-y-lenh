@@ -151,6 +151,8 @@ async function waitFor(what, fn, ms = 30000) {
     // A change on day 1 carries to the days after it; day 3 then gets its own doctor back.
     check((await ui.$$('[data-eday] .bg-amber-500')).length === 3, 'edit on day 1 marks days 2 and 3 too (day 3 added afterwards)');
     await ui.click('[data-eday="3"]');
+    const hint = await ui.textContent('[data-day-edits]');
+    check(/Ngày cuối: đã nhận phần sửa/.test(hint) && !/Ô không sửa/.test(hint), 'last day says it took the earlier edits (0.6.2)');
     await ui.selectOption('[data-order-fields] [data-field=bacSi]', 'd1');
     // Add Cồn xoa bóp on day 2 only.
     await ui.click('[aria-label="Thêm Cồn xoa bóp ngày 2"]');

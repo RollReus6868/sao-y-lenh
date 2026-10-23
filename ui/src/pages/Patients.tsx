@@ -614,7 +614,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
                 <div className="border-t border-border/40 p-3">
                   <div className="mb-2 flex items-center gap-2 text-xs">
                     <span className="font-bold">Ngày {eday + 1} · {dayDate(eday)}</span>
-                    <span className="text-muted-foreground">{eday < days - 1 ? (sac ? `Giờ chỉ đổi ngày này, mục khác áp dụng luôn cho ngày ${eday + 2}–${days}` : `Sửa ở đây áp dụng luôn cho ngày ${eday + 2}–${days}`) : 'Ô không sửa giữ như y lệnh nguồn'}</span>
+                    <span className="text-muted-foreground">{eday < days - 1 ? (sac ? `Giờ chỉ đổi ngày này, mục khác áp dụng luôn cho ngày ${eday + 2}–${days}` : `Sửa ở đây áp dụng luôn cho ngày ${eday + 2}–${days}`) : days > 1 ? 'Ngày cuối: đã nhận phần sửa của các ngày trước, sửa ở đây chỉ đổi ngày này' : 'Sửa ở đây áp dụng cho ngày này'}</span>
                     <span className="ml-auto flex gap-1">
                       <Button variant="ghost" size="xs" disabled={!edits[eday]} onClick={() => setEdit(eday, null)} data-action="edit-reset"><RotateCcw /> Bỏ sửa</Button>
                     </span>
