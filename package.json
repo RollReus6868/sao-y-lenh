@@ -1,7 +1,7 @@
 {
   "name": "sao-y-lenh",
   "productName": "SaoYLenh",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Sao chép và sửa y lệnh nội trú trên OneMES",
   "main": "src/main.js",
   "author": "Xuan Dai",

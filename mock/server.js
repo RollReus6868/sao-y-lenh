@@ -164,10 +164,17 @@ const KQ = {
       ['(S36) Định lượng Cholesterol toàn phần (máu)', '6.1', '3.9-5.2', 'mmol/L', 'red'],
       ['(S10) Định lượng Creatinin (máu)', '75', '62-120', 'µmol/L', ''],
     ] },
+    // A reading off the scale is coloured and must be kept (0.6.3); the coloured
+    // Urobilinogen sits on its lower bound and is dropped.
+    { id: 'xn5', tg: '08:10 06/10/2026', loai: 'Xét nghiệm nước tiểu', dv: 'Tổng phân tích nước tiểu (Bằng máy tự động)', items: [
+      ['(S64) Tỷ trọng', '>=1.030', '1.005-1.030', '', 'blue'],
+      ['(S65) pH', '5.5', '5-7.5', '', ''],
+      ['(S73) Urobilinogen', '3.2 µmol/L', '3.2-16 µmol/L', 'mg/dl', 'blue'],
+    ] },
   ],
   cdha: [
     { id: 'cd1', tg: '09:00 10/10/2026', ten: 'Siêu âm ổ bụng tổng quát', moTa: 'Gan: kích thước bình thường, nhu mô tăng âm nhẹ.', ketLuan: 'Gan nhiễm mỡ độ I' },
-    { id: 'cd2', tg: '09:30 06/10/2026', ten: 'Chụp X-quang cột sống thắt lưng thẳng nghiêng', moTa: 'Gai xương thân đốt L4, L5.', ketLuan: 'Thoái hóa cột sống thắt lưng' },
+    { id: 'cd2', tg: '09:30 06/10/2026', ten: 'Chụp X-quang khớp vai thẳng [số hóa 1 phim]', moTa: 'Gai xương bờ ổ chảo.', ketLuan: 'Hình ảnh thoái hóa khớp vai' },
   ],
 };
 

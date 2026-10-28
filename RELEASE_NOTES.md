@@ -1,4 +1,10 @@
-# Sao Y Lệnh 0.6.2
+# Sao Y Lệnh 0.6.3
+
+- **Kết quả CLS, tạo y lệnh mới để trống Cấp độ chăm sóc**: OneMES tự điền cấp độ vào y lệnh mới; tool giờ xóa ô này trước khi Lưu.
+- **Bỏ phần trong ngoặc sau tên**: ví dụ "Chụp X-quang khớp vai thẳng [số hóa 1 phim]" ghi thành "Chụp X-quang khớp vai thẳng", "Siêu âm khớp (gối, háng, khuỷu, cổ tay….)" ghi thành "Siêu âm khớp".
+- **Tỷ trọng nước tiểu ">=1.030"**: kết quả dạng ">=1.030" (hoặc ">", "<", "<=") mà OneMES tô màu xanh hoặc đỏ thì tool coi là bất thường và ghi "Tỷ trọng >=1.030", không bỏ qua nữa.
+
+## 0.6.2
 
 - **Sửa dòng chữ gây hiểu nhầm ở ngày cuối**: trong **Sửa từng ngày**, ngày cuối (ngày 3 khi chọn 3 ngày, ngày 4 khi chọn 4 ngày) trước ghi "Ô không sửa giữ như y lệnh nguồn" nên trông như ngày đó không được sửa. Thực ra ngày cuối vẫn nhận phần sửa của các ngày trước (có chấm cam và chữ "đã sửa"). Giờ dòng chữ ghi rõ: "Ngày cuối: đã nhận phần sửa của các ngày trước, sửa ở đây chỉ đổi ngày này".
 

@@ -2,7 +2,7 @@
 // calls OneMES's own functions; it never calls the server directly.
 // Every function returns plain data so it survives structured clone.
 (function () {
-  if (window.__SYL && window.__SYL.version === 13) return;
+  if (window.__SYL && window.__SYL.version === 14) return;
 
   const txt = (el) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
   const norm = (s) =>
@@ -551,7 +551,7 @@
   };
 
   // Fills the order form. f = { thoiGian, thoiGianThucHien, dienBien, dienBienPHCN,
-  // bacSi: {id, text}, capDo: {id, text} }; fields left out stay as they are.
+  // bacSi: {id, text}, capDo: {id, text}, clearCapDo }; fields left out stay as they are.
   function setOrderFields(f) {
     const w = where();
     if (!w.popupOpen) return { ok: false, reason: 'popup-closed' };
@@ -575,6 +575,18 @@
     t('txtYLenhKhacThamKham', f.yLenhKhac, 'Y lệnh khác');
     if (f.bacSi && f.bacSi.id && !setPicked('cboBacSiThamKham', f.bacSi.id, f.bacSi.text)) bad.push('Bác sĩ');
     if (f.capDo && f.capDo.id && !setPicked('cboCapDoChamSocThamKham', f.capDo.id, f.capDo.text)) bad.push('Cấp độ chăm sóc');
+    // Kết quả CLS orders leave Cấp độ chăm sóc empty (0.6.3, user request).
+    if (f.clearCapDo) {
+      const s = byId('cboCapDoChamSocThamKham');
+      if (s && s.value) {
+        if (window.jQuery) window.jQuery(s).val(null).trigger('change');
+        else {
+          s.value = '';
+          s.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (s.value) bad.push('Cấp độ chăm sóc (để trống)');
+      }
+    }
     return bad.length ? { ok: false, reason: 'Không điền được: ' + bad.join(', ') } : { ok: true };
   }
 
@@ -1290,7 +1302,7 @@
   }
 
   window.__SYL = {
-    version: 13,
+    version: 14,
     loginForm,
     doLogin,
     where,

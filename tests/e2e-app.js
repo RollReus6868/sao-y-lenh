@@ -287,6 +287,7 @@ async function waitFor(what, fn, ms = 30000) {
     const cls = m.mock.getState().patients[1].orders.filter((o) => !before2.includes(o.id));
     check(cls.length === 1 && cls[0].dienBien === clsText && hm(cls[0].dateTH) === '14:20' && cls[0].dateTH.getDate() === 11 && cls[0].status === 'Hoàn tất', 'CLS: new order with the text at 14:20 11/10 (typed time kept), completed');
     check(cls[0] && cls[0].khac === '* Giải thích kết quả CLS với người bệnh và người nhà.' && m.mock.getState().log.some((x) => x[0] === 'benhChinhCo'), 'CLS: Y lệnh khác filled, bệnh chính question answered Có');
+    check(cls[0] && !cls[0].capDo, 'CLS: Cấp độ chăm sóc left empty (0.6.3)');
 
     // Choice is remembered and shown in the list.
     await ui.click('[data-action=back]');

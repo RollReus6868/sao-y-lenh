@@ -64,7 +64,7 @@ function createDriver(host) {
 
   async function call(fn, ...args) {
     const a = args.map((x) => JSON.stringify(x)).join(',');
-    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==13){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
+    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==14){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
   }
 
   function checkStop() {
@@ -569,6 +569,7 @@ function createDriver(host) {
     if (f.yLenhKhac !== undefined) out.push('y lệnh khác');
     if (f.bacSi) out.push(`bác sĩ ${f.bacSi.text}`);
     if (f.capDo) out.push(`cấp độ ${f.capDo.text}`);
+    if (f.clearCapDo) out.push('để trống cấp độ chăm sóc');
     return out.join(', ');
   }
 
@@ -1395,8 +1396,12 @@ function createDriver(host) {
     }
     if (o.thoiGianThucHien === f.thoiGianThucHien) delete f.thoiGianThucHien;
     if (o.thoiGian === f.thoiGian) delete f.thoiGian;
+    // OneMES fills Cấp độ chăm sóc into a new order; the user wants it empty (0.6.3).
+    const cur = await call('readOrder');
+    if (cur && cur.capDo && cur.capDo.id) f.clearCapDo = true;
     await applyFields(id, label, f);
     const back = await readStable(id);
+    if (back.capDo && back.capDo.id) log('warn', `${label}: OneMES vẫn giữ cấp độ chăm sóc ${back.capDo.text || back.capDo.id} sau khi Lưu`);
     if (back.thoiGianThucHien && back.thoiGianThucHien !== fmtTime(th)) throw new PageError(`${label}: giờ thực hiện trên OneMES là ${back.thoiGianThucHien}, không phải ${fmtTime(th)}`);
     if (autoComplete) await complete(id, label);
     await call('back').catch(() => {});
@@ -1560,12 +1565,26 @@ function planTicks({ history, srcDate, srcThuoc = [], deletions = [], catalog = 
 
 // "Xét nghiệm huyết học" -> "Công thức máu", other groups lose "Xét nghiệm".
 function clsGroup(s) {
-  const t = String(s || '').replace(/\s+/g, ' ').trim();
+  const t = clsPlain(s);
   if (/huyết học/i.test(t)) return 'Công thức máu';
   if (/hóa sinh|hoá sinh/i.test(t)) return 'Hóa sinh máu';
   const x = t.replace(/^xét nghiệm\s*/i, '').trim();
   return x ? x.charAt(0).toUpperCase() + x.slice(1) : 'Xét nghiệm';
 }
+// "Chụp X-quang khớp vai thẳng [số hóa 1 phim]" -> "Chụp X-quang khớp vai thẳng",
+// "Siêu âm khớp (gối, háng, khuỷu, cổ tay….)" -> "Siêu âm khớp" (0.6.3, user request:
+// no bracketed part after a service or group name).
+function clsPlain(s) {
+  let t = String(s || '').replace(/\s+/g, ' ').trim();
+  for (let i = 0; i < 3; i++) {
+    const x = t.replace(/\s*(\[[^\]]*\]?|\([^)]*\)?)\s*$/, '').trim();
+    if (!x || x === t) break;
+    t = x;
+  }
+  return t;
+}
+// A machine reading at the end of its scale, e.g. Tỷ trọng ">=1.030".
+const clsBound = (v) => /^\s*(<=|>=|≤|≥|<|>)/.test(String(v || ''));
 // "(S34) Định lượng Procalcitonin (PCT) (máu)" -> "PCT"; otherwise the plain name.
 function clsName(s) {
   let t = String(s || '').replace(/\s+/g, ' ').trim();
@@ -1594,6 +1613,9 @@ function clsInRange(value, ref) {
   const v = String(value || '').trim();
   const r = String(ref || '').trim();
   if (!v || !r) return null;
+  // ">=1.030" against "1.005-1.030": the reading is off the scale, so the site's colour
+  // decides (0.6.3, user: a coloured Tỷ trọng >=1.030 is abnormal).
+  if (clsBound(v)) return null;
   const vm = new RegExp(`^[<>≤≥=\\s]*(${CLS_NUM})`).exec(v);
   if (!vm) return norm(v) === norm(r) ? true : null;
   const x = clsNum(vm[1]);
@@ -1631,7 +1653,8 @@ function clsText(results) {
         if (!groups.has(g)) groups.set(g, []);
         // A word result (Positive, Trace, Âm tính…) takes no unit.
         const unit = it.unit && /\d/.test(it.value) ? (it.unit === '%' ? '' : ' ') + it.unit : '';
-        const v = `${clsName(it.name)}: ${String(it.value).trim()}${unit}`;
+        // A reading off the scale reads "Tỷ trọng >=1.030", with no colon (0.6.3).
+        const v = `${clsName(it.name)}${clsBound(it.value) ? ' ' : ': '}${String(it.value).trim().replace(/^(<=|>=|≤|≥|<|>)\s+/, '$1')}${unit}`;
         if (!groups.get(g).includes(v)) groups.get(g).push(v);
       }
     }
@@ -1647,7 +1670,7 @@ function clsText(results) {
       if (!groups.has(g) && !normal.includes(l)) normal.push(l);
     }
     block.push(...normal);
-    for (const r of rs.filter((x) => x.kind === 'cdha')) if (r.ketLuan) block.push(`${r.name}: ${r.ketLuan.replace(/\s*\n\s*/g, '; ')}`);
+    for (const r of rs.filter((x) => x.kind === 'cdha')) if (r.ketLuan) block.push(`${clsPlain(r.name) || r.name}: ${r.ketLuan.replace(/\s*\n\s*/g, '; ')}`);
     if (!block.length) continue;
     if (many) lines.push(`Ngày ${day.slice(0, 5)}:`);
     lines.push(...block.map((b) => (many ? '- ' + b : b)));
