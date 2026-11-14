@@ -11,6 +11,10 @@ on:
         description: 'Publish a GitHub Release from this commit'
         type: boolean
         default: false
+      mac:
+        description: 'Build macOS too (off: the release holds the Windows installer only)'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -70,6 +74,7 @@ jobs:
 
   macos:
     needs: test
+    if: github.event_name != 'workflow_dispatch' || inputs.mac
     strategy:
       fail-fast: false
       matrix:
@@ -107,7 +112,10 @@ jobs:
 
   release:
     needs: [windows, macos]
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish)
+    if: >-
+      !cancelled() && needs.windows.result == 'success' &&
+      (needs.macos.result == 'success' || (needs.macos.result == 'skipped' && github.event_name == 'workflow_dispatch' && !inputs.mac)) &&
+      (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -120,8 +128,10 @@ jobs:
         run: |
           V=$(node -p "require('./package.json').version")
           cd out
-          for f in "SaoYLenh-$V-windows-setup.exe" "SaoYLenh-$V-mac-arm64.zip" "SaoYLenh-$V-mac-x64.zip"; do test -f "$f" || { echo "::error::missing $f"; exit 1; }; done
-          sha256sum "SaoYLenh-$V-windows-setup.exe" "SaoYLenh-$V-mac-arm64.zip" "SaoYLenh-$V-mac-x64.zip" > SHA256SUMS.txt
+          FILES=("SaoYLenh-$V-windows-setup.exe")
+          if [[ "${{ needs.macos.result }}" != "skipped" ]]; then FILES+=("SaoYLenh-$V-mac-arm64.zip" "SaoYLenh-$V-mac-x64.zip"); fi
+          for f in "${FILES[@]}"; do test -f "$f" || { echo "::error::missing $f"; exit 1; }; done
+          sha256sum "${FILES[@]}" > SHA256SUMS.txt
           if gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "::error::release v$V already exists"; exit 1; fi
           gh release create "v$V" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Sao Y Lệnh $V" --notes-file ../RELEASE_NOTES.md --latest \
-            "SaoYLenh-$V-windows-setup.exe" "SaoYLenh-$V-mac-arm64.zip" "SaoYLenh-$V-mac-x64.zip" SHA256SUMS.txt
+            "${FILES[@]}" SHA256SUMS.txt
