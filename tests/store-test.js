@@ -39,6 +39,22 @@ const t = createStore(dir2).get().settings.themThuoc;
 check(t.map((x) => x.tuTick).join() === '5,3,,7', 'themThuoc: tuTick filled for the defaults only: ' + t.map((x) => x.tuTick).join());
 check(createStore(fs.mkdtempSync(path.join(os.tmpdir(), 'syl-store-'))).get().settings.themThuoc.map((x) => x.tuTick).join() === '5,3', 'themThuoc: fresh defaults carry tuTick');
 fs.rmSync(dir2, { recursive: true, force: true });
+
+// 0.7.0: the last read of a patient's orders is kept in loads.json, not in data.json.
+const dir3 = fs.mkdtempSync(path.join(os.tmpdir(), 'syl-store-'));
+let s3 = createStore(dir3);
+check(s3.getLoad('p1') === null, 'loads: none at first');
+const kept = s3.setLoad('p1', { rows: [{ id: 'a' }], source: { id: 'a' }, skipped: [] });
+s3.setLoad('p1|sac', { rows: [], source: null, skipped: [] });
+s3.setLoad('p2', { rows: [], source: null, skipped: [] });
+check(kept.at > 0 && kept.source.id === 'a', 'loads: kept with the time it was read');
+check(!('loads' in s3.get()) && (!fs.existsSync(path.join(dir3, 'data.json')) || !fs.readFileSync(path.join(dir3, 'data.json'), 'utf8').includes('"rows"')) && fs.existsSync(path.join(dir3, 'loads.json')), 'loads: not in data.json');
+s3 = createStore(dir3);
+check(s3.getLoad('p1').source.id === 'a' && s3.getLoad('p1|sac'), 'loads: survive a restart');
+check(s3.dropLoads('p1') === 2 && !s3.getLoad('p1') && !s3.getLoad('p1|sac') && s3.getLoad('p2'), 'loads: dropping a patient drops both kinds, not other patients');
+check(createStore(dir3).getLoad('p1') === null, 'loads: the drop is saved');
+check(Array.isArray(s3.get().yLenhMaus) && !s3.get().yLenhMaus.length, 'yLenhMaus: empty list by default');
+fs.rmSync(dir3, { recursive: true, force: true });
 fs.rmSync(dir, { recursive: true, force: true });
 console.log(failed ? `${failed} failed` : 'all checks passed');
 process.exit(failed ? 1 : 0);

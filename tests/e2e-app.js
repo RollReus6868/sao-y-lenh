@@ -318,8 +318,17 @@ async function waitFor(what, fn, ms = 30000) {
     // The source (12/10) has Cồn xoa bóp: the copies drop it (0.6.0).
     const o12 = pA.orders.filter((o) => o.date.getDate() === 12 && !/sắc/i.test(o.khac) && o.status === 'Hoàn tất').pop();
     o12.thuoc.push({ ...o12.thuoc[0], id: require('crypto').randomUUID(), name: 'CỒN XOA BÓP', hamLuong: '1000mg+1000mg+1', dvt: 'Lọ' });
+    // 0.7.0: opening again shows the last read at once, without reading OneMES; the
+    // changes made there since show after Cập nhật.
+    const reads0 = m.mock.getState().orderReads || 0;
+    const t0 = Date.now();
     await ui.click('[data-patient="2400000001"] >> button >> nth=1');
     await ui.waitForSelector('[data-grid]', { timeout: 30000 });
+    const shownIn = Date.now() - t0;
+    await sleep(800);
+    check((m.mock.getState().orderReads || 0) === reads0 && !!(await ui.$('[data-read-at]')) && shownIn < 3000, `kept read: shown at once (${shownIn} ms) without reading OneMES, with its time`);
+    check(!(await ui.$('[aria-label="Thêm Cao thông mạch ngày 1"][aria-pressed=true]')), 'kept read: what was read before (no tick yet)');
+    await ui.click('[data-action=reload]');
     await waitFor('auto tick', async () => !!(await ui.$('[aria-label="Thêm Cao thông mạch ngày 1"][aria-pressed=true]')), 15000);
     check(!(await ui.$('[aria-label="Thêm Cao thông mạch ngày 2"][aria-pressed=true]')) && !(await ui.$('[aria-label="Thêm Cồn xoa bóp ngày 1"][aria-pressed=true]')) && /Tự tick N1 \(vì 10\/10 có\)/.test(await ui.textContent('[data-add="cao-thong-mach"]')), 'tick sẵn: Cao thông mạch on day 1 only, with the reason');
     check(/Tự tick xóa N1, N2, N3/.test(await ui.textContent('[data-item="CỒN XOA BÓP"]')) && !!(await ui.$('[aria-label="Xóa CỒN XOA BÓP ngày 3"][aria-pressed=true]')), 'tick xóa: Cồn xoa bóp from the source ticked for deletion on every day');
@@ -338,6 +347,72 @@ async function waitFor(what, fn, ms = 30000) {
     check(sacA[1] && hm(sacA[1].dateTH) === hm(usualA[0].dateTH) && sacA[1].date.getDate() === 12, 'sắc: day 2 thực hiện as the new usual order of 13/10, chỉ định on 12/10');
     const savedA = JSON.parse(fs.readFileSync(path.join(dataDir, 'data.json'), 'utf8'));
     check(savedA.runs[pA.noitruid + '|sac'] && savedA.runs[pA.noitruid + '|sac'].ok && savedA.runs[pA.noitruid].ok, 'sắc: both runs recorded');
+
+    // Y lệnh mẫu (0.7.0): two order pages saved like Chrome does (the form keeps the time
+    // the page was opened and no notes; the order list and the tables are there), imported
+    // at once, edited, then a new order is created for another patient.
+    const pB = m.mock.getState().patients[1];
+    const srcB = pB.orders.filter((o) => o.status === 'Hoàn tất' && o.dvkt.length && o.dienBienPHCN && !/sắc/i.test(o.khac)).sort((a, b) => b.date - a.date);
+    await waitFor('tool idle', async () => !(await ui.$('[data-runbar]')), 120000);
+    await sleep(500);
+    // The UI reads the patient again right after a run; scan once the tool is free.
+    const scanned = await waitFor('scan', () => ui.evaluate(() => window.app.call('scan')), 120000);
+    const urlB = scanned.find((p) => p.noitruid === pB.noitruid).url;
+    await view.goto(urlB.replace(/usid=[^&]+/, 'usid=' + /usid=([^&]+)/.exec(view.url())[1]));
+    const saveOrder = async (o) => {
+      await view.evaluate(() => (typeof loadListYLenh === 'function' && document.getElementById('divDsYLenh') ? loadListYLenh() : onshowDsYLenh(document.getElementById('showDsYLenh'))));
+      await view.waitForSelector('tr[id^="tr"]', { state: 'attached' });
+      await view.evaluate((id) => onDrawWebpartYLenh(id), o.id);
+      await view.waitForFunction(() => document.querySelectorAll('#tblDichVu tr[id]').length > 0);
+      return view.evaluate(() => {
+        const c = document.documentElement.cloneNode(true);
+        for (const id of ['txtThoigianThamKham', 'txtThoigianThucHienThamKham']) {
+          c.querySelector('#' + id).setAttribute('value', '00:56 09/10/2026');
+          if (id === 'txtThoigianThamKham') c.querySelector('#' + id).setAttribute('data-value', '00:56 09/10/2026');
+        }
+        return '<!DOCTYPE html>' + c.outerHTML;
+      });
+    };
+    const fx = fs.mkdtempSync(path.join(os.tmpdir(), 'syl-mau-'));
+    fs.writeFileSync(path.join(fx, 'mau-a.html'), await saveOrder(srcB[0]));
+    fs.writeFileSync(path.join(fx, 'mau-b.html'), await saveOrder(srcB[1]));
+    const pC = m.mock.getState().patients[2];
+    await ui.click('[data-action=back]').catch(() => {});
+    await ui.click(`[data-patient="${pC.maBN}"] >> button >> nth=1`);
+    await ui.waitForSelector('[data-tab=mau]', { timeout: 30000 });
+    await waitFor('idle', async () => !(await ui.$('[data-runbar]')), 60000);
+    await ui.click('[data-tab=mau]');
+    await ui.setInputFiles('[data-input=yl-mau-file]', [path.join(fx, 'mau-a.html'), path.join(fx, 'mau-b.html')]);
+    await ui.waitForSelector('[data-yl-fields]', { timeout: 10000 });
+    check((await ui.$$('[data-field=yl-mau] option')).length === 2, 'mẫu: two files imported at once');
+    check((await ui.inputValue('[data-field=yl-dienBien]')) === srcB[0].dienBien && (await ui.inputValue('[data-field=yl-dienBienPHCN]')) === srcB[0].dienBienPHCN, 'mẫu: notes taken from Lịch sử y lệnh (the saved form has none)');
+    check((await ui.inputValue('[data-field=yl-bacSi]')) === srcB[0].bacSi.id && !(await ui.$('[data-yl-note]')), 'mẫu: doctor read, order found by its service time');
+    check((await ui.$$('[data-yl-thuoc-row]')).length === srcB[0].thuoc.length && !(await ui.$('[data-yl-dvkt]')), 'mẫu: every drug line read, no DVKT section');
+    const gioB = hm(srcB[0].dateTH);
+    check((await ui.inputValue('[data-yl-fields] [data-field=gio]')) === gioB, `mẫu: time as the order (${gioB}), not when the page was saved`);
+    // Edit: drugs the mock's Kê đơn does not stock are dropped; a note and the date changed.
+    const stock = ['Renaxib 200', 'HOẠT HUYẾT KHỨ Ứ ẨM', 'Kim châm cứu tiệt trùng dùng một lần'];
+    for (const t of srcB[0].thuoc.map((x) => x.name).filter((n) => !stock.includes(n))) await ui.click(`[aria-label="Bỏ ${t}"]`);
+    const keep = srcB[0].thuoc.filter((x) => stock.includes(x.name));
+    await ui.fill('[data-field=yl-dienBien]', 'Đỡ đau nhiều theo mẫu.');
+    await ui.click('[data-action=yl-save]');
+    await sleep(500);
+    const savedM = JSON.parse(fs.readFileSync(path.join(dataDir, 'data.json'), 'utf8')).yLenhMaus;
+    check(savedM.length === 2 && savedM[0].dienBien === 'Đỡ đau nhiều theo mẫu.' && savedM[0].thuoc.length === keep.length, 'mẫu: edits saved into the example');
+    await ui.fill('[data-field=yl-ngay]', '15/10/2026');
+    await ui.press('[data-field=yl-ngay]', 'Tab');
+    const beforeC = pC.orders.map((o) => o.id);
+    await ui.click('[data-action=yl-create]');
+    await ui.click('[data-action=yl-confirm]');
+    await ui.waitForSelector('[data-yl-result]', { timeout: 180000 });
+    const newC = m.mock.getState().patients[2].orders.filter((o) => !beforeC.includes(o.id));
+    const oc = newC[0];
+    check(newC.length === 1 && oc.dienBien === 'Đỡ đau nhiều theo mẫu.' && oc.dienBienPHCN === srcB[0].dienBienPHCN && oc.bacSi.id === srcB[0].bacSi.id, 'mẫu: new order with the edited notes and the doctor');
+    check(oc.dateTH.getDate() === 15 && hm(oc.dateTH) === gioB, 'mẫu: on the chosen day at the example time');
+    check(keep.every((k) => oc.thuoc.some((x) => x.name === k.name && x.sl === k.sl && (x.doiTuong === 'Hao phí') === (k.doiTuong === 'Hao phí'))) && oc.thuoc.length === keep.length, 'mẫu: drugs added with SL and hao phí as the example: ' + oc.thuoc.map((x) => `${x.name}×${x.sl} ${x.doiTuong}`).join(', '));
+    check(oc.dvkt.length === 0 && oc.status === 'Hoàn tất' && !(await ui.$('[data-action=yl-open-browser]')), 'mẫu: no DVKT added, every drug in, completed (Tự Hoàn tất on): ' + oc.status);
+    check(!m.mock.getState().log.some((x) => x[0] === 'xoaHetThuoc'), 'mẫu: the prescription was never emptied');
+    fs.rmSync(fx, { recursive: true, force: true });
 
     if (process.env.SHOTS) {
       await ui.click('[data-tab=pick]');

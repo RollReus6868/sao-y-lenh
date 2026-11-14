@@ -16,7 +16,8 @@ export interface Order {
   thuoc: Item[]; dvkt: Item[]; saoYLenh: SelectInfo | null; hinhThucSao: SelectInfo | null;
 }
 export interface Lists { at: number; bacSi: { id: string; name: string; login: string }[]; capDo: { id: string; ma: string; ten: string; text: string }[] }
-export interface LoadResult { rows: OrderRow[]; source: Order | null; skipped: { id: string; tg: string; status: string }[]; lists?: Lists | null; auto?: AutoTicks | null }
+/** at: when OneMES was read (0.7.0: the last read is kept and shown first). */
+export interface LoadResult { rows: OrderRow[]; source: Order | null; skipped: { id: string; tg: string; status: string }[]; lists?: Lists | null; auto?: AutoTicks | null; at?: number }
 export interface Settings {
   baseUrl: string; autoComplete: boolean; stepMode: boolean; hinhThuc: string; defaultDays: number;
   bacSiFav: { id: string; name: string }[]; esBase: string; gpuOff: boolean; themThuoc: AddItem[]; autoLogin?: boolean;
@@ -56,7 +57,7 @@ export interface BaSchema { source: string; groups: BaGroup[] }
 export interface Data {
   settings: Settings; templates: Template[]; choices: Record<string, Choice>; runs: Record<string, RunInfo>;
   lists: Lists | null; benhAn: Record<string, BenhAnDraft>; benhAnMaus: BenhAnMau[]; benhAnMauId: string | null;
-  dvScans?: Record<string, DvScan>; login?: LoginInfo;
+  dvScans?: Record<string, DvScan>; login?: LoginInfo; yLenhMaus?: YLenhMau[];
 }
 export interface BenhAnMau { id: string; name: string; values: BaValues; at: number }
 export interface MauList { benhAnMaus: BenhAnMau[]; benhAnMauId: string | null; id?: string }
@@ -94,3 +95,18 @@ export interface ClsRow { kind: 'xn' | 'cdha'; idx: number; date: string; name: 
 export interface ClsList { dates: string[]; rows: ClsRow[]; usual?: Record<string, string>; at: number }
 export interface ClsResult { kind: 'xn' | 'cdha'; date: string; name: string; items?: { name: string; value: string; unit: string; ref: string; flag: 'red' | 'blue' | null }[]; total?: number; wrong?: { name: string; value: string; ref: string; unit: string }[]; ketLuan?: string }
 export interface ClsRead { results: ClsResult[]; text: string; at: number }
+
+/** A drug / supply line of an order example (0.7.0); added through Kê Tây y/VTYT. */
+export interface MauThuoc { id: string; ten: string; hamLuong?: string; dvt?: string; kho: string; loai: string; sl: string; cachDung: string; haoPhi: boolean; tuTra: boolean }
+/** An order saved as HTML by the user and edited in the tool, to create new orders from. */
+export interface YLenhMau {
+  id: string; name: string; file?: string; at: number;
+  /** Giờ thực hiện of the example, HH:mm (the date is chosen when creating). */
+  gio: string;
+  dienBien: string; dienBienPHCN: string; yLenhKhac: string;
+  bacSi: Picked | null; bacSiTen?: string; capDo: Picked | null; capDoTen?: string;
+  thuoc: MauThuoc[];
+  /** What to check after reading the file (shown above the form). rowBacSi: the doctor named in Lịch sử y lệnh. */
+  note?: string; rowBacSi?: string;
+}
+export interface MauCreateResult { id: string; thoiGian: string; added: string[]; failed: { ten: string; message: string }[]; status: string; open?: boolean }

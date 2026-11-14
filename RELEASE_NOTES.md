@@ -1,4 +1,13 @@
-# Sao Y Lệnh 0.6.3
+# Sao Y Lệnh 0.7.0
+
+- **Mở bệnh nhân nhanh, không đọc lại mỗi lần**: tool nhớ lần đọc y lệnh gần nhất của từng bệnh nhân. Mở lại bệnh nhân thì hiện ngay, góc trên ghi "Đọc lúc …". Bấm nút **Cập nhật** (góc trên bên phải) khi muốn đọc lại từ OneMES, ví dụ sau khi anh/chị sửa y lệnh trực tiếp trên OneMES. Sau khi tool sao chép, xóa, sửa, dọn thủ thuật hay tạo y lệnh cho bệnh nhân nào thì lần mở sau tool tự đọc lại bệnh nhân đó. Khi chạy nhiều bệnh nhân (nút **Chạy**), tool vẫn đọc OneMES mới nhất trước khi sao chép.
+- **Tạo y lệnh mới từ y lệnh mẫu** (thẻ mới **Y lệnh mẫu** của mỗi bệnh nhân):
+  - Mở một y lệnh trên OneMES, bấm Ctrl+S (Trang web, hoàn chỉnh) khi danh sách y lệnh đang hiện, rồi trong tool bấm **Nhập file HTML**. Chọn được nhiều file một lần, mỗi file thành một mẫu.
+  - Tool đọc giờ thực hiện, bác sĩ, cấp độ chăm sóc, diễn biến bệnh, diễn biến PHCN, y lệnh khác và các dòng thuốc/VTYT (kho, loại kê, số lượng, cách dùng, hao phí, tự trả). DVKT không nằm trong chức năng này. File lưu từ OneMES không giữ chữ trong các ô diễn biến, nên tool lấy từ dòng của y lệnh đó trong Lịch sử y lệnh.
+  - Sửa được mọi mục: các ô, thêm/bỏ/sửa từng dòng thuốc. **Lưu mẫu** để giữ phần sửa, **Lưu thành mẫu mới**, **Đổi tên**, **Xóa mẫu**.
+  - Chọn ngày rồi **Tạo y lệnh**: tool bấm Thêm y lệnh mới, điền giờ (chỉ định sớm hơn 1 phút), bác sĩ, cấp độ, diễn biến, y lệnh khác, Lưu, rồi kê từng thuốc qua Kê Tây y/VTYT (đúng kho, số lượng, cách dùng, hao phí/tự trả). Kê đủ thì tool Hoàn tất (nếu bật Tự Hoàn tất). Thuốc nào không kê được thì tool báo rõ, các thuốc khác vẫn kê, y lệnh để ở trạng thái Mới và mở sẵn trong **Trình duyệt** để anh/chị kê nốt.
+
+## 0.6.3
 
 - **Kết quả CLS, tạo y lệnh mới để trống Cấp độ chăm sóc**: OneMES tự điền cấp độ vào y lệnh mới; tool giờ xóa ô này trước khi Lưu.
 - **Bỏ phần trong ngoặc sau tên**: ví dụ "Chụp X-quang khớp vai thẳng [số hóa 1 phim]" ghi thành "Chụp X-quang khớp vai thẳng", "Siêu âm khớp (gối, háng, khuỷu, cổ tay….)" ghi thành "Siêu âm khớp".

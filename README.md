@@ -12,7 +12,7 @@ Tool desktop sao chép và sửa y lệnh nội trú trên OneMES 3.0: quét dan
 
 1. Mở mục **Trình duyệt** ở thanh bên, đăng nhập OneMES như trên Chrome. Nút **Ds Điều trị nội trú** đưa thẳng tới danh sách bệnh nhân.
 2. **Quét danh sách**.
-3. Bấm một bệnh nhân. Tool mở Lịch sử y lệnh và chọn y lệnh nguồn.
+3. Bấm một bệnh nhân. Lần đầu tool mở Lịch sử y lệnh và chọn y lệnh nguồn; những lần sau tool hiện ngay lần đọc gần nhất (góc trên ghi "Đọc lúc …"). Bấm **Cập nhật** để đọc lại OneMES khi đã sửa gì trên đó bằng tay.
 4. Ở thẻ **Sao chép**, chọn **Y lệnh thường** hoặc **Sắc thuốc thang** (y lệnh có Y lệnh khác "Chỉ định sắc thuốc thang"), rồi **Số ngày** (1 = chỉ Sao chép; 2–4 = Sao chép + Sao y lệnh 1–3 ngày).
 5. Tick ô đỏ ở mục cần xóa cho từng ngày. Bấm tên mục để chọn cả hàng; bấm tiêu đề cột để chọn nhanh hoặc áp mẫu. Vật tư y tế có ghi (Hao phí) hoặc (Bảo hiểm).
 6. Muốn đổi giờ thực hiện, bác sĩ, cấp độ chăm sóc hay diễn biến của ngày nào thì bấm ngày đó ở **Sửa từng ngày**. Sửa ở một ngày thì các ngày sau cũng theo; ngày sau nào sửa riêng thì giữ phần riêng đó.
@@ -23,6 +23,7 @@ Tool desktop sao chép và sửa y lệnh nội trú trên OneMES 3.0: quét dan
 9. Thẻ **Bệnh án**: lần đầu bấm **Nhập mẫu từ file HTML** và chọn trang Thông tin bệnh án đã hoàn tất (lưu bằng Ctrl+S trong Chrome). Có thể lưu nhiều mẫu (tự điền rồi **Lưu làm mẫu**, hoặc nhập thêm file) và chọn mẫu ở ô **Mẫu** rồi **Điền từ mẫu**; đổi tên, xóa mẫu ở Cài đặt. Bệnh nhân mới bắt đầu từ mẫu có ngôi sao; sửa rồi **Cập nhật bệnh án lên OneMES**. Tool chỉ điền ô còn trống trên OneMES, ô đã có nội dung giữ nguyên.
 10. Thẻ **Dọn thủ thuật**: **Quét các ngày cũ** liệt kê thủ thuật **Hoàn trả** hoặc **Chờ thực hiện** ở các ngày trước hôm nay có cột DV vàng (bỏ qua y lệnh sắc thuốc thang). Bỏ tick mục không muốn dọn, bấm **Dọn**.
 11. Thẻ **Kết quả CLS**: **Đọc Xem kết quả**, chọn ngày, **Lấy kết quả**: tool ghi các chỉ số màu đỏ hoặc xanh dương thật sự nằm ngoài khoảng tham chiếu (tên + kết quả) và kết luận CĐHA; không có bất thường thì ghi "Các chỉ số trong giới hạn bình thường". Sửa nội dung, chọn giờ và ngày, rồi **Tạo y lệnh mới**.
+12. Thẻ **Y lệnh mẫu**: mở một y lệnh trên OneMES, bấm Ctrl+S (Trang web, hoàn chỉnh) khi danh sách y lệnh đang hiện, rồi bấm **Nhập file HTML** (chọn được nhiều file một lần). Sửa giờ, bác sĩ, cấp độ, diễn biến, y lệnh khác và từng dòng thuốc/VTYT (kho, loại kê, SL, cách dùng, hao phí, tự trả); **Lưu mẫu** để giữ phần sửa. Chọn ngày rồi **Tạo y lệnh**: tool thêm y lệnh mới, điền và Lưu, kê thuốc qua Kê Tây y/VTYT, rồi Hoàn tất nếu bật Tự Hoàn tất. Chức năng này không làm DVKT.
 
 Lần đầu nên bật **Từng bước** và thử với 1 bệnh nhân.
 

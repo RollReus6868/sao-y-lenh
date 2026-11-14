@@ -404,8 +404,12 @@ const commands = {
       // The Bác sĩ / Cấp độ chăm sóc choices are read once and kept.
       let lists = null;
       if (!store.get().lists) lists = await readLists(d).catch(() => null);
-      return { ...r, lists };
+      // Kept so the next opening shows it at once (0.7.0); Cập nhật reads again.
+      const kept = store.setLoad(runKey(patient, kind), { ...r, at: Date.now() });
+      return { ...kept, lists };
     }),
+  // The last read of this patient's orders, without touching OneMES (0.7.0).
+  'patient:cached': ({ patient, kind }) => store.getLoad(runKey(patient, kind)),
   'dvkt:scan': ({ patient, before }) =>
     task('Quét thủ thuật cũ', async (d) => {
       const r = await d.scanDvCu(patient, { before: before || process.env.SYL_TODAY });
@@ -415,6 +419,7 @@ const commands = {
     task('Dọn thủ thuật', async (d) => {
       let res;
       try {
+        store.dropLoads(patient.noitruid);
         res = await d.cleanDvCu(patient, days || []);
       } finally {
         // Whatever happened, read the days again so the list shows what is left.
@@ -429,17 +434,29 @@ const commands = {
   'cls:create': ({ patient, thoiGian, dienBien, yLenhKhac }) =>
     task('Tạo y lệnh kết quả CLS', async (d) => {
       log('info', `${patient.hoTen}: tạo y lệnh mới cho kết quả CLS (${thoiGian})`);
+      store.dropLoads(patient.noitruid);
       const r = await d.clsCreate(patient, { thoiGian, dienBien, yLenhKhac }, store.get().settings.autoComplete);
       log('ok', `${patient.hoTen}: đã tạo y lệnh kết quả CLS ${r.thoiGian}`);
       return r;
     }),
   'lists:load': () => task('Đọc danh sách bác sĩ', (d) => readLists(d)),
+  // Y lệnh mẫu (0.7.0): the list is kept whole; creating an order follows one of them.
+  'ylMau:set': (list) => store.set('yLenhMaus', Array.isArray(list) ? list : []),
+  'ylMau:create': ({ patient, mau }) =>
+    task('Tạo y lệnh theo mẫu', async (d) => {
+      log('info', `${patient.hoTen}: tạo y lệnh mới theo mẫu "${mau.name || ''}" (${mau.thoiGianThucHien})`);
+      store.dropLoads(patient.noitruid);
+      const r = await d.mauCreate(patient, mau, store.get().settings.autoComplete);
+      log(r.failed.length ? 'warn' : 'ok', `${patient.hoTen}: đã tạo y lệnh ${r.thoiGian} theo mẫu, thêm ${r.added.length} thuốc${r.failed.length ? `; ${r.failed.length} thuốc chưa thêm được` : ''} (${r.status})`);
+      return r;
+    }),
   run: ({ plans }) =>
     task('Sao chép y lệnh', async (d) => {
       const out = [];
       for (let i = 0; i < plans.length; i++) {
         const p = { ...plans[i], ...pickSettings() };
         push({ progress: { patient: p.patient.hoTen, index: i, total: plans.length } });
+        store.dropLoads(p.patient.noitruid); // its orders change: the kept read is stale (0.7.0)
         try {
           const key = runKey(p.patient, p.kind);
           if (!p.sourceId) {
@@ -494,6 +511,7 @@ const commands = {
       // Only orders this tool created can be deleted from here.
       if (!day) throw new Error('Chỉ xóa được y lệnh do tool vừa tạo');
       log('info', `${patient.hoTen}: xóa y lệnh ngày ${day.day} (${day.time || ''})`);
+      store.dropLoads(patient.noitruid);
       await d.deleteOrder(patient, id);
       const days = run.days.map((x) => (x.id === id ? { ...x, deleted: true } : x));
       const check = run.check && { ...run.check, days: run.check.days.map((x) => (x.id === id ? { ...x, deleted: true } : x)) };
@@ -505,6 +523,7 @@ const commands = {
       const day = run && (run.days || []).find((x) => x.id === id && !x.deleted);
       if (!day) throw new Error('Chỉ sửa được y lệnh do tool vừa tạo');
       log('info', `${patient.hoTen}: sửa y lệnh ngày ${day.day} (${day.time || ''})`);
+      store.dropLoads(patient.noitruid);
       await d.updateDay(patient, id, edit || null, remove || [], store.get().settings.autoComplete);
       // What this day should now hold, then read it back.
       const expect = run.expect ? { ...run.expect, days: run.expect.days.map((e) => (e.day === day.day ? expectAfterEdit(e, edit, remove) : e)) } : null;

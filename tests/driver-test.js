@@ -419,6 +419,50 @@ const names = (o) => [...o.thuoc, ...o.dvkt].map((x) => x.name);
     const oN = await d.openOrder(fresh[0].id);
     check(oN.thuoc.length && oN.thuoc.every((x) => !x.red), 'red rows: a normal row is not red');
 
+    // --- y lệnh mới theo mẫu (0.7.0) ---
+    console.log('y lệnh mẫu');
+    m.mock.reset();
+    pts = await d.scanPatients();
+    before = ids(2);
+    m.mock.getState().log.length = 0;
+    const MAU = {
+      name: 'Mẫu thử',
+      thoiGianThucHien: '07:45 13/10/2026',
+      dienBien: 'Đau giảm.\nĂn ngủ được.',
+      dienBienPHCN: 'Tập vận động.',
+      yLenhKhac: 'Theo dõi huyết áp.',
+      bacSi: { id: 'd2', text: 'BS. Trần Thị Hai' },
+      capDo: { id: 'c1', text: 'Cấp I' },
+      thuoc: [
+        { ten: 'Renaxib 200', kho: 'Kho Cao đơn - Tân dược', loai: 'KÊ LĨNH', sl: '2', cachDung: 'Uống sáng chiều', haoPhi: false, tuTra: true },
+        { ten: 'Kim châm cứu tiệt trùng dùng một lần', kho: 'Kho Hóa chất - VTYT', loai: 'KÊ LĨNH', sl: '10', cachDung: '', haoPhi: true, tuTra: false },
+        { ten: 'Thuốc không có trong kho', kho: 'KCPSX', loai: 'KÊ LĨNH', sl: '1', cachDung: '', haoPhi: false, tuTra: false },
+      ],
+    };
+    const mr = await d.mauCreate(pts[2], MAU, true);
+    fresh = newOrders(2, before);
+    const no = fresh[0];
+    check(fresh.length === 1 && mr.id === no.id, 'mẫu: one new order');
+    check(no.dienBien === MAU.dienBien && no.dienBienPHCN === MAU.dienBienPHCN && no.khac === MAU.yLenhKhac, 'mẫu: notes and Y lệnh khác as the example');
+    check(no.bacSi.id === 'd2' && no.capDo && no.capDo.id === 'c1', 'mẫu: doctor and care level as the example: ' + JSON.stringify([no.bacSi, no.capDo]));
+    check(no.dateTH.getDate() === 13 && hm(no.dateTH) === '07:45' && hm(no.date) === '07:44', 'mẫu: thực hiện as chosen, chỉ định a minute before');
+    const ren = no.thuoc.find((x) => x.name === 'Renaxib 200');
+    const kimM = no.thuoc.find((x) => /^Kim châm/.test(x.name));
+    check(ren && ren.sl === '2' && ren.cachDung === 'Uống sáng chiều' && ren.doiTuong === 'Người bệnh tự trả', 'mẫu: drug added with SL, cách dùng, tự trả: ' + JSON.stringify(ren));
+    check(kimM && kimM.sl === "10" && kimM.doiTuong === "Hao phí", "mẫu: supply added as hao phí: " + JSON.stringify(kimM));
+    check(mr.added.length === 2 && mr.failed.length === 1 && /Thuốc không có/.test(mr.failed[0].ten), 'mẫu: a drug not found is reported, the others still added: ' + JSON.stringify(mr.failed));
+    check(no.dvkt.length === 0 && no.status === 'Mới' && mr.status === 'Mới', 'mẫu: no services; a drug left to add keeps the order Mới');
+    check(mr.open === true && (await d.where()).popupOpen, 'mẫu: with work left, the order stays open in the browser');
+    check(!m.mock.getState().log.some((x) => x[0] === 'xoaHetThuoc'), 'mẫu: the prescription was never emptied');
+    // Nothing left by hand: completed when Tự Hoàn tất is on; an empty care level is cleared.
+    before = ids(2);
+    const mr2 = await d.mauCreate(pts[2], { ...MAU, thoiGianThucHien: '08:15 14/10/2026', capDo: null, thuoc: [MAU.thuoc[0]] }, true);
+    const no2 = newOrders(2, before)[0];
+    check(!mr2.open && mr2.status === 'Hoàn tất' && no2 && no2.status === 'Hoàn tất' && !no2.capDo && no2.thuoc.length === 1, 'mẫu: nothing left, completed, care level empty: ' + JSON.stringify([mr2.status, no2 && no2.capDo]));
+    let bad = null;
+    try { await d.mauCreate(pts[2], { thoiGianThucHien: '08:15 14/10/2026', dienBien: '', dienBienPHCN: '', yLenhKhac: '', thuoc: [] }); } catch (e) { bad = e.message; }
+    check(/trống/.test(bad || ''), 'mẫu: an empty example is refused before touching OneMES: ' + bad);
+
     // --- Ds Điều trị nội trú from start pages without the link ---
     console.log('nút Ds');
     await page.goto(m.base + '/home.aspx?scope=sys&lang=vi');

@@ -64,7 +64,7 @@ function createDriver(host) {
 
   async function call(fn, ...args) {
     const a = args.map((x) => JSON.stringify(x)).join(',');
-    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==14){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
+    return exec(`(function(){if(!window.__SYL||window.__SYL.version!==15){${AGENT}\n}return window.__SYL.${fn}(${a});})()`);
   }
 
   function checkStop() {
@@ -685,7 +685,7 @@ function createDriver(host) {
       }, 10000);
       await sleep(300);
       await call('s2Close');
-      const f = await call('keDonFill', { sl: it.sl || '1', cachDung: it.cachDung || '' });
+      const f = await call('keDonFill', { sl: it.sl || '1', cachDung: it.cachDung || '', haoPhi: !!it.haoPhi, ...(it.tuTra !== undefined ? { tuTra: !!it.tuTra } : {}) });
       if (!f.ok) throw new PageError(`${label}: ${f.reason}`);
       st = await keDonState();
       if (String(st.sl).trim() !== String(it.sl || '1').trim()) throw new PageError(`${label}: ô Số lượng không nhận ${it.sl}`);
@@ -1354,11 +1354,9 @@ function createDriver(host) {
    * Thêm y lệnh mới, then writes time and diễn biến bệnh into it and saves.
    * thoiGian = 'HH:mm dd/MM/yyyy' (thời gian thực hiện; chỉ định one minute earlier).
    */
-  async function clsCreate(patient, { thoiGian, dienBien, yLenhKhac }, autoComplete = false) {
+  // Thêm y lệnh mới on the patient's page; returns the new (Mới) order once it is open.
+  async function openNewOrder(patient) {
     const name = patient.hoTen || patient.maBN;
-    const th = parseTime(thoiGian);
-    if (!th) throw new PageError(`Thời gian "${thoiGian}" không đúng dạng giờ:phút ngày/tháng/năm`);
-    if (!String(dienBien || '').trim()) throw new PageError('Nội dung y lệnh đang trống');
     await gotoPatient(patient);
     const before = await listOrders();
     const ids = new Set(before.map((r) => r.id));
@@ -1386,6 +1384,15 @@ function createDriver(host) {
       else await sleep(250);
     }
     await settle();
+    return { o, id, label, before };
+  }
+
+  async function clsCreate(patient, { thoiGian, dienBien, yLenhKhac }, autoComplete = false) {
+    const name = patient.hoTen || patient.maBN;
+    const th = parseTime(thoiGian);
+    if (!th) throw new PageError(`Thời gian "${thoiGian}" không đúng dạng giờ:phút ngày/tháng/năm`);
+    if (!String(dienBien || '').trim()) throw new PageError('Nội dung y lệnh đang trống');
+    const { o, id, label } = await openNewOrder(patient);
     const f = { thoiGianThucHien: fmtTime(th), thoiGian: fmtTime(new Date(th.getTime() - 60000)), dienBien };
     // Y lệnh khác: the given line is added under whatever the order already holds.
     const add = String(yLenhKhac || '').trim();
@@ -1406,6 +1413,71 @@ function createDriver(host) {
     if (autoComplete) await complete(id, label);
     await call('back').catch(() => {});
     return { id, thoiGian: fmtTime(th) };
+  }
+
+  // ---------- y lệnh mới theo mẫu (0.7.0) ----------
+  /**
+   * Creates a new order like a saved example (an order page saved as HTML, edited in the
+   * tool). mau = { thoiGianThucHien: 'HH:mm dd/MM/yyyy', dienBien, dienBienPHCN, yLenhKhac,
+   * bacSi, capDo, thuoc: [{ ten, kho, loai, sl, cachDung, haoPhi, tuTra }] }.
+   * Drugs go in through Kê Tây y/VTYT like the Thêm thuốc ticks. Services (DVKT) are not
+   * part of it (user, 2026-11-14). A drug that could not be added leaves the order Mới.
+   */
+  async function mauCreate(patient, mau, autoComplete = false) {
+    const th = parseTime(mau.thoiGianThucHien);
+    if (!th) throw new PageError(`Thời gian "${mau.thoiGianThucHien || ''}" không đúng dạng giờ:phút ngày/tháng/năm`);
+    const notes = ['dienBien', 'dienBienPHCN', 'yLenhKhac'].some((k) => String(mau[k] || '').trim());
+    const thuoc = (mau.thuoc || []).filter((x) => String(x.ten || '').trim());
+    if (!notes && !thuoc.length) throw new PageError('Mẫu đang trống: không có diễn biến, y lệnh khác hay thuốc nào');
+    const { o, id, label } = await openNewOrder(patient);
+    const result = { id, thoiGian: fmtTime(th), added: [], failed: [], status: 'Mới' };
+    const f = { thoiGianThucHien: fmtTime(th), thoiGian: fmtTime(new Date(th.getTime() - 60000)) };
+    for (const k of ['dienBien', 'dienBienPHCN', 'yLenhKhac']) if (typeof mau[k] === 'string' && mau[k].trim()) f[k] = mau[k];
+    if (mau.bacSi && mau.bacSi.id) f.bacSi = { id: mau.bacSi.id, text: mau.bacSi.text || '' };
+    if (mau.capDo && mau.capDo.id) f.capDo = { id: mau.capDo.id, text: mau.capDo.text || '' };
+    else if (o.capDo && o.capDo.id && mau.capDo === null) f.clearCapDo = true;
+    if (o.thoiGianThucHien === f.thoiGianThucHien) delete f.thoiGianThucHien;
+    if (o.thoiGian === f.thoiGian) delete f.thoiGian;
+    await applyFields(id, label, f);
+    for (const x of thuoc) {
+      checkStop();
+      const it = {
+        id: x.id || x.ten,
+        label: x.ten,
+        ten: String(x.ten).trim(),
+        tim: String(x.tim || x.ten).trim(),
+        kho: String(x.kho || '').trim(),
+        loai: x.loai || '',
+        sl: String(x.sl || '1').trim(),
+        cachDung: x.cachDung || '',
+        haoPhi: !!x.haoPhi,
+        tuTra: !!x.tuTra,
+      };
+      try {
+        if (!it.kho) throw new PageError(`${label}: "${it.ten}" chưa có kho`);
+        const r = await addThuoc(id, label, it);
+        if (r.added || r.already) result.added.push(it.ten);
+      } catch (e) {
+        if (e instanceof StopError) throw e;
+        log('error', e.message);
+        result.failed.push({ ten: it.ten, message: e.message });
+        // A Kê đơn popup left open would take the next drug with it.
+        const k = await keDonState().catch(() => ({ open: false }));
+        if (k.open) throw e;
+      }
+    }
+    const back = await readStable(id);
+    const missing = thuoc.filter((x) => !hasItem(back, { ten: String(x.ten).trim() })).map((x) => x.ten);
+    for (const n of missing) if (!result.failed.some((y) => y.ten === n)) result.failed.push({ ten: n, message: 'không thấy trong y lệnh sau khi thêm' });
+    if (back.thoiGianThucHien && back.thoiGianThucHien !== fmtTime(th)) throw new PageError(`${label}: giờ thực hiện trên OneMES là ${back.thoiGianThucHien}, không phải ${fmtTime(th)}`);
+    if (autoComplete && !result.failed.length) {
+      await complete(id, label);
+      result.status = 'Hoàn tất';
+    } else if (autoComplete) log('info', `${label}: để ở trạng thái Mới để anh/chị làm nốt phần còn lại rồi Hoàn tất`);
+    // A drug left to add by hand: the order stays open in Trình duyệt.
+    result.open = !!result.failed.length;
+    if (!result.open) await call('back').catch(() => {});
+    return result;
   }
 
   // ---------- danh sách bác sĩ, cấp độ chăm sóc ----------
@@ -1494,7 +1566,7 @@ function createDriver(host) {
     return { values: back.values, missing, kept, filled: todo.map((f) => f.id), diff, at: Date.now() };
   }
 
-  return { call, where, login, addThuoc, autoTicks, sacEdits, scanPatients, openPatient, listOrders, pickSource, loadPatient, scanDvCu, cleanDvCu, clsList, clsRead, clsCreate, openOrder, readOrder, run, gotoList, verify, deleteOrder, updateDay, loadLists, readBenhAn, saveBenhAn, fieldsFor };
+  return { call, where, login, addThuoc, autoTicks, sacEdits, scanPatients, openPatient, listOrders, pickSource, loadPatient, scanDvCu, cleanDvCu, clsList, clsRead, clsCreate, mauCreate, openOrder, readOrder, run, gotoList, verify, deleteOrder, updateDay, loadLists, readBenhAn, saveBenhAn, fieldsFor };
 }
 
 const SAC_RE = /sắc thuốc thang/i;

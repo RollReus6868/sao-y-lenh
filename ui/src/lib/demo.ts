@@ -105,6 +105,14 @@ export function demoApi() {
       { id: 'a', name: 'Bỏ điện xung', keys: ['d|điều trị bằng các dòng điện xung|vùng mông đùi t, ngày 01 lần x 20 phút'] },
       { id: 'b', name: 'Chỉ giữ thuốc', keys: source.dvkt.map((x) => x.key.replace(/#\d+$/, '')) },
     ],
+    yLenhMaus: q0.get('noyl') ? [] : [{
+      id: 'yl1', name: 'Y lệnh mẫu PHCN', at: Date.now(), gio: '07:30', dienBien: 'Đau giảm, ăn ngủ được.', dienBienPHCN: 'Tập vận động nhẹ nhàng.', yLenhKhac: '',
+      bacSi: { id: 'd1', text: 'BS. Nguyễn Văn Mẫu' }, capDo: null, capDoTen: '(III-C) III-C',
+      thuoc: [
+        { id: 't1', ten: 'Renaxib 200', hamLuong: '200mg', dvt: 'Viên', kho: 'Kho Cao đơn - Tân dược', loai: 'KÊ LĨNH', sl: '2', cachDung: 'Uống sáng 1 viên, chiều 1 viên', haoPhi: false, tuTra: false },
+        { id: 't2', ten: 'Kim châm cứu tiệt trùng dùng một lần', dvt: 'Cái', kho: 'Kho Hóa chất - VTYT', loai: 'KÊ LĨNH', sl: '10', cachDung: '', haoPhi: true, tuTra: false },
+      ],
+    }],
     choices: { [patients[1].noitruid]: { days: 3, deletions: [[], [], []] } },
     runs: { [patients[2].noitruid]: { at: Date.now(), ok: true, message: '3 ngày' }, [patients[4].noitruid]: { at: Date.now(), ok: false, message: 'OneMES báo: Chưa chọn loại phiếu lĩnh' } },
   };
@@ -173,17 +181,21 @@ export function demoApi() {
         case 'templates:set': data.templates = payload; return data.templates as T;
         case 'choice:set': if (payload.choice) data.choices[payload.id] = payload.choice; else delete data.choices[payload.id]; return undefined as T;
         case 'scan': pushState({ busy: true, task: 'Quét danh sách' }); await sleep(500); pushState({ busy: false, task: '' }); addLog('info', `Quét được ${patients.length} bệnh nhân`); return patients as T;
+        case 'patient:cached': return null as T;
+        case 'ylMau:set': data.yLenhMaus = payload; return data.yLenhMaus as T;
+        case 'ylMau:create': pushState({ busy: true, task: 'Tạo y lệnh theo mẫu' }); await sleep(900); pushState({ busy: false, task: '' });
+          return { id: 'new', thoiGian: payload.mau.thoiGianThucHien, added: payload.mau.thuoc.map((t: { ten: string }) => t.ten), failed: [], status: 'Hoàn tất' } as T;
         case 'patient:load': pushState({ busy: true, task: 'Đọc y lệnh' }); await sleep(400); pushState({ busy: false, task: '' });
           if (q.get('edits') && !data.choices[payload.patient.noitruid]) data.choices[payload.patient.noitruid] = { days: 3, deletions: [[], [], []], edits: [{ gio: '07:30', bacSi: { id: 'd2', text: 'BS. Trần Thị Hai' } }, null, { dienBien: 'Đỡ đau nhiều, ngủ được.' }] };
           if (payload.kind === 'sac') {
             const sac = { ...source, id: 'sac', thoiGian: '15:00 12/10/2026', thoiGianThucHien: '07:30 13/10/2026', dienBien: 'Chỉ định sắc thuốc thang', dienBienPHCN: '', thuoc: [T('Thang thuốc mẫu', '', 'Thang', '1', 'Thuốc Đông Y', 'Sắc uống ngày 1 thang')], dvkt: [D('Sắc thuốc thang', '1 thang/ngày', 'Y học dân tộc')] };
             // Usual orders already copied for 14/10, none yet for 15/10.
             const usual = (tg: string, tgth: string, bacSi: string) => ({ id: 'u' + tgth, tg, tgth, bacSi, dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' });
-            return { rows: [usual('07:09 14/10/2026', '07:10 14/10/2026', 'BS. Trần Thị Hai'), { id: 'sac', tg: sac.thoiGian, tgth: sac.thoiGianThucHien, bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: sac.dienBien, dienBienPHCN: '', khac: 'Chỉ định Sắc thuốc thang' }, usual('07:04 13/10/2026', '07:05 13/10/2026', 'BS. Lê Văn Ba')], source: sac, skipped: [] } as T;
+            return { at: Date.now(), rows: [usual('07:09 14/10/2026', '07:10 14/10/2026', 'BS. Trần Thị Hai'), { id: 'sac', tg: sac.thoiGian, tgth: sac.thoiGianThucHien, bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: sac.dienBien, dienBienPHCN: '', khac: 'Chỉ định Sắc thuốc thang' }, usual('07:04 13/10/2026', '07:05 13/10/2026', 'BS. Lê Văn Ba')], source: sac, skipped: [] } as T;
           }
           // Cao thông mạch was on 11/10, so day 1 (14/10) is ticked by the tool.
           const auto = { adds: [['cao-thong-mach'], [], [], []], why: [{ day: 1, id: 'cao-thong-mach', from: '11/10' }], for: source.id };
-          return { auto, rows: [{ id: 'src', tg: '07:04 13/10/2026', tgth: '07:05 13/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }, { id: 'old', tg: '07:04 12/10/2026', tgth: '07:05 12/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }], source, skipped: [] } as T;
+          return { at: Date.now(), auto, rows: [{ id: 'src', tg: '07:04 13/10/2026', tgth: '07:05 13/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }, { id: 'old', tg: '07:04 12/10/2026', tgth: '07:05 12/10/2026', bacSi: 'BS. Nguyễn Văn Mẫu', dienBien: source.dienBien, dienBienPHCN: source.dienBienPHCN, khac: '' }], source, skipped: [] } as T;
         case 'run': {
           pushState({ busy: true, task: 'Sao chép y lệnh', progress: { patient: payload.plans[0].patient.hoTen, index: 0, total: payload.plans.length } });
           if (q.get('step')) { pushState({ stepWaiting: 'Ngày 2: xóa "Lirystad 150"' }); return new Promise(() => {}) as Promise<T>; }

@@ -529,7 +529,7 @@
   }
   function insertThuoc() {
     var r = call('themThuoc', { id: window._ylenh_ID, kho: document.getElementById('cboKho').value, hang: document.getElementById('cboThuoc').value,
-      sl: document.getElementById('txtSl').value, cachDung: document.getElementById('txtCachDungThuoc').value, haoPhi: document.getElementById('cbTrongGoiKD').checked }).value;
+      sl: document.getElementById('txtSl').value, cachDung: document.getElementById('txtCachDungThuoc').value, haoPhi: document.getElementById('cbTrongGoiKD').checked, tuTra: document.getElementById('cbNguoiBenhTTKD').checked }).value;
     if (r.Error) { cleanThuoc(); window.callGallAlert(r.InfoMessage); return; }
     toastr.info('Thêm mới thành công');
     $('.divThuocVTYTPopupTK tbody').html(keDonRows());

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BedDouble, ClipboardCheck, FileText, Globe, MousePointerClick, Check, ChevronDown, ClipboardCopy, Copy, Eraser, FlaskConical, ListChecks, PencilLine, Pill as PillIcon, Play, Plus, RefreshCw, RotateCcw, ScanLine, Search, Stethoscope, Users, X } from 'lucide-react';
+import { BedDouble, ClipboardCheck, FileText, Globe, MousePointerClick, Check, ChevronDown, ClipboardCopy, Copy, Eraser, FileStack, FlaskConical, ListChecks, PencilLine, Pill as PillIcon, Play, Plus, RefreshCw, RotateCcw, ScanLine, Search, Stethoscope, Users, X } from 'lucide-react';
 import { cn } from '@/kit/cn';
 import { Button, Chip, EmptyState, Input, PageHeader, Pill, Segmented, Select, Switch } from '@/kit/ui';
 import { useApp } from '@/lib/useApp';
@@ -8,6 +8,7 @@ import { RunBar, Sheet } from '@/components/common';
 import { OrderFields, editSummary, type OrderBase } from '@/components/OrderFields';
 import { addDays, dayLabel, ddmm, hhmmOf, parseDay, parseTime, weekdayShort } from '@/lib/dates';
 import { ResultView } from '@/pages/Result';
+import { MauView } from '@/pages/YLenhMau';
 import { BenhAnView } from '@/pages/BenhAn';
 import { ClsView, DvCleanView } from '@/pages/DvCls';
 
@@ -216,24 +217,29 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
   const [saveTpl, setSaveTpl] = useState<number | null>(null);
   const [tplName, setTplName] = useState('');
   const [confirm, setConfirm] = useState(false);
-  const [tab, setTab] = useState<'pick' | 'result' | 'benhan' | 'dv' | 'cls'>('pick');
+  const [tab, setTab] = useState<'pick' | 'result' | 'benhan' | 'dv' | 'cls' | 'mau'>('pick');
   const [kind, setKind] = useState<Kind>('thuong');
   const ck = runKey(patient, kind); // choices and results of sắc thuốc thang copies are kept apart
   const [edits, setEdits] = useState<(DayEdit | null)[]>(NO_EDITS);
   const [adds, setAdds] = useState<string[][]>(EMPTY);
   const [auto, setAuto] = useState<AutoTicks | null>(null);
   const [eday, setEday] = useState<number | null>(null);
+  const [readAt, setReadAt] = useState<number | null>(null);
   const loaded = useRef(false);
   // The user changed the Thêm thuốc ticks (or deletions of those drugs) for this source;
   // until then the tool's own ticks are worked out again on every load.
   const touched = useRef(false);
 
-  const load = async (sourceId?: string, k: Kind = kind) => {
+  // kept: show the last read of this patient at once, if there is one (0.7.0); reading
+  // OneMES again takes a while, so only Cập nhật, a new source or a run does that.
+  const load = async (sourceId?: string, k: Kind = kind, kept = false) => {
     setLoading(true);
     loaded.current = false;
-    const r = await call<LoadResult>('patient:load', { patient, sourceId, kind: k }).catch(() => null);
+    let r: LoadResult | null = kept ? await call<LoadResult | null>('patient:cached', { patient, kind: k }).catch(() => null) : null;
+    if (!r) r = await call<LoadResult>('patient:load', { patient, sourceId, kind: k }).catch(() => null);
     setLoading(false);
     setRes(r);
+    setReadAt(r?.at || null);
     setAuto(r?.auto || null);
     if (r?.lists) refresh(); // doctor / care level lists were read for the first time
     if (r?.source) {
@@ -264,7 +270,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     }
   };
   useEffect(() => {
-    load();
+    load(undefined, kind, true);
   }, [patient.noitruid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Remember the choice per patient (by item name, so it carries to the next copy).
@@ -416,7 +422,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
     if (k === kind) return;
     setKind(k);
     setRes(null);
-    load(undefined, k);
+    load(undefined, k, true);
   };
   const setSetting = (p: Record<string, unknown>) => call('settings:set', p).then((st) => setData((x) => x && { ...x, settings: st as NonNullable<typeof data>['settings'] }));
   const shown = (k: number) => sel[k].filter((x) => items.some((i) => i.key === x));
@@ -534,7 +540,8 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
           <div className="truncate font-bold leading-tight">{patient.hoTen}</div>
           <div className="truncate text-xs text-muted-foreground">{patient.maBN} · {patient.tuoi} tuổi · {patient.bg}</div>
         </div>
-        <Button variant="ghost" size="icon" aria-label="Đọc lại" title="Đọc lại y lệnh" onClick={() => load(src?.id)} disabled={state.busy}><RefreshCw /></Button>
+        {readAt && <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:inline" title="Y lệnh hiện ở đây là lần đọc OneMES gần nhất" data-read-at>Đọc lúc {readStamp(readAt)}</span>}
+        <Button variant="outline" size="sm" title="Đọc lại y lệnh từ OneMES (lấy y lệnh nguồn mới nhất)" onClick={() => load()} disabled={state.busy} data-action="reload"><RefreshCw className={cn(loading && 'animate-spin')} /> Cập nhật</Button>
       </div>
       <div className="flex flex-shrink-0 flex-wrap items-center gap-1 px-3 pb-2 sm:px-4" role="tablist">
         <TabBtn on={tab === 'pick'} onClick={() => setTab('pick')} data-tab="pick"><ListChecks /> Sao chép</TabBtn>
@@ -553,6 +560,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
           {data?.dvScans?.[patient.noitruid]?.days.some((d) => d.items.length) ? <span className="h-2 w-2 rounded-full bg-amber-500" /> : null}
         </TabBtn>
         <TabBtn on={tab === 'cls'} onClick={() => setTab('cls')} data-tab="cls"><FlaskConical /> Kết quả CLS</TabBtn>
+        <TabBtn on={tab === 'mau'} onClick={() => setTab('mau')} data-tab="mau"><FileStack /> Y lệnh mẫu</TabBtn>
         <div className="ml-auto flex items-center gap-3 pl-2">
           <label className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground" title="Tool dừng trước mỗi thao tác trên OneMES để anh/chị bấm tiếp"><Switch checked={!!data?.settings.stepMode} onChange={(v) => setSetting({ stepMode: v })} label="Chạy từng bước" /> Từng bước</label>
           <label className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground" title="Hoàn tất mỗi y lệnh sau khi sửa xong"><Switch checked={!!data?.settings.autoComplete} onChange={(v) => setSetting({ autoComplete: v })} label="Tự Hoàn tất" /> Tự Hoàn tất</label>
@@ -560,7 +568,7 @@ function PatientDetail({ patient, onBack, onBrowser }: { patient: Patient; onBac
       </div>
       {state.busy && <RunBar onBrowser={onBrowser} />}
 
-      {tab === 'benhan' ? <BenhAnView patient={patient} /> : tab === 'result' ? <ResultView patient={patient} kind={kind} /> : tab === 'dv' ? <DvCleanView patient={patient} /> : tab === 'cls' ? <ClsView patient={patient} /> : <>
+      {tab === 'benhan' ? <BenhAnView patient={patient} /> : tab === 'result' ? <ResultView patient={patient} kind={kind} /> : tab === 'dv' ? <DvCleanView patient={patient} /> : tab === 'cls' ? <ClsView patient={patient} /> : tab === 'mau' ? <MauView patient={patient} onBrowser={onBrowser} /> : <>
       <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-border/40 px-3 pb-2 sm:px-4" data-pick-bar>
         <Segmented value={kind} onChange={changeKind} disabled={state.busy} options={[{ value: 'thuong' as Kind, label: 'Y lệnh thường', title: 'Y lệnh có Diễn biến bệnh và Diễn biến PHCN' }, { value: 'sac' as Kind, label: 'Sắc thuốc thang', title: 'Y lệnh có Y lệnh khác: Chỉ định sắc thuốc thang' }]} />
         <span className="ml-1 text-[11px] font-semibold text-muted-foreground">Số ngày</span>
@@ -693,6 +701,14 @@ function usualOn(rows: OrderRow[], d: Date) {
   return rows
     .filter((r) => !isSac(r) && !/^kết quả cls:/i.test((r.dienBien || '').trim()) && parseDay(r.tgth || r.tg)?.toDateString() === key)
     .sort((a, b) => (parseTime(a.tgth || a.tg)?.getTime() || 0) - (parseTime(b.tgth || b.tg)?.getTime() || 0))[0];
+}
+
+// "16:20 14/11", or "16:20 hôm nay".
+function readStamp(at: number) {
+  const d = new Date(at);
+  const p = (n: number) => String(n).padStart(2, '0');
+  const hm = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  return d.toDateString() === new Date().toDateString() ? `${hm} hôm nay` : `${hm} ${p(d.getDate())}/${p(d.getMonth() + 1)}`;
 }
 
 function TabBtn({ on, children, ...p }: { on: boolean; children: React.ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) {

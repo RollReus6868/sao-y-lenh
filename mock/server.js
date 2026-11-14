@@ -340,7 +340,7 @@ const api = {
     const h = hangById(hang);
     return { Error: false, RetBoolean: !!(f && h && f.o.thuoc.some((x) => x.name === h.name)) };
   },
-  themThuoc({ id, kho, hang, sl, cachDung, haoPhi }) {
+  themThuoc({ id, kho, hang, sl, cachDung, haoPhi, tuTra }) {
     const f = findOrder(id);
     if (!f) return { Error: true, InfoMessage: 'Không tìm thấy y lệnh' };
     if (f.o.status !== 'Mới') return { Error: true, InfoMessage: 'Y lệnh đã hoàn tất, không thể kê thêm' };
@@ -348,7 +348,7 @@ const api = {
     if (!h || h.kho !== kho) return { Error: true, InfoMessage: 'Thuốc không thuộc kho đã chọn' };
     if (!(Number(sl) > 0)) return { Error: true, InfoMessage: 'Chưa nhập số lượng' };
     const khoName = KHO.find((k) => k.id === kho).text.replace(/^\S+ - /, '');
-    f.o.thuoc.push({ id: uid(), group: 'Thuốc Tây Y', loaiKe: 'Dự trù', kho: khoName, name: h.name, hamLuong: h.hamLuong, dvt: h.dvt, duongDung: h.duongDung, sl: String(sl), cachDung, doiTuong: haoPhi ? 'Hao phí' : 'Bảo hiểm', trangThai: 'Mới' });
+    f.o.thuoc.push({ id: uid(), group: 'Thuốc Tây Y', loaiKe: 'Dự trù', kho: khoName, name: h.name, hamLuong: h.hamLuong, dvt: h.dvt, duongDung: h.duongDung, sl: String(sl), cachDung, doiTuong: haoPhi ? 'Hao phí' : tuTra ? 'Người bệnh tự trả' : 'Bảo hiểm', trangThai: 'Mới' });
     state.log.push(['themThuoc', id, h.name, String(sl), cachDung]);
     return { Error: false, RetNumber4: f.o.thuoc.length };
   },
@@ -373,6 +373,7 @@ const api = {
     return { Error: false };
   },
   order({ id }) {
+    state.orderReads = (state.orderReads || 0) + 1; // tests: was OneMES read again?
     const f = findOrder(id);
     if (!f) return { Error: true, InfoMessage: 'Không tìm thấy y lệnh' };
     return { Error: false, RetObject: orderView(f.p, f.o) };

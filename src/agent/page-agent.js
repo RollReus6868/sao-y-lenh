@@ -2,7 +2,7 @@
 // calls OneMES's own functions; it never calls the server directly.
 // Every function returns plain data so it survives structured clone.
 (function () {
-  if (window.__SYL && window.__SYL.version === 14) return;
+  if (window.__SYL && window.__SYL.version === 15) return;
 
   const txt = (el) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
   const norm = (s) =>
@@ -928,10 +928,23 @@
       else el.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
     };
+    // Hao phí as asked (unticked unless haoPhi); Tự trả only when asked (0.7.0, order examples).
+    const tick = (el, want) => {
+      if (!el || el.checked === want) return true;
+      if ($ && $.fn.iCheck && $(el).parent('[class*=icheckbox]').length) $(el).iCheck(want ? 'check' : 'uncheck');
+      else {
+        el.checked = want;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return el.checked === want;
+    };
     const hp = byId('cbTrongGoiKD');
-    if (hp && hp.checked && !v.haoPhi) {
-      if ($ && $.fn.iCheck) $(hp).iCheck('uncheck');
-      else hp.checked = false;
+    if (hp && !tick(hp, !!v.haoPhi)) return { ok: false, reason: 'không đặt được ô Hao phí' };
+    if (v.haoPhi && !hp) return { ok: false, reason: 'không thấy ô Hao phí' };
+    if (v.tuTra !== undefined) {
+      const tt = byId('cbNguoiBenhTTKD');
+      if (!tt && v.tuTra) return { ok: false, reason: 'không thấy ô Người bệnh tự trả' };
+      if (tt && !tick(tt, !!v.tuTra)) return { ok: false, reason: 'không đặt được ô Người bệnh tự trả' };
     }
     if (!set('txtSl', String(v.sl))) return { ok: false, reason: 'no-txtSl' };
     if (v.cachDung && !set('txtCachDungThuoc', v.cachDung)) return { ok: false, reason: 'no-txtCachDungThuoc' };
@@ -1302,7 +1315,7 @@
   }
 
   window.__SYL = {
-    version: 14,
+    version: 15,
     loginForm,
     doLogin,
     where,

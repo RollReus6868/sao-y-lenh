@@ -32,6 +32,10 @@ const DEFAULTS = {
   benhAnMauId: null, // the example new patients start from
   login: null, // { user, secret, enc, at } OneMES account; secret = password encrypted by main (safeStorage)
   dvScans: {}, // noitruid -> { days: [{ id, tg, items: [{ id, name, trangThai, action }] }], at } old services to clean
+  // 0.7.0: orders saved as HTML by the user, edited in the tool, to create new orders from.
+  // [{ id, name, file, at, gio, dienBien, dienBienPHCN, yLenhKhac, bacSi, bacSiTen, capDo, capDoTen,
+  //    thuoc: [{ id, ten, hamLuong, dvt, kho, loai, sl, cachDung, haoPhi, tuTra }] }] (no DVKT: user, 2026-11-14)
+  yLenhMaus: [],
 };
 
 function createStore(dir) {
@@ -68,6 +72,22 @@ function createStore(dir) {
     const tmp = file + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(data, null, 1));
     fs.renameSync(tmp, file);
+  }
+
+  // 0.7.0: the last read of each patient's orders (patient:load), so opening a patient
+  // shows it at once; Cập nhật reads OneMES again. Kept apart from data.json, which is
+  // written often and sent to the window whole. key = runKey -> { at, rows, source, ... }.
+  const loadsFile = path.join(dir, 'loads.json');
+  let loads;
+  try {
+    loads = JSON.parse(fs.readFileSync(loadsFile, 'utf8')) || {};
+  } catch {
+    loads = {};
+  }
+  function saveLoads() {
+    const tmp = loadsFile + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(loads));
+    fs.renameSync(tmp, loadsFile);
   }
 
   const pad = (n) => String(n).padStart(2, '0');
@@ -160,6 +180,21 @@ function createStore(dir) {
       else data.benhAn[id] = { ...(data.benhAn[id] || {}), ...patch };
       save();
       return data.benhAn[id] || null;
+    },
+    getLoad: (key) => loads[key] || null,
+    setLoad(key, r) {
+      if (r) loads[key] = { ...r, at: r.at || Date.now() };
+      else delete loads[key];
+      saveLoads();
+      return loads[key] || null;
+    },
+    // Every kind of one patient (usual and sắc thuốc thang): its orders changed.
+    dropLoads(noitruid) {
+      const id = String(noitruid || '');
+      let n = 0;
+      for (const k of Object.keys(loads)) if (k === id || k.startsWith(id + '|')) delete loads[k], n++;
+      if (n) saveLoads();
+      return n;
     },
     appendLog,
   };

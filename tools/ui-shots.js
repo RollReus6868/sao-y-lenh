@@ -103,6 +103,18 @@ const { chromium } = require('playwright-core');
       await shot('cls-confirm');
       await page.click('[data-action=cls-confirm]');
       await page.waitForSelector('[data-action=cls-create]:not([disabled])');
+      // Y lệnh mẫu (0.7.0): the example form, the confirm sheet, the result (no DVKT).
+      await page.click('[data-tab=mau]');
+      await page.waitForSelector('[data-yl-fields]');
+      if ((await page.locator('[data-yl-thuoc-row]').count()) !== 2 || (await page.locator('[data-yl-dvkt]').count())) problems.push(`${mode} ${width} mẫu: drug rows missing or DVKT shown`);
+      await shot('mau');
+      await page.click('[data-action=yl-create]');
+      await shot('mau-confirm');
+      await page.click('[data-action=yl-confirm]');
+      await page.waitForSelector('[data-yl-result]');
+      await page.locator('[data-yl-result]').scrollIntoViewIfNeeded();
+      await shot('mau-result');
+      if (!(await page.locator('[data-read-at]').count()) && width >= 760) problems.push(`${mode} ${width} read time not shown`);
       await page.click('[data-tab=pick]');
       await page.click('[data-pick-bar] button:has-text("Sắc thuốc thang")');
       await page.waitForSelector('[data-item="Sắc thuốc thang"]');
