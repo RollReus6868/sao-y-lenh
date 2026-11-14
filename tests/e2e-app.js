@@ -359,23 +359,27 @@ async function waitFor(what, fn, ms = 30000) {
     const scanned = await waitFor('scan', () => ui.evaluate(() => window.app.call('scan')), 120000);
     const urlB = scanned.find((p) => p.noitruid === pB.noitruid).url;
     await view.goto(urlB.replace(/usid=[^&]+/, 'usid=' + /usid=([^&]+)/.exec(view.url())[1]));
-    const saveOrder = async (o) => {
+    // noDv: like an order without services (user's files, 2026-11-14): no service rows,
+    // and the form's data-value keeps the order's time while value has the page's.
+    const saveOrder = async (o, noDv = false) => {
       await view.evaluate(() => (typeof loadListYLenh === 'function' && document.getElementById('divDsYLenh') ? loadListYLenh() : onshowDsYLenh(document.getElementById('showDsYLenh'))));
       await view.waitForSelector('tr[id^="tr"]', { state: 'attached' });
       await view.evaluate((id) => onDrawWebpartYLenh(id), o.id);
       await view.waitForFunction(() => document.querySelectorAll('#tblDichVu tr[id]').length > 0);
-      return view.evaluate(() => {
+      return view.evaluate(({ noDv }) => {
+        const tg = document.getElementById('txtThoigianThamKham').getAttribute('data-value');
         const c = document.documentElement.cloneNode(true);
         for (const id of ['txtThoigianThamKham', 'txtThoigianThucHienThamKham']) {
           c.querySelector('#' + id).setAttribute('value', '00:56 09/10/2026');
-          if (id === 'txtThoigianThamKham') c.querySelector('#' + id).setAttribute('data-value', '00:56 09/10/2026');
+          if (id === 'txtThoigianThamKham') c.querySelector('#' + id).setAttribute('data-value', noDv ? tg : '00:56 09/10/2026');
         }
+        if (noDv) c.querySelectorAll('#tblDichVu tr[id]').forEach((tr) => tr.remove());
         return '<!DOCTYPE html>' + c.outerHTML;
-      });
+      }, { noDv });
     };
     const fx = fs.mkdtempSync(path.join(os.tmpdir(), 'syl-mau-'));
     fs.writeFileSync(path.join(fx, 'mau-a.html'), await saveOrder(srcB[0]));
-    fs.writeFileSync(path.join(fx, 'mau-b.html'), await saveOrder(srcB[1]));
+    fs.writeFileSync(path.join(fx, 'mau-b.html'), await saveOrder(srcB[1], true));
     const pC = m.mock.getState().patients[2];
     await ui.click('[data-action=back]').catch(() => {});
     await ui.click(`[data-patient="${pC.maBN}"] >> button >> nth=1`);
@@ -389,6 +393,13 @@ async function waitFor(what, fn, ms = 30000) {
     check((await ui.inputValue('[data-field=yl-bacSi]')) === srcB[0].bacSi.id && !(await ui.$('[data-yl-note]')), 'mẫu: doctor read, order found by its service time');
     check((await ui.$$('[data-yl-thuoc-row]')).length === srcB[0].thuoc.length && !(await ui.$('[data-yl-dvkt]')), 'mẫu: every drug line read, no DVKT section');
     const gioB = hm(srcB[0].dateTH);
+    // The second file: found by the form's data-value, as there are no service rows.
+    const idB = await ui.$eval('[data-field=yl-mau]', (sel) => sel.options[1].value);
+    await ui.selectOption('[data-field=yl-mau]', idB);
+    await sleep(300);
+    check((await ui.inputValue('[data-field=yl-dienBien]')) === srcB[1].dienBien && (await ui.inputValue('[data-yl-fields] [data-field=gio]')) === hm(srcB[1].dateTH) && !(await ui.$('[data-yl-note]')), 'mẫu: an order without services is found by its data-value time');
+    await ui.selectOption('[data-field=yl-mau]', await ui.$eval('[data-field=yl-mau]', (sel) => sel.options[0].value));
+    await sleep(300);
     check((await ui.inputValue('[data-yl-fields] [data-field=gio]')) === gioB, `mẫu: time as the order (${gioB}), not when the page was saved`);
     // Edit: drugs the mock's Kê đơn does not stock are dropped; a note and the date changed.
     const stock = ['Renaxib 200', 'HOẠT HUYẾT KHỨ Ứ ẨM', 'Kim châm cứu tiệt trùng dùng một lần'];

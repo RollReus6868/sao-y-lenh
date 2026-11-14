@@ -121,13 +121,19 @@ export function mauFromHtml(html: string, name: string): YLenhMau {
   const hasForm = !!doc.getElementById('txtDienBienYLenhThamKham') || !!doc.getElementById('txtThoigianThamKham');
   const thuoc = readThuoc(doc);
   if (!hasForm && !thuoc.length) throw new Error('File này không phải trang y lệnh của OneMES (không thấy khung y lệnh đang mở)');
-  // A saved page keeps the time the form was first drawn (when the page was opened), not
-  // the order's: OneMES types the order's values in by script, and saving keeps neither
-  // those nor the notes. The order is found in Lịch sử y lệnh by the time on its service
-  // rows (drawn by the server), else by the form's time, and its notes are taken from there.
-  const formTg = field(doc, 'txtThoigianThamKham').trim();
+  // A saved page keeps in the form's value the time the form was first drawn (when the
+  // page was opened), not the order's: OneMES types the order's values in by script, and
+  // saving keeps neither those nor the notes. The order is found in Lịch sử y lệnh by the
+  // time on its service rows (drawn by the server), else the form's data-value, else its
+  // value, and its notes are taken from that row.
+  // 0.7.1: an order without services has no service rows; then the form's data-value
+  // holds the order's time (files of 2026-11-14) while value holds when the page opened.
+  const tgEl = doc.getElementById('txtThoigianThamKham');
+  const formTg = (tgEl?.getAttribute('data-value') || tgEl?.getAttribute('value') || '').trim();
   const dvTg = dvTime(doc);
-  const row = (dvTg && historyRow(doc, dvTg)) || (formTg && historyRow(doc, formTg)) || null;
+  const tries = [dvTg, tgEl?.getAttribute('data-value'), tgEl?.getAttribute('value')].map((x) => (x || '').trim()).filter(Boolean);
+  let row: ReturnType<typeof historyRow> = null;
+  for (const t of tries) if ((row = historyRow(doc, t))) break;
   const pick = (id: string, fromRow?: string) => field(doc, id).trim() || (fromRow || '').trim();
   const fromForm = (id: string) => (row ? '' : field(doc, id).trim());
   const bacSi = picked(doc, 'cboBacSiThamKham');

@@ -1,4 +1,9 @@
-# Sao Y Lệnh 0.7.0
+# Sao Y Lệnh 0.7.1
+
+- **Sửa lỗi Y lệnh mẫu báo "Không tìm thấy y lệnh này trong Lịch sử y lệnh"** với y lệnh không có dịch vụ kỹ thuật (ví dụ y lệnh chăm sóc trong ngày). File anh/chị lưu là đúng; tool đã dò y lệnh bằng giờ mở trang thay vì giờ của y lệnh. Bản này lấy đúng giờ, diễn biến bệnh, y lệnh khác, bác sĩ và cấp độ chăm sóc.
+- Các mẫu đã nhập trước đó vẫn giữ dữ liệu cũ (thiếu diễn biến, giờ sai): anh/chị bấm **Xóa mẫu** rồi **Nhập file HTML** lại các file đó.
+
+## 0.7.0
 
 - **Mở bệnh nhân nhanh, không đọc lại mỗi lần**: tool nhớ lần đọc y lệnh gần nhất của từng bệnh nhân. Mở lại bệnh nhân thì hiện ngay, góc trên ghi "Đọc lúc …". Bấm nút **Cập nhật** (góc trên bên phải) khi muốn đọc lại từ OneMES, ví dụ sau khi anh/chị sửa y lệnh trực tiếp trên OneMES. Sau khi tool sao chép, xóa, sửa, dọn thủ thuật hay tạo y lệnh cho bệnh nhân nào thì lần mở sau tool tự đọc lại bệnh nhân đó. Khi chạy nhiều bệnh nhân (nút **Chạy**), tool vẫn đọc OneMES mới nhất trước khi sao chép.
 - **Tạo y lệnh mới từ y lệnh mẫu** (thẻ mới **Y lệnh mẫu** của mỗi bệnh nhân):
